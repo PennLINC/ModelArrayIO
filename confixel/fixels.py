@@ -11,7 +11,6 @@ import pandas as pd
 from tqdm import tqdm
 import h5py
 
-
 def find_mrconvert():
     program = 'mrconvert'
 
@@ -70,10 +69,8 @@ def nifti2_to_mif(nifti2_image, mif_file):
 def gather_fixels(index_file, directions_file):
     """
     Load the index and directions files to get lookup tables.
-
     Parameters
     -----------
-
     index_file: str
         path to a Nifti2 index file
     directions_file: str
@@ -125,10 +122,8 @@ def write_hdf5(index_file, directions_file, cohort_file, output_h5='fixeldb.h5',
                relative_root='/'):
     """
     Load all fixeldb data.
-
     Parameters
     -----------
-
     index_file: str
         path to a Nifti2 index file
     directions_file: str
@@ -148,10 +143,10 @@ def write_hdf5(index_file, directions_file, cohort_file, output_h5='fixeldb.h5',
     # upload each cohort's data
     scalars = defaultdict(list)
     subject_lists = defaultdict(list)
+    print("Extracting .mif data...")
     for ix, row in tqdm(cohort_df.iterrows(), total=cohort_df.shape[0]):
-        print(row)
 
-        scalar_file = op.join(relative_root, row.scalar_mif)
+        scalar_file = op.join(relative_root, row['scalar_mif'])
         scalar_img, scalar_data = mif_to_nifti2(scalar_file)
         scalars[row['scalar_name']].append(scalar_data)
         subject_lists[row['scalar_name']].append(ix)
@@ -159,8 +154,13 @@ def write_hdf5(index_file, directions_file, cohort_file, output_h5='fixeldb.h5',
     # Write the output
     output_file = op.join(relative_root, output_h5)
     f = h5py.File(output_file, "w")
-    f.create_dataset(name="fixels", data=fixel_table.to_numpy().T)
-    f.create_dataset(name="voxels", data=voxel_table.to_numpy().T)
+    
+    fixelsh5 = f.create_dataset(name="fixels", data=fixel_table.to_numpy().T)
+    fixelsh5.attrs['column_names'] = list(fixel_table.columns)
+    
+    voxelsh5 = f.create_dataset(name="voxels", data=voxel_table.to_numpy().T)
+    voxelsh5.attrs['column_names'] = list(voxel_table.columns)
+    
     for scalar_name in scalars.keys():
         f.create_dataset('scalars/{}/values'.format(scalar_name),
                          data=np.row_stack(scalars[scalar_name]))
@@ -189,14 +189,18 @@ def get_parser():
     parser.add_argument(
         "--relative-root", "--relative_root",
         help="Root to which all paths are relative",
-        type=os.path.abspath)
+        type=os.path.abspath, default="/inputs/")
     parser.add_argument(
         "--output-hdf5", "--output_hdf5",
-        help="hdf5 file where outputs will be saved.")
+        help="hdf5 file where outputs will be saved.", default="fixelarray.h5")
     return parser
 
 
 def main():
+
+    path = '/inputs'
+
+    subfolders = [f.path for f in os.scandir(path)]
 
     parser = get_parser()
     args = parser.parse_args()
@@ -210,7 +214,6 @@ def main():
 
 def h5_to_mifs(example_mif, h5_file, fixel_output_dir):
     """Writes the contents of an hdf5 file to a fixels directory.
-
     The ``h5_file`` parameter should point to an HDF5 file that contains at least two
     datasets. There must be one called ``results/results_matrix``, that contains a
     matrix of fixel results. Each column contains a single result and each row is a
@@ -218,15 +221,12 @@ def h5_to_mifs(example_mif, h5_file, fixel_output_dir):
     named ``results/has_names``. This data can be of any type and does not need to contain
     more than a single row of data. Instead, its attributes are read to get column names
     for the data represented in ``results/results_matrix``.
-
     The function takes the example mif file and converts it to Nifti2 to get a header.
     Then each column in ``results/results_matrix`` is extracted to fill the data of a
     new Nifti2 file that gets converted to mif and named according to the corresponding
     item in ``results/has_names``.
-
     Parameters
     ==========
-
     example_mif: str
         abspath to a scalar mif file. Its header is used as a template
     h5_file: str
@@ -234,34 +234,31 @@ def h5_to_mifs(example_mif, h5_file, fixel_output_dir):
     fixel_output_dir: str
         abspath to where the output fixel data will go. the index and directions mif files
         should already be copied here.
-
     Outputs
     =======
-
     None
     """
     # Get a template nifti image.
     nifti2_img, _ = mif_to_nifti2(example_mif)
     h5_data = h5py.File(h5_file, "r")
     results_matrix = h5_data['results/results_matrix']
-
     names_data = h5_data['results/has_names']
-
     try:
-        results_names = [name.decode('utf8') for name in names_data[()]]
+        results_names = [name.decode('utf8') for name in names_data.attrs['names']]
     except Exception:
         print("Unable to read column names, using 'componentNNN' instead")
         results_names = ['component%03d' % (n + 1) for n in
                          range(results_matrix.shape[1])]
 
-    for result_col, result_name in enumerate(results_names):
 
+    for result_col, result_name in enumerate(results_names):
         valid_result_name = result_name.replace(" ", "_").replace("/", "_")
         out_mif = op.join(fixel_output_dir, valid_result_name + '.mif')
         temp_nifti2 = nb.Nifti2Image(results_matrix[:, result_col].reshape(-1, 1, 1),
                                      nifti2_img.affine,
                                      header=nifti2_img.header)
         nifti2_to_mif(temp_nifti2, out_mif)
+
 
 
 def h5_to_fixels():
@@ -284,6 +281,7 @@ def h5_to_fixels():
     example_mif = op.join(args.relative_root, cohort_df['scalar_mif'][0])
     h5_input = op.join(args.relative_root, args.input_hdf5)
     h5_to_mifs(example_mif, h5_input, out_fixel_dir)
+
 
 
 def get_h5_to_fixels_parser():
