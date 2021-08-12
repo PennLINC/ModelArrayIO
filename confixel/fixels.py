@@ -81,6 +81,7 @@ def gather_fixels(index_file, directions_file):
     count_vol = index_data[..., 0]
     id_vol = index_data[..., 1]
     max_id = id_vol.max()
+    # print(max_id)
     max_fixel_id = max_id + int(count_vol[id_vol == max_id])
     voxel_mask = count_vol > 0
     masked_ids = id_vol[voxel_mask]
@@ -134,6 +135,10 @@ def write_hdf5(index_file, directions_file, cohort_file, output_h5='fixeldb.h5',
         path to which index_file, directions_file and cohort_file (and its contents) are relative
     """
     # gather fixel data
+    # print("relative_root:")
+    # print(relative_root)
+    # print("index_file:")
+    # print(index_file)
     fixel_table, voxel_table = gather_fixels(op.join(relative_root, index_file),
                                              op.join(relative_root, directions_file))
 
@@ -198,9 +203,9 @@ def get_parser():
 
 def main():
 
-    path = '/inputs'
+    # path = '/inputs'   # Chenying, 7/13/20201
 
-    subfolders = [f.path for f in os.scandir(path)]
+    # subfolders = [f.path for f in os.scandir(path)]    # Chenying, 7/13/20201
 
     parser = get_parser()
     args = parser.parse_args()
@@ -212,7 +217,7 @@ def main():
     return status
 
 
-def h5_to_mifs(example_mif, h5_file, fixel_output_dir):
+def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
     """Writes the contents of an hdf5 file to a fixels directory.
     The ``h5_file`` parameter should point to an HDF5 file that contains at least two
     datasets. There must be one called ``results/results_matrix``, that contains a
@@ -231,6 +236,8 @@ def h5_to_mifs(example_mif, h5_file, fixel_output_dir):
         abspath to a scalar mif file. Its header is used as a template
     h5_file: str
         abspath to an h5 file that contains statistical results and their metadata.
+    analysis_name: str
+        the name for the analysis results to be saved
     fixel_output_dir: str
         abspath to where the output fixel data will go. the index and directions mif files
         should already be copied here.
@@ -241,20 +248,24 @@ def h5_to_mifs(example_mif, h5_file, fixel_output_dir):
     # Get a template nifti image.
     nifti2_img, _ = mif_to_nifti2(example_mif)
     h5_data = h5py.File(h5_file, "r")
-    results_matrix = h5_data['results/results_matrix']
-    names_data = h5_data['results/has_names']
+    results_matrix = h5_data['results/' + analysis_name + '/results_matrix']
+    names_data = results_matrix.attrs['colnames']  # NOTE: results_matrix: need to be transposed...
+    # print(results_matrix.shape)    
+
+    # print(h5_data['results/' + analysis_name + '/results_matrix'].attrs['column_names'])
+    
     try:
-        results_names = [name.decode('utf8') for name in names_data.attrs['names']]
+        results_names = names_data.tolist()
     except Exception:
         print("Unable to read column names, using 'componentNNN' instead")
         results_names = ['component%03d' % (n + 1) for n in
-                         range(results_matrix.shape[1])]
+                         range(results_matrix.shape[0])]
 
 
     for result_col, result_name in enumerate(results_names):
         valid_result_name = result_name.replace(" ", "_").replace("/", "_")
-        out_mif = op.join(fixel_output_dir, valid_result_name + '.mif')
-        temp_nifti2 = nb.Nifti2Image(results_matrix[:, result_col].reshape(-1, 1, 1),
+        out_mif = op.join(fixel_output_dir, analysis_name + "_" + valid_result_name + '.mif')
+        temp_nifti2 = nb.Nifti2Image(results_matrix[result_col, :].reshape(-1, 1, 1),
                                      nifti2_img.affine,
                                      header=nifti2_img.header)
         nifti2_to_mif(temp_nifti2, out_mif)
