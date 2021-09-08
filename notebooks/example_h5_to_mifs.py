@@ -1,4 +1,4 @@
-from fixels import *    # h5_to_mifs
+from ../confixel/fixels import *    # h5_to_mifs
 
 flag_whichdataset = "josiane"    # "val" or "test_n50" or "josiane"
 

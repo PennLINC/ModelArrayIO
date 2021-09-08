@@ -1,4 +1,4 @@
-from fixels import * 
+from ../confixel/fixels import * 
 example_mif = "/home/chenying/Desktop/fixel_project/data/data_from_josiane/index.mif"
 
 nifti2_img, _ = mif_to_nifti2(example_mif)
