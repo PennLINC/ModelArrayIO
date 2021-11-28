@@ -1,4 +1,7 @@
-from ../confixel/fixels import *    # h5_to_mifs
+import sys
+sys.path.insert(0,'../confixel/')
+
+from fixels import *    # h5_to_mifs
 
 flag_whichdataset = "josiane"    # "val" or "test_n50" or "josiane"
 
@@ -23,9 +26,9 @@ elif flag_whichdataset == "val" :
     fixel_output_dir = "/home/chenying/Desktop/fixel_project/data/data_from_Val/h5_to_mifs_28yrAndBelow_only1"
 elif flag_whichdataset == "josiane" :
     example_mif = "/home/chenying/Desktop/fixel_project/data/data_from_josiane/for_fixelcfestats/fdc_10_smoothed_10fwhm_new/sub-80010.mif"
-    h5_file = "/home/chenying/Desktop/fixel_project/data/data_from_josiane/results/ltn_FDC_n938_wResults_nfixel-0_20210908-135041.h5"
-    analysis_name = "lm"
-    fixel_output_dir = "/home/chenying/Desktop/fixel_project/data/data_from_josiane/results/ltn_FDC_n938_wResults_nfixel-0_20210908-135041"
+    h5_file = "/home/chenying/Desktop/fixel_project/data/data_from_josiane/results/ltn_FDC_n938_wResults_nfixel-0_20211126-182543.h5"
+    analysis_name = "gam_allOutputs"
+    fixel_output_dir = "/home/chenying/Desktop/fixel_project/data/data_from_josiane/results/ltn_FDC_n938_wResults_nfixel-0_20211126-182543"
 
 h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir)
 
