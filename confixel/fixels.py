@@ -81,7 +81,7 @@ def gather_fixels(index_file, directions_file):
     count_vol = index_data[..., 0]   # number of fixels in each voxel; by index.mif definition
     id_vol = index_data[..., 1]  # index of the first fixel in this voxel, in the list of all fixels (in directions.mif, FD.mif, etc)
     max_id = id_vol.max()
-    max_fixel_id = max_id + int(count_vol[id_vol == max_id])  # the maximum id of fixels (i.e. # of fixels in entire image - 1)
+    max_fixel_id = max_id + int(count_vol[id_vol == max_id])  # = the maximum id of fixels + 1 = # of fixels in entire image
     voxel_mask = count_vol > 0   # voxels that contains fixel(s), =1
     masked_ids = id_vol[voxel_mask]  # 1D array, len = # of voxels with fixel(s), value see id_vol
     masked_counts = count_vol[voxel_mask]  # dim as masked_ids; value see count_vol
