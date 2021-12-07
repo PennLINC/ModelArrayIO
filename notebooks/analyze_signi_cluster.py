@@ -150,13 +150,13 @@ if __name__ == '__main__':   # main function
     # the .h5 file with results of statistics, saved from R:
     fn_h5_results = "/home/chenying/Desktop/fixel_project/data/data_from_josiane/results/ltn_FDC_n938_wResults_nfixel-0_20211126-182543.h5"
     # manually defined mask - for a bigger, rough boundary of cluster:
-    filename_manual_mask = "ROI_x65_sage_p_bonfer_lt_1e-20.mif"  # this should be a .mif file!
+    filename_manual_mask = "ROI_x69_sage_p_lt_1e-15.mif"  # this should be a .mif file!
 
     # for thresholding:
     analysis_name = "gam_allOutputs"
-    stat_name_thr = "s_Age.p.value.bonferroni"  # the stat name for thresholding
+    stat_name_thr = "s_Age.p.value"  # the stat name for thresholding
     flag_compare = "lt"
-    thr = 1e-20
+    thr = 1e-15
 
     # for saving intersect mask:
     example_mif = "/home/chenying/Desktop/fixel_project/data/data_from_josiane/for_fixelcfestats/fdc_10_smoothed_10fwhm_new/sub-80010.mif"
