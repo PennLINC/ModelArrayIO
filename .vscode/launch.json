@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Python: Current File",
             "type": "python",
@@ -11,7 +12,12 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "env": {"PYTHONPATH": "${workspaceRoot}"},
-            "args": []
+            "args": ["--index-file", "fixeldata/index.mif",
+                "--directions-file", "fixeldata/directions.mif",
+                "--cohort-file", "test_cohort_n50.csv",
+                "--output-hdf5", "fixels_withRealSubjID.h5",
+                "--relative-root", "../data/data_forCircleCI_n50",
+                "--colname_subjid","subject_id"]
         }
     ]
 }

@@ -14,9 +14,9 @@ elif [[ "$which_dataset" == "data_forCircleCI_n=50" ]]
 then
 	index_file="fixeldata/index.mif"
 	directions_file="fixeldata/directions.mif"
-	cohort_file="test_cohort_n=50.csv"
+	cohort_file="test_cohort_n50.csv"
 	output_hdf5="fixels.h5"
-	relative_root="../data/data_forCircleCI_n=50"
+	relative_root="../data/data_forCircleCI_n50"
 elif [[ "$which_dataset" == "data_from_Val" ]]
 then
 	#index_file="fixeldata/index.mif"

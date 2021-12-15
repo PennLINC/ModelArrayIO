@@ -118,7 +118,8 @@ def gather_fixels(index_file, directions_file):
     return fixel_table, voxel_table
 
 
-def write_hdf5(index_file, directions_file, cohort_file, output_h5='fixeldb.h5',
+def write_hdf5(index_file, directions_file, cohort_file, colname_subjid="subject_id",
+                output_h5='fixeldb.h5',
                relative_root='/'):
     """
     Load all fixeldb data.
@@ -130,14 +131,14 @@ def write_hdf5(index_file, directions_file, cohort_file, output_h5='fixeldb.h5',
         path to a Nifti2 directions file
     cohort_file: str
         path to a csv with demographic info and paths to data
+    colname_subjid: str
+        the column name of subject ids in cohort file
+    output_h5: str
+        path to a new .h5 file to be written
     relative_root: str
         path to which index_file, directions_file and cohort_file (and its contents) are relative
     """
     # gather fixel data
-    # print("relative_root:")
-    # print(relative_root)
-    # print("index_file:")
-    # print(index_file)
     fixel_table, voxel_table = gather_fixels(op.join(relative_root, index_file),
                                              op.join(relative_root, directions_file))
 
@@ -148,12 +149,11 @@ def write_hdf5(index_file, directions_file, cohort_file, output_h5='fixeldb.h5',
     scalars = defaultdict(list)
     subject_lists = defaultdict(list)
     print("Extracting .mif data...")
-    for ix, row in tqdm(cohort_df.iterrows(), total=cohort_df.shape[0]):
-
+    for ix, row in tqdm(cohort_df.iterrows(), total=cohort_df.shape[0]):   # ix: index of row (start from 0); row: one row of data
         scalar_file = op.join(relative_root, row['scalar_mif'])
         scalar_img, scalar_data = mif_to_nifti2(scalar_file)
-        scalars[row['scalar_name']].append(scalar_data)
-        subject_lists[row['scalar_name']].append(ix)
+        scalars[row['scalar_name']].append(scalar_data)   # append to specific scalar_name
+        subject_lists[row['scalar_name']].append(row[colname_subjid])  # append real subject id to specific scalar_name
 
     # Write the output
     output_file = op.join(relative_root, output_h5)
@@ -166,10 +166,9 @@ def write_hdf5(index_file, directions_file, cohort_file, output_h5='fixeldb.h5',
     voxelsh5.attrs['column_names'] = list(voxel_table.columns)
     
     for scalar_name in scalars.keys():
-        f.create_dataset('scalars/{}/values'.format(scalar_name),
+        one_scalar_h5 = f.create_dataset('scalars/{}/values'.format(scalar_name),
                          data=np.row_stack(scalars[scalar_name]))
-        f.create_dataset('scalars/{}/ids'.format(scalar_name),
-                         data=np.row_stack(subject_lists[scalar_name]))
+        one_scalar_h5.attrs['column_names'] = list(subject_lists[scalar_name])  # column names: list of subject ids
     f.close()
     return int(not op.exists(output_file))
 
@@ -184,12 +183,16 @@ def get_parser():
         required=True)
     parser.add_argument(
         "--directions-file", "--directions_file",
-        help="Index File",
+        help="Directions File",
         required=True)
     parser.add_argument(
-        "--cohort-file", "--cohort-file",
-        help="Index File",
+        "--cohort-file", "--cohort_file",
+        help="Path to a csv with demographic info and paths to data",
         required=True)
+    parser.add_argument(
+        "--colname_subjid", "--colname-subjid",
+        help="The column name of subject ids in cohort file",
+        default="subject_id")
     parser.add_argument(
         "--relative-root", "--relative_root",
         help="Root to which all paths are relative",
@@ -211,6 +214,7 @@ def main():
     status = write_hdf5(index_file=args.index_file,
                         directions_file=args.directions_file,
                         cohort_file=args.cohort_file,
+                        colname_subjid=args.colname_subjid,
                         output_h5=args.output_hdf5,
                         relative_root=args.relative_root)
     return status
