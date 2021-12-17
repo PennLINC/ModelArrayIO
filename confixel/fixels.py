@@ -165,7 +165,7 @@ def write_hdf5(index_file, directions_file, cohort_file, colname_subjid="subject
     voxelsh5 = f.create_dataset(name="voxels", data=voxel_table.to_numpy().T)
     voxelsh5.attrs['column_names'] = list(voxel_table.columns)
     
-    for scalar_name in scalars.keys():
+    for scalar_name in scalars.keys():  # in the cohort.csv, two or more scalars in one sheet is allowed, and they can be separated to different scalar group.
         one_scalar_h5 = f.create_dataset('scalars/{}/values'.format(scalar_name),
                          data=np.row_stack(scalars[scalar_name]))
         one_scalar_h5.attrs['column_names'] = list(subject_lists[scalar_name])  # column names: list of subject ids
