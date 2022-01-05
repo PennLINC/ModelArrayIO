@@ -12,12 +12,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "env": {"PYTHONPATH": "${workspaceRoot}"},
-            "args": ["--index-file", "fixeldata/index.mif",
-                "--directions-file", "fixeldata/directions.mif",
-                "--cohort-file", "n25x2_cohort.csv",
-                "--output-hdf5", "fixels_withSubjID.h5",
-                "--relative-root", "../data/data_forCircleCI_n25x2",
-                "--colname_subjid","subject_id"]
+            "args": []
         }
     ]
 }

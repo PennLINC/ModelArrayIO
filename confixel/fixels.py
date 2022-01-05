@@ -15,11 +15,11 @@ def find_mrconvert():
     program = 'mrconvert'
 
     def is_exe(fpath):
-        return os.path.exists(fpath) and os.access(fpath, os.X_OK)
+        return op.exists(fpath) and os.access(fpath, os.X_OK)
 
     for path in os.environ["PATH"].split(os.pathsep):
         path = path.strip('"')
-        exe_file = os.path.join(path, program)
+        exe_file = op.join(path, program)
         if is_exe(exe_file):
             return program
     return None
@@ -51,20 +51,22 @@ def mif_to_nifti2(mif_file):
 
 def nifti2_to_mif(nifti2_image, mif_file):
 
-    dirpath = tempfile.mkdtemp()
     mrconvert = find_mrconvert()
     if mrconvert is None:
         raise Exception("The mrconvert executable could not be found on $PATH")
 
-    nii_file = op.join(dirpath, 'mif.nii')
-    nifti2_image.to_filename(nii_file)
+    nii_file = mif_file.replace('.mif','.nii')
+    nifti2_image.to_filename(nii_file)  # save as .nii first
+
+    # convert .nii to .mif
     proc = subprocess.Popen([mrconvert, nii_file, mif_file], stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
     _, err = proc.communicate()
 
     if not op.exists(mif_file):
         raise Exception(err)
-
+        
+    os.remove(nii_file)   # remove temporary .nii file
 
 def gather_fixels(index_file, directions_file):
     """
@@ -190,7 +192,7 @@ def get_parser():
     parser.add_argument(
         "--relative-root", "--relative_root",
         help="Root to which all paths are relative",
-        type=os.path.abspath, default="/inputs/")
+        type=op.abspath, default="/inputs/")
     parser.add_argument(
         "--output-hdf5", "--output_hdf5",
         help="hdf5 file where outputs will be saved.", default="fixelarray.h5")
@@ -257,7 +259,10 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
         results_names = ['component%03d' % (n + 1) for n in
                          range(results_matrix.shape[0])]
 
-
+    # Make output directory if it does not exist
+    if op.isdir(fixel_output_dir) == False:
+        os.mkdir(fixel_output_dir)
+        
     for result_col, result_name in enumerate(results_names):
         valid_result_name = result_name.replace(" ", "_").replace("/", "_")
         out_mif = op.join(fixel_output_dir, analysis_name + "_" + valid_result_name + '.mif')
