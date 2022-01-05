@@ -56,7 +56,9 @@ def nifti2_to_mif(nifti2_image, mif_file):
         raise Exception("The mrconvert executable could not be found on $PATH")
 
     nii_file = mif_file.replace('.mif','.nii')
-    nifti2_image.to_filename(nii_file)
+    nifti2_image.to_filename(nii_file)  # save as .nii first
+
+    # convert .nii to .mif
     proc = subprocess.Popen([mrconvert, nii_file, mif_file], stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
     _, err = proc.communicate()
@@ -64,7 +66,7 @@ def nifti2_to_mif(nifti2_image, mif_file):
     if not op.exists(mif_file):
         raise Exception(err)
         
-    os.remove(nii_file)
+    os.remove(nii_file)   # remove temporary .nii file
 
 def gather_fixels(index_file, directions_file):
     """
