@@ -148,7 +148,7 @@ def save_selectedFixel_mask(fn_selected_txt, example_mif):
 if __name__ == '__main__':   # main function
     # ++++++++++++++++++++++ CHANGE BELOW FOR YOUR PURPOSE ++++++++++++++++++++++++++++++++++
     # the .h5 file with results of statistics, saved from R:
-    fn_h5_results = "/home/chenying/Desktop/fixel_project/data/data_from_josiane/results/ltn_FDC_n938_wResults_nfixel-0_20211126-182543.h5"
+    fn_h5_results = "/home/chenying/Desktop/fixel_project/data/data_from_josiane/results/ltn_FDC_n938_wResults_nfixels-0_20220109-183909.h5"
     # manually defined mask - for a bigger, rough boundary of cluster:
     filename_manual_mask = "ROI_x69_sage_p_lt_1e-15.mif"  # this should be a .mif file!
 
