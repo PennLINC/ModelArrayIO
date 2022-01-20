@@ -59,12 +59,13 @@ For this case, when running ConFixel creating hdf5 fixel data, argument **--rela
 foo@bar:~$ git clone https://github.com/PennLINC/ConFixel.git
 foo@bar:~$ cd ConFixel
 foo@bar:~$ pip install .   # for end user
-# you may remove the original repository if you are an end user:
+# you may remove the original source code if you are an end user:
 foo@bar:~$ cd ..
 foo@bar:~$ rm -r ConFixel
 ```
-If you are a developer, if there is any update in the scripts locally, you may update the installation with:
+If you are a developer, and if there is any update in the source code locally, you may update the installation with:
 ``` console
+# Supporse you're in root directory of ConFixel source code:
 foo@bar:~$ pip install -e .    # for developer to update
 ```
 
