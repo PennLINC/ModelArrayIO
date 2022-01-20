@@ -55,15 +55,47 @@ For this case, when running ConFixel creating hdf5 fixel data, argument **--rela
 
 ## Run ConFixel
 ### Install from github
-TODO: to finish.....
+``` console
+foo@bar:~$ git clone https://github.com/PennLINC/ConFixel.git
+foo@bar:~$ cd ConFixel
+foo@bar:~$ pip install .   # for end user
+# you may remove the original repository if you are an end user:
+foo@bar:~$ cd ..
+foo@bar:~$ rm -r ConFixel
+```
+If you are a developer, if there is any update in the scripts locally, you may update the installation with:
+``` console
+foo@bar:~$ pip install -e .    # for developer to update
+```
 
-### From .mif to .h5
-Example please see "notebooks/example_mif_to_h5.sh" \
+### Convert .mif files to an HDF5 (.h5) file
+Using above described scenario as an example, for FD dataset:
+``` console
+foo@bar:~$ fixeldb_create \
+                --index-file FD/index.mif \
+                --directions-file FD/directions.mif \
+                --cohort-file cohort_FD.csv \
+                --relative-root /home/username/myProject/data \
+                --output-hdf5 FD.h5
+```
+<!-- ^ above is tested -->
 
-### From .h5 to .mif
-Example please see "notebooks/example_h5_to_mifs.py" \
+Now you should get the HDF5 file "FD.h5" in folder "/home/username/myProject/data". You may use [ModelArray](https://github.com/PennLINC/ModelArray) to perform statistical analysis.
 
- \
+### Convert result .h5 file to .mif files:
+After getting statistical results in FD.h5 file, you can use `fixelstats_write` to convert results into a list of .mif files in a folder specified by you. This command will also copy the original index.mif and directions.mif to this folder.
+``` console 
+foo@bar:~$ fixelstats_write \
+                --index-file FD/index.mif \
+                --directions-file FD/directions.mif \
+                --cohort-file cohort_FD.csv \
+                --relative-root /home/username/myProject/data \
+                --input-hdf5 FD.h5 \
+                --output-hdf5 FD_stats 
+```
+Now you can view the results in folder FD_stats in `mrview`.
 
+<!-- TODO: push to github + pip install -e . + test out ^^^ -->
 
-TODO: use conda + terminal command `fixeldb_create` and `fixelstats_write`; Still using case above as an example
+<!--TODO: use conda + terminal command `fixeldb_create` and `fixelstats_write`; Still using case above as an example -->
+<!-- TODO: also update example*.py and .sh -->

@@ -187,15 +187,17 @@ def get_parser():
         required=True)
     parser.add_argument(
         "--cohort-file", "--cohort_file",
-        help="Path to a csv with demographic info and paths to data",
+        help="Path to a csv with demographic info and paths to data.",
         required=True)
     parser.add_argument(
         "--relative-root", "--relative_root",
-        help="Root to which all paths are relative",
-        type=op.abspath, default="/inputs/")
+        help="Root to which all paths are relative, i.e. defining the (absolute) path to root directory of index_file, directions_file, cohort_file, and output_hdf5.",
+        type=op.abspath, 
+        default="/inputs/")
     parser.add_argument(
         "--output-hdf5", "--output_hdf5",
-        help="hdf5 file where outputs will be saved.", default="fixelarray.h5")
+        help="Name of HDF5 (.h5) file where outputs will be saved.", 
+        default="fixelarray.h5")
     return parser
 
 
@@ -308,19 +310,19 @@ def get_h5_to_fixels_parser():
         help="Index File",
         required=True)
     parser.add_argument(
-        "--cohort-file", "--cohort-file",
+        "--cohort-file", "--cohort_file",
         help="Index File",
         required=True)
     parser.add_argument(
         "--relative-root", "--relative_root",
-        help="Root to which all paths are relative",
+        help="Root to which all paths are relative, i.e. defining the (absolute) path to root directory of index_file, directions_file, cohort_file, input_hdf5, and output_dir.",
         type=os.path.abspath)
     parser.add_argument(
         "--input-hdf5", "--input_hdf5",
-        help="hdf5 file where outputs will be saved.")
+        help="Name of HDF5 (.h5) file where results outputs are saved.")
     parser.add_argument(
         "--output-dir", "--output_dir",
-        help="Fixel directory where outputs will be saved.")
+        help="Fixel directory where outputs will be saved. If the directory does not exist, it will be automatically created.")
     return parser
 
 
