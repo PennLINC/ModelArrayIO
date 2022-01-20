@@ -98,7 +98,7 @@ foo@bar:~$ fixelstats_write \
 Now you can view the results in folder "FD_stats" in `mrview`.
 
 ### For additional description:
-You can refer to `--help` for additional informations:
+You can refer to `--help` for additional information:
 ``` console 
 foo@bar:~$ fixeldb_create --help
 foo@bar:~$ fixelstats_write --help
