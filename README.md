@@ -83,19 +83,27 @@ foo@bar:~$ fixeldb_create \
 Now you should get the HDF5 file "FD.h5" in folder "/home/username/myProject/data". You may use [ModelArray](https://github.com/PennLINC/ModelArray) to perform statistical analysis.
 
 ### Convert result .h5 file to .mif files:
-After getting statistical results in FD.h5 file, you can use `fixelstats_write` to convert results into a list of .mif files in a folder specified by you. This command will also copy the original index.mif and directions.mif to this folder.
+After getting statistical results in FD.h5 file (say, the analysis name is called "mylm"), you can use `fixelstats_write` to convert results into a list of .mif files in a folder specified by you. This command will also copy the original index.mif and directions.mif to this folder.
 ``` console 
 foo@bar:~$ fixelstats_write \
                 --index-file FD/index.mif \
                 --directions-file FD/directions.mif \
                 --cohort-file cohort_FD.csv \
                 --relative-root /home/username/myProject/data \
+                --analysis-name mylm \
                 --input-hdf5 FD.h5 \
-                --output-hdf5 FD_stats 
+                --output-dir FD_stats 
 ```
-Now you can view the results in folder FD_stats in `mrview`.
+Now you can view the results in folder "FD_stats" in `mrview`.
 
-<!-- TODO: push to github + pip install -e . + test out ^^^ -->
+### For additional description:
+You can refer to `--help` for additional informations:
+``` console 
+foo@bar:~$ fixeldb_create --help
+foo@bar:~$ fixelstats_write --help
+```
 
-<!--TODO: use conda + terminal command `fixeldb_create` and `fixelstats_write`; Still using case above as an example -->
+<!--TODO: after update please test out: use conda + terminal command `fixeldb_create` and `fixelstats_write`; Still using case above as an example -->
+<!-- fixelstats_write: can be tested out with existing results; otherwise have to run for all fixels.. -->
+
 <!-- TODO: also update example*.py and .sh -->

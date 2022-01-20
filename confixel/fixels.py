@@ -203,10 +203,6 @@ def get_parser():
 
 def main():
 
-    # path = '/inputs'   # Chenying, 7/13/20201
-
-    # subfolders = [f.path for f in os.scandir(path)]    # Chenying, 7/13/20201
-
     parser = get_parser()
     args = parser.parse_args()
     status = write_hdf5(index_file=args.index_file,
@@ -279,12 +275,13 @@ def h5_to_fixels():
     parser = get_h5_to_fixels_parser()
     args = parser.parse_args()
 
-    if op.exists(args.output_dir):
+    out_fixel_dir = op.join(args.relative_root, args.output_dir)  # absolute path for output dir
+
+    if op.exists(out_fixel_dir):
         print("WARNING: Output directory exists")
-    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(out_fixel_dir, exist_ok=True)
 
     # Copy in the index and directions
-    out_fixel_dir = op.join(args.relative_root, args.output_dir)
     shutil.copyfile(op.join(args.relative_root, args.directions_file),
                     op.join(out_fixel_dir, op.split(args.directions_file)[1]))
     shutil.copyfile(op.join(args.relative_root, args.index_file),
@@ -294,7 +291,8 @@ def h5_to_fixels():
     cohort_df = pd.read_csv(op.join(args.relative_root, args.cohort_file))
     example_mif = op.join(args.relative_root, cohort_df['source_file'][0])
     h5_input = op.join(args.relative_root, args.input_hdf5)
-    h5_to_mifs(example_mif, h5_input, out_fixel_dir)
+    analysis_name = args.analysis_name
+    h5_to_mifs(example_mif, h5_input, analysis_name, out_fixel_dir)
 
 
 
@@ -307,16 +305,20 @@ def get_h5_to_fixels_parser():
         required=True)
     parser.add_argument(
         "--directions-file", "--directions_file",
-        help="Index File",
+        help="Directions File",
         required=True)
     parser.add_argument(
         "--cohort-file", "--cohort_file",
-        help="Index File",
+        help="Path to a csv with demographic info and paths to data.",
         required=True)
     parser.add_argument(
         "--relative-root", "--relative_root",
         help="Root to which all paths are relative, i.e. defining the (absolute) path to root directory of index_file, directions_file, cohort_file, input_hdf5, and output_dir.",
         type=os.path.abspath)
+    parser.add_argument(
+        "--analysis-name", "--analysis_name",
+        help="Name for the statistical analysis results to be saved."
+    )
     parser.add_argument(
         "--input-hdf5", "--input_hdf5",
         help="Name of HDF5 (.h5) file where results outputs are saved.")
