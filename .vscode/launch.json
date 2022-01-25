@@ -11,8 +11,11 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "env": {"PYTHONPATH": "${workspaceRoot}"},
-            "args": []
+            //"env": {"PYTHONPATH": "/cbica/projects/GRMPY/miniconda3/condabin"},
+            "args": ["--group-mask-file", "code/tpl-MNI152NLin6Asym_res-02_desc-brain_mask.nii.gz",
+                     "--cohort-file", "GRMPY_convoxel_meanCBF_n213.csv",
+                     "--relative-root", "/cbica/projects/GRMPY/project/curation/testing/aslprep_unzipped_convoxel",
+                     "--output-hdf5", "voxeldb_meanCBF_n213.h5"]
         }
     ]
 }

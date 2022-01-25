@@ -1,9 +1,12 @@
 #!/usr/bin/env python
+import argparse
 import os.path as op
+from collections import defaultdict
 import nibabel as nb
 import pandas as pd
 import numpy as np
 from collections import defaultdict
+from tqdm import tqdm
 import h5py
 
 
@@ -36,7 +39,7 @@ def write_hdf5(group_mask_file, cohort_file,
                output_h5='voxeldb.h5',
                relative_root='/'):
     """
-    Load all fixeldb data.
+    Load all volume data.
     Parameters
     -----------
     group_mask_file: str
@@ -46,13 +49,13 @@ def write_hdf5(group_mask_file, cohort_file,
     output_h5: str
         path to a new .h5 file to be written
     relative_root: str
-        path to which index_file, directions_file and cohort_file (and its contents) are relative
+        path to which group_mask_file and cohort_file (and its contents) are relative
     """
     # gather cohort data
     cohort_df = pd.read_csv(op.join(relative_root, cohort_file))
 
     # Load the group mask image to define the rows of the matrix
-    group_mask_img = nb.load(group_mask_file)
+    group_mask_img = nb.load(op.join(relative_root, group_mask_file))
     group_mask_matrix = group_mask_img.get_fdata() > 0
 
     # upload each cohort's data
@@ -79,3 +82,40 @@ def write_hdf5(group_mask_file, cohort_file,
         one_scalar_h5.attrs['column_names'] = list(sources_lists[scalar_name])  # column names: list of source .mif filenames
     f.close()
     return int(not op.exists(output_file))
+
+def get_parser():
+
+    parser = argparse.ArgumentParser(
+        description="Create a hdf5 file of volume data")
+    parser.add_argument(
+        "--group-mask-file", "--group_mask_file",
+        help="Path to a group mask file",
+        required=True)
+    parser.add_argument(
+        "--cohort-file", "--cohort_file",
+        help="Path to a csv with demographic info and paths to data.",
+        required=True)
+    parser.add_argument(
+        "--relative-root", "--relative_root",
+        help="Root to which all paths are relative, i.e. defining the (absolute) path to root directory of group_mask_file, cohort_file, and output_hdf5.",
+        type=op.abspath, 
+        default="/inputs/")
+    parser.add_argument(
+        "--output-hdf5", "--output_hdf5",
+        help="Name of HDF5 (.h5) file where outputs will be saved.", 
+        default="fixelarray.h5")
+    return parser
+
+def main():
+    parser = get_parser()
+    args = parser.parse_args()
+    status = write_hdf5(group_mask_file=args.group_mask_file, 
+                        cohort_file=args.cohort_file, 
+                        output_h5=args.output_hdf5,
+                        relative_root=args.relative_root)
+
+
+    return status
+
+if __name__ == "__main__":
+    main()
