@@ -19,7 +19,7 @@ def flattened_image(scalar_image, scalar_mask, group_mask_matrix):
     scalar_matrix = scalar_img.get_fdata()
 
     scalar_matrix[np.logical_not(scalar_mask_matrix)] = np.nan
-    return scalar_matrix[group_mask_matrix]
+    return scalar_matrix[group_mask_matrix].squeeze()     # .shape = (#voxels,)  # squeeze() is to remove the 2nd dimension which is not necessary
     
 
 def back_to_3d(group_mask_file, results_array, out_file):
