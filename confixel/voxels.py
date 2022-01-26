@@ -56,7 +56,17 @@ def write_hdf5(group_mask_file, cohort_file,
 
     # Load the group mask image to define the rows of the matrix
     group_mask_img = nb.load(op.join(relative_root, group_mask_file))
-    group_mask_matrix = group_mask_img.get_fdata() > 0
+    group_mask_matrix = group_mask_img.get_fdata() > 0     # get_fdata(): get matrix data in float format
+    voxel_coords = np.column_stack(np.nonzero(group_mask_img.get_fdata()))  # np.nonzero() returns the coords of nonzero elements; then np.column_stack() stack them together as an (#voxels, 3) array
+
+    # voxel_table: records the coordinations of the nonzero voxels; coord starts from 0 (because using python)
+    voxel_table = pd.DataFrame(
+        dict(
+            voxel_id=np.arange(voxel_coords.shape[0]),
+            i=voxel_coords[:, 0],
+            j=voxel_coords[:, 1],
+            k=voxel_coords[:, 2]))
+
 
     # upload each cohort's data
     scalars = defaultdict(list)
@@ -73,8 +83,8 @@ def write_hdf5(group_mask_file, cohort_file,
     output_file = op.join(relative_root, output_h5)
     f = h5py.File(output_file, "w")
     
-    # voxelsh5 = f.create_dataset(name="voxels", data=voxel_table.to_numpy().T)
-    # voxelsh5.attrs['column_names'] = list(voxel_table.columns)
+    voxelsh5 = f.create_dataset(name="voxels", data=voxel_table.to_numpy().T)
+    voxelsh5.attrs['column_names'] = list(voxel_table.columns)
     
     for scalar_name in scalars.keys():  # in the cohort.csv, two or more scalars in one sheet is allowed, and they can be separated to different scalar group.
         one_scalar_h5 = f.create_dataset('scalars/{}/values'.format(scalar_name),
