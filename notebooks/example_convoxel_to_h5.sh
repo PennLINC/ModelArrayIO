@@ -5,7 +5,12 @@
 # pip install -e .
 
 # for grmpy project, on cubic:
-nsubj=3
-cmd="convoxel --group-mask-file aslprep_unzipped_convoxel/code/tpl-MNI152NLin6Asym_res-02_desc-brain_mask.nii.gz --cohort-file aslprep_unzipped_convoxel/GRMPY_convoxel_meanCBF_n${nsubj}.csv --relative-root /cbica/projects/GRMPY/project/curation/testing/ --output-hdf5 aslprep_unzipped_convoxel/voxeldb_meanCBF_n${nsubj}.h5"
+nsubj=215
+
+cmd="convoxel --group-mask-file stats_ModelArray/tpl-MNI152NLin6Asym_res-02_desc-brain_mask.nii.gz"
+cmd+=" --cohort-file stats_ModelArray/GRMPY_convoxel_meanCBF_n${nsubj}.csv"
+cmd+=" --relative-root /cbica/projects/GRMPY/project/curation/testing/"
+cmd+=" --output-hdf5 stats_ModelArray/GRMPY_meanCBF_n${nsubj}_orig.h5"
+
 echo $cmd
 $cmd

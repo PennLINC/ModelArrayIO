@@ -12,10 +12,10 @@
             "program": "${file}",
             "console": "integratedTerminal",
             //"env": {"PYTHONPATH": "/cbica/projects/GRMPY/miniconda3/condabin"},
-            "args": ["--group-mask-file", "aslprep_unzipped_convoxel/code/tpl-MNI152NLin6Asym_res-02_desc-brain_mask.nii.gz",
-                     "--cohort-file", "aslprep_unzipped_convoxel/GRMPY_convoxel_meanCBF_n213.csv",
-                     "--relative-root", "/cbica/projects/GRMPY/project/curation/testing",
-                     "--output-hdf5", "aslprep_unzipped_convoxel/voxeldb_meanCBF_n213.h5"]
+            "args": ["--group-mask-file", "stats_ModelArray/tpl-MNI152NLin6Asym_res-02_desc-brain_mask.nii.gz",
+                     "--cohort-file", "stats_ModelArray/GRMPY_convoxel_meanCBF_n215.csv",
+                     "--relative-root", "/cbica/projects/GRMPY/project/curation/testing/",
+                     "--output-hdf5", "stats_ModelArray/GRMPY_meanCBF_n215_test.h5"]
         }
     ]
 }
