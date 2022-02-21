@@ -32,12 +32,12 @@ elif flag_option == 2:   ## using console commands + h5_to_fixels():
     
     if flag_whichdataset == "josiane" :
         # temp: can be entered as args in vscode's launch.json; also need to change main(): calling h5_to_fixels()
-        temp = ["--index-file", "results/ltn_FDC_n938_wResults_nfixels-0_20220109-183909/index.mif",
-                "--directions-file", "results/ltn_FDC_n938_wResults_nfixels-0_20220109-183909/directions.mif",
+        temp = ["--index-file", "results/ltn_FDC_n938_wResults_nfixels-0_20220204-140019/index.mif",
+                "--directions-file", "results/ltn_FDC_n938_wResults_nfixels-0_20220204-140019/directions.mif",
                 "--cohort-file", "df_example_n938.csv",
                 "--relative-root", "/home/chenying/Desktop/fixel_project/data/data_from_josiane",
                 "--analysis-name", "gam_allOutputs",
-                "--input-hdf5", "results/ltn_FDC_n938_wResults_nfixels-0_20220109-183909.h5",
+                "--input-hdf5", "results/ltn_FDC_n938_wResults_nfixels-0_20220204-140019.h5",
                 "--output-dir", "results/output_test"]
         cmd = 'fixelstats_write ' + ' '.join(temp)    
         os.system(cmd)
