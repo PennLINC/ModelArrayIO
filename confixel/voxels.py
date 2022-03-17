@@ -71,7 +71,7 @@ def write_hdf5(group_mask_file, cohort_file,
     # upload each cohort's data
     scalars = defaultdict(list)
     sources_lists = defaultdict(list)
-    print("Extracting .mif data...")
+    print("Extracting NIfTI data...")
     for ix, row in tqdm(cohort_df.iterrows(), total=cohort_df.shape[0]):   # ix: index of row (start from 0); row: one row of data
         scalar_file = op.join(relative_root, row['source_file'])
         scalar_mask_file = op.join(relative_root, row['source_mask_file'])
