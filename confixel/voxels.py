@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import os
 import os.path as op
 from collections import defaultdict
 import nibabel as nb
@@ -23,7 +24,8 @@ def flattened_image(scalar_image, scalar_mask, group_mask_matrix):
     
 
 def back_to_3d(group_mask_file, results_array, out_file):
-
+    """ Save a volume file for one statistical metric
+    """
     group_mask_img = nb.load(group_mask_file)
     group_mask_matrix = group_mask_img.get_fdata() > 0
 
@@ -33,6 +35,64 @@ def back_to_3d(group_mask_file, results_array, out_file):
                                 header=group_mask_img.header)
     output_img.to_filename(out_file)
 
+
+def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, volume_output_dir):
+    """ Convert stat results in .h5 file to a list of volume (.nii or .nii.gz) files
+    """
+
+    # group-level mask:
+    group_mask_img = nb.load(group_mask_file)
+    group_mask_matrix = group_mask_img.get_fdata() > 0
+
+    # results in .h5 file:
+    h5_data = h5py.File(h5_file, "r")
+    results_matrix = h5_data['results/' + analysis_name + '/results_matrix']
+    names_data = results_matrix.attrs['colnames']  # NOTE: results_matrix: need to be transposed...
+    # print(results_matrix.shape)   
+
+    try:
+        results_names = names_data.tolist()
+    except Exception:
+        print("Unable to read column names, using 'componentNNN' instead")
+        results_names = ['component%03d' % (n + 1) for n in
+                         range(results_matrix.shape[0])]
+
+    # # Make output directory if it does not exist  # has been done in h5_to_volumes_wrapper()
+    # if op.isdir(volume_output_dir) == False:
+    #     os.mkdir(volume_output_dir)
+
+    # for loop: save stat metric results one by one:
+    for result_col, result_name in enumerate(results_names):
+        valid_result_name = result_name.replace(" ", "_").replace("/", "_")
+
+        out_file = op.join(volume_output_dir, analysis_name + "_" + valid_result_name + output_extension)
+        output = np.zeros(group_mask_matrix.shape)
+        output[group_mask_matrix] = results_matrix[result_col, :]
+        output_img = nb.Nifti1Image(output, affine=group_mask_img.affine,
+                                    header=group_mask_img.header)
+        output_img.to_filename(out_file)
+
+
+def h5_to_volumes_wrapper():
+    parser = get_h5_to_volume_parser()
+    args = parser.parse_args()
+
+    volume_output_dir = op.join(args.relative_root, args.output_dir)  # absolute path for output dir
+    
+    if op.exists(volume_output_dir):
+        print("WARNING: Output directory exists")
+    os.makedirs(volume_output_dir, exist_ok=True)
+
+    # any files to copy?
+
+    # other arguments:
+    group_mask_file = op.join(args.relative_root, args.group_mask_file)
+    h5_input = op.join(args.relative_root, args.input_hdf5)
+    analysis_name = args.analysis_name
+    output_extension = args.output_ext
+
+    # call function:
+    h5_to_volumes(h5_input, analysis_name, group_mask_file, output_extension, volume_output_dir)
 
 
 def write_hdf5(group_mask_file, cohort_file, 
@@ -93,6 +153,38 @@ def write_hdf5(group_mask_file, cohort_file,
     f.close()
     return int(not op.exists(output_file))
 
+def get_h5_to_volume_parser():
+    parser = argparse.ArgumentParser(
+        description="Convert statistical results from an hdf5 file to a volume data (NIfTI file)")
+    parser.add_argument(
+        "--group-mask-file", "--group_mask_file",
+        help="Path to a group mask file",
+        required=True)
+    parser.add_argument(
+        "--cohort-file", "--cohort_file",
+        help="Path to a csv with demographic info and paths to data.",
+        required=True)
+    parser.add_argument(
+        "--relative-root", "--relative_root",
+        help="Root to which all paths are relative, i.e. defining the (absolute) path to root directory of group_mask_file, cohort_file, and output_hdf5.",
+        type=op.abspath, 
+        default="/inputs/")
+    parser.add_argument(
+        "--analysis-name", "--analysis_name",
+        help="Name of the statistical analysis results to be saved.")
+    parser.add_argument(
+        "--input-hdf5", "--input_hdf5",
+        help="Name of HDF5 (.h5) file where results outputs are saved.")
+    parser.add_argument(
+        "--output-dir", "--output_dir",
+        help="A directory where output volume files will be saved. If the directory does not exist, it will be automatically created.")
+    parser.add_argument(
+        "--output-ext", "--output_ext",
+        help="The extension for output volume data. Options are .nii.gz (default) and .nii. Please provide the prefix dot.",
+        default=".nii.gz")
+    return parser
+    
+
 def get_parser():
 
     parser = argparse.ArgumentParser(
@@ -128,4 +220,5 @@ def main():
     return status
 
 if __name__ == "__main__":
-    main()
+#    main()
+    h5_to_volumes_wrapper()

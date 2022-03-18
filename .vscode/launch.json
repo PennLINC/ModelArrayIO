@@ -12,10 +12,13 @@
             "program": "${file}",
             "console": "integratedTerminal",
             //"env": {"PYTHONPATH": "/cbica/projects/GRMPY/miniconda3/condabin"},
-            "args": ["--group-mask-file", "stats_ModelArray/tpl-MNI152NLin6Asym_res-02_desc-brain_mask.nii.gz",
-                     "--cohort-file", "stats_ModelArray/GRMPY_convoxel_meanCBF_n215.csv",
-                     "--relative-root", "/cbica/projects/GRMPY/project/curation/testing/",
-                     "--output-hdf5", "stats_ModelArray/GRMPY_meanCBF_n215_test.h5"]
+            "args": ["--group-mask-file", "n1601_NbackCoverageMask_20170427.nii.gz",
+                     "--cohort-file", "pncNback_phenotypes.csv",
+                     "--relative-root", "/home/chenying/Desktop/fixel_project/data/data_voxel_kristin_nback",
+                     "--analysis_name", "lm_fullOutputs",
+                     "--input-hdf5", "pncNback_nvoxels-0_wResults_20220317-162937.h5",
+                     "--output-dir", "pncNback_nvoxels-0_wResults_20220317-162937",
+                     "--output-ext", ".nii.gz"]
         }
     ]
 }
