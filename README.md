@@ -72,7 +72,7 @@ foo@bar:~$ pip install -e .    # for developer to update
 ### Convert .mif files to an HDF5 (.h5) file
 Using above described scenario as an example, for FD dataset:
 ``` console
-foo@bar:~$ fixeldb_create \
+foo@bar:~$ confixel \
                 --index-file FD/index.mif \
                 --directions-file FD/directions.mif \
                 --cohort-file cohort_FD.csv \
