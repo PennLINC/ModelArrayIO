@@ -269,6 +269,10 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
                                      header=nifti2_img.header)
         nifti2_to_mif(temp_nifti2, out_mif)
 
+        # # if this result is p.value, also write out 1-p.value (1m.p.value)
+        # if "p.value" in valid_result_name:   # the result name contains "p.value" (from R package broom)
+        #     valid_result_name_1mpvalue = valid_result_name.replace("p.value", "1m.p.value")
+
 
 
 def h5_to_fixels():
