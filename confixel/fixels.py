@@ -50,6 +50,8 @@ def mif_to_nifti2(mif_file):
 
 
 def nifti2_to_mif(nifti2_image, mif_file):
+# Note: because -force is not turned on in "mrconvert", the output files won't be overwritten!
+
 
     mrconvert = find_mrconvert()
     if mrconvert is None:
@@ -269,6 +271,15 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
                                      header=nifti2_img.header)
         nifti2_to_mif(temp_nifti2, out_mif)
 
+        # if this result is p.value, also write out 1-p.value (1m.p.value)
+        if "p.value" in valid_result_name:   # the result name contains "p.value" (from R package broom)
+            valid_result_name_1mpvalue = valid_result_name.replace("p.value", "1m.p.value")
+            out_mif_1mpvalue = op.join(fixel_output_dir, analysis_name + "_" + valid_result_name_1mpvalue + '.mif')
+            output_mifvalues_1mpvalue = 1 - results_matrix[result_col, :]   # 1 minus
+            temp_nifti2_1mpvalue = nb.Nifti2Image(output_mifvalues_1mpvalue.reshape(-1, 1, 1),
+                                                    nifti2_img.affine,
+                                                    header=nifti2_img.header)
+            nifti2_to_mif(temp_nifti2_1mpvalue, out_mif_1mpvalue)
 
 
 def h5_to_fixels():

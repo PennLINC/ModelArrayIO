@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import argparse
 import os
 import os.path as op
@@ -71,6 +70,17 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
         output_img = nb.Nifti1Image(output, affine=group_mask_img.affine,
                                     header=group_mask_img.header)
         output_img.to_filename(out_file)
+
+        # if this result is p.value, also write out 1-p.value (1m.p.value)
+        if "p.value" in valid_result_name:   # the result name contains "p.value" (from R package broom)
+            valid_result_name_1mpvalue = valid_result_name.replace("p.value", "1m.p.value")
+            out_file_1mpvalue = op.join(volume_output_dir, analysis_name + "_" + valid_result_name_1mpvalue + output_extension)
+            output_1mpvalue = np.zeros(group_mask_matrix.shape)
+            output_1mpvalue[group_mask_matrix] = 1 - results_matrix[result_col, :]  # 1 minus
+            output_img_1mpvalue = nb.Nifti1Image(output_1mpvalue, affine=group_mask_img.affine,
+                                                header=group_mask_img.header)
+            output_img_1mpvalue.to_filename(out_file_1mpvalue)
+
 
 
 def h5_to_volumes_wrapper():
@@ -220,5 +230,4 @@ def main():
     return status
 
 if __name__ == "__main__":
-#    main()
-    h5_to_volumes_wrapper()
+    main()
