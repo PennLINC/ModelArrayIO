@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import argparse
 import os
 import os.path as op
@@ -231,5 +230,4 @@ def main():
     return status
 
 if __name__ == "__main__":
-#    main()
-    h5_to_volumes_wrapper()
+    main()

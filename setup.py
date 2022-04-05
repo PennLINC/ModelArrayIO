@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-""" fmriprep setup script """
 import sys
 from setuptools import setup
 import versioneer
