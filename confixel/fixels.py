@@ -50,6 +50,8 @@ def mif_to_nifti2(mif_file):
 
 
 def nifti2_to_mif(nifti2_image, mif_file):
+# Note: because -force is not turned on in "mrconvert", the output files won't be overwritten!
+
 
     mrconvert = find_mrconvert()
     if mrconvert is None:
