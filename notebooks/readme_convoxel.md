@@ -8,13 +8,14 @@ To convert (a list of) voxel-wise data from NIfTI format to .h5 format, you need
 In addition, different from `ConFixel`, you also need to provide these image files:
 * one group mask: Only voxels within the group mask will be kept during conversion to .h5 file.
 * subject-specific masks: This takes the inconsistent boundary of subject-specific images into account. After conversion, for each subject's scalar mage, voxels outside the subject-specific mask will be set to `NaN`. `ModelArray` will then check if each voxel has sufficient number of subjects to get reliable statistics (see argument `num.subj.lthr.abs` and `num.subj.lthr.rel` in Model fitting functions, e.g., [`ModelArray.lm()`](https://pennlinc.github.io/ModelArray/reference/ModelArray.lm.html)).
+    * If you don't have subject-specific masks, that's fine; you can use group mask instead (see below for how to achieve this in .csv file).
 
 ### Cohort's csv file (for each scalar)
 Each row of a cohort .csv is for one NIfTI file you want to include. The file should at least include these columns (Notes: these column names are fixed, i.e. not user-defined):
 
 * "scalar_name": which tells us what metric is being analyzed, e.g. FA
 * "source_file": which tells us which NIfTI file will be used for this subject
-* "source_mask_file": As the boundary of the subject-specific images can be different from the group mask, `ConVoxel` also asks for the filename for subject-specific masks. This is something different from `ConFixel`. If you don't have subject-specific masks, simply provide group mask here for each subject.
+* "source_mask_file": which tells us the filename of subject-specific masks. If you don't have subject-specific masks, simply provide filename of group mask here for each subject.
 
 ### Example
 #### Example folder structure
