@@ -1,23 +1,99 @@
 # how to use ConVoxel
 
-## Prepare csv file, for example:
+In general, `ConVoxel` is very similar to `ConFixel`.
+
+## Prepare data
+To convert (a list of) voxel-wise data from NIfTI format to .h5 format, you need to prepare a cohort CSV file that provides several basic informations of all NIfTI files you want to include. We recommend that, for each scalar (e.g. FA), prepare one .csv file, and thus getting one .h5 file.
+
+In addition, different from `ConFixel`, you also need to provide these image files:
+* one group mask: Only voxels within the group mask will be kept during conversion to .h5 file.
+* subject-specific masks: This takes the inconsistent boundary of subject-specific images into account. After conversion, for each subject's scalar mage, voxels outside the subject-specific mask will be set to `NaN`. `ModelArray` will then check if each voxel has sufficient number of subjects to get reliable statistics (see argument `num.subj.lthr.abs` and `num.subj.lthr.rel` in Model fitting functions, e.g., [`ModelArray.lm()`](https://pennlinc.github.io/ModelArray/reference/ModelArray.lm.html)).
+
+### Cohort's csv file (for each scalar)
+Each row of a cohort .csv is for one NIfTI file you want to include. The file should at least include these columns (Notes: these column names are fixed, i.e. not user-defined):
+
+* "scalar_name": which tells us what metric is being analyzed, e.g. FA
+* "source_file": which tells us which NIfTI file will be used for this subject
+* "source_mask_file": As the boundary of the subject-specific images can be different from the group mask, `ConVoxel` also asks for the filename for subject-specific masks. This is something different from `ConFixel`. If you don't have subject-specific masks, simply provide group mask here for each subject.
+
+### Example
+#### Example folder structure
+```
+/home/username/myProject/data
+|
+├── cohort_FA.csv
+├── group_mask.nii.gz
+│
+├── FA
+|   ├── sub1_FA.nii.gz
+|   ├── sub2_FA.nii.gz
+|   ├── sub3_FA.nii.gz
+│   ├── ...
+│
+├── individual_masks
+|   ├── sub1_mask.nii.gz
+|   ├── sub2_mask.nii.gz
+|   ├── sub3_mask.nii.gz
+|   ├── ...
+└── ...
+```
+
+#### Corresponding csv file for scalar FA can look like this:
 "cohort_FA.csv" for scalar FA:
-| ***scalar_name*** | ***source_file***  | ***source_mask_file***  | subject_id    | age    | sex     | 
+| ***scalar_name*** | ***source_file***  | ***source_mask_file***  | subject_id    | age    | sex     |
 | :----:        | :----:         | :----:         | :----:        | :----: |  :----: |
-| FA            | FA/sub1_FA.mif | FA/sub1_FA_mask.mif | sub1          | 10     | F       |
-| FA            | FA/sub2_FA.mif | FA/sub2_FA_mask.mif | sub2          | 20     | M       |
-| FA            | FA/sub3_FA.mif | FA/sub3_FA_mask.mif | sub3          | 15     | F       |
+| FA            | FA/sub1_FA.nii.gz | individual_masks/sub1_mask.nii.gz | sub1          | 10     | F       |
+| FA            | FA/sub2_FA.nii.gz | individual_masks/sub2_mask.nii.gz | sub2          | 20     | M       |
+| FA            | FA/sub3_FA.nii.gz | individual_masks/sub3_mask.nii.gz | sub3          | 15     | F       |
 | ...            | ... | ... | ...          | ...     | ...       |
 
 Notes:
 * Columns that must be included are highlighted in ***bold and italics***;
-    * Notice that compared to csv file for ConFixel, here we need to provide a column called `source_mask_file`. This column is for subject-specific masks, i.e. the boundary of the subject-specific images can be different from the group mask. If you don't have subject-specific masks, simply provide group mask here for each subject.
 * The order of columns can be changed.
 
+For this case, when running ConVoxel, argument `--relative-root` should be `/home/username/myProject/data`
 
-## ConVoxel --> volume data
+## Run ConVoxel
+### Convert NIfTI files to an HDF5 (.h5) file
+Using above described scenario as an example, for FA dataset:
+``` console
+foo@bar:~$ # first, activate conda environment where `ConFixel` is installed: `conda activate <env_name>`
+foo@bar:~$ convoxel \
+                --group-mask-file group_mask.nii.gz \
+                --cohort-file cohort_FA.csv \
+                --relative-root /home/username/myProject/data \
+                --output-hdf5 FA.h5
+```
 
-All the converted volume data are saved with data type float32. 
+Now you should get the HDF5 file "FA.h5" in folder "/home/username/myProject/data". You may use [`ModelArray`](https://pennlinc.github.io/ModelArray/) to perform statistical analysis.
+
+### Convert result .h5 file back to NIfTI format
+After running `ModelArray` and getting statistical results in FA.h5 file (say, the analysis name is called "mylm"), you can use `volumestats_write` to convert results into a list of NIfTI files in a folder specified by you.
+
+``` console
+foo@bar:~$ # first, activate conda environment where `ConFixel` is installed: `conda activate <env_name>`
+foo@bar:~$ volumestats_write \
+                --group-mask-file group_mask.nii.gz \
+                --cohort-file cohort_FA.csv \
+                --relative-root /home/username/myProject/data \
+                --analysis-name mylm \
+                --input-hdf5 FA.h5 \
+                --output-dir FA_stats \
+                --output-ext .nii.gz    # or ".nii"
+```
+
+Now you should get the results NIfTI images saved in folder "FA_stats". All the converted volume data are saved with data type float32.
+
+### For additional information:
+You can refer to `--help` for additional information:
+``` console
+foo@bar:~$ convoxel --help
+foo@bar:~$ volumestats_write --help
+```
+
+## Other notes
+### Image of number of observations used
+If you requested `nobs` when running model fitting in `ModelArray`, after conversion back to NIfTI files, you'll get an image called `*_model.nobs.nii*` (number of observations used). With the feature of `subject-specific masks`, you'll probably see inhomogeneity in this image.
 
 ### Results for voxels without sufficient subjects (because of subject-specific masks):
 
