@@ -1,11 +1,11 @@
-# how to use ConVoxel
+# Walkthrough for voxel-wise data conversion
 
-In general, `ConVoxel` is very similar to `ConFixel`.
+For voxel-wise data, we use converter `ConVoxel`. In general, `ConVoxel` is very similar to converter `ConFixel`.
 
 ## Prepare data
 To convert (a list of) voxel-wise data from NIfTI format to .h5 format, you need to prepare a cohort CSV file that provides several basic informations of all NIfTI files you want to include. We recommend that, for each scalar (e.g. FA), prepare one .csv file, and thus getting one .h5 file.
 
-In addition, different from `ConFixel`, you also need to provide these image files:
+In addition, different from converter `ConFixel`, you also need to provide these image files:
 * one group mask: Only voxels within the group mask will be kept during conversion to .h5 file.
 * subject-specific masks: This takes the inconsistent boundary of subject-specific images into account. After conversion, for each subject's scalar mage, voxels outside the subject-specific mask will be set to `NaN`. `ModelArray` will then check if each voxel has sufficient number of subjects to get reliable statistics (see argument `num.subj.lthr.abs` and `num.subj.lthr.rel` in Model fitting functions, e.g., [`ModelArray.lm()`](https://pennlinc.github.io/ModelArray/reference/ModelArray.lm.html)).
     * If you don't have subject-specific masks, that's fine; you can use group mask instead (see below for how to achieve this in .csv file).
@@ -72,7 +72,7 @@ Now you should get the HDF5 file "FA.h5" in folder "/home/username/myProject/dat
 After running `ModelArray` and getting statistical results in FA.h5 file (say, the analysis name is called "mylm"), you can use `volumestats_write` to convert results into a list of NIfTI files in a folder specified by you.
 
 ``` console
-foo@bar:~$ # first, activate conda environment where `ConFixel` is installed: `conda activate <env_name>`
+foo@bar:~$ # first, activate conda environment where software `ConFixel` is installed: `conda activate <env_name>`
 foo@bar:~$ volumestats_write \
                 --group-mask-file group_mask.nii.gz \
                 --cohort-file cohort_FA.csv \
@@ -94,7 +94,7 @@ foo@bar:~$ volumestats_write --help
 
 ## Other notes
 ### Image of number of observations used
-If you requested `nobs` when running model fitting in `ModelArray`, after conversion back to NIfTI files, you'll get an image called `*_model.nobs.nii*` (number of observations used). With the feature of `subject-specific masks`, you'll probably see inhomogeneity in this image.
+If you requested `nobs` when running model fitting in `ModelArray`, after conversion back to NIfTI files, you'll get an image called `*_model.nobs.nii*` (number of observations used). With the feature of "subject-specific masks", you'll probably see inhomogeneity in this image.
 
 ### Results for voxels without sufficient subjects (because of subject-specific masks):
 
