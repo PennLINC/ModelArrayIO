@@ -3,7 +3,7 @@
 
 <p align="center">
 
-![Overview](overview_structure.PNG)
+![Overview](overview_structure.png)
 
 </p>
 
