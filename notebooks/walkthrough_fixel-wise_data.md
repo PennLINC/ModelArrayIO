@@ -96,3 +96,7 @@ foo@bar:~$ fixelstats_write --help
 <!-- fixelstats_write: can be tested out with existing results; otherwise have to run for all fixels.. -->
 
 <!-- TODO: also update example*.py and .sh -->
+
+## Other notes
+### ConFixel: convert from `.h5` to `.mif`
+* If there are already existing images in the output folder, the images won't be overwritten. This is because in function confixel.fixels.nifti2_to_mif, we did not turn on -force in "mrconvert".

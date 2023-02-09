@@ -45,7 +45,7 @@ pip install -e .    # for developer to update
 ```
 
 ## How to use
-We provide [walkthrough of how to use `ConFixel` for fixel-wise data](notebooks/walkthrough_fixel-wise_data.md), and [walkthrough of `ConVoxel` for voxel-wise data](notebooks/walkthrough_voxel-wise_data.md).
+We provide [walkthrough for how to use `ConFixel` for fixel-wise data](notebooks/walkthrough_fixel-wise_data.md), and [walkthrough for `ConVoxel` for voxel-wise data](notebooks/walkthrough_voxel-wise_data.md).
 
 As `ConFixel` software is usually used together with [ModelArray](https://pennlinc.github.io/ModelArray/), we also provide [a combined walkthrough](https://pennlinc.github.io/ModelArray/articles/walkthrough.html) of ConFixel + ModelArray with example fixel-wise data.
 
