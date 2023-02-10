@@ -83,7 +83,7 @@ foo@bar:~$ volumestats_write \
                 --output-ext .nii.gz    # or ".nii"
 ```
 
-Now you should get the results NIfTI images saved in folder "FA_stats". All the converted volume data are saved with data type float32.
+Now you should get the results NIfTI images saved in folder "FA_stats". All the converted volume data are saved with data type float32. You can view the images with the image viewer you like.
 
 ### For additional information:
 You can refer to `--help` for additional information:
