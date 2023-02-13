@@ -26,15 +26,15 @@ Each row of a cohort .csv is for one NIfTI file you want to include. The file sh
 ├── group_mask.nii.gz
 │
 ├── FA
-|   ├── sub1_FA.nii.gz
-|   ├── sub2_FA.nii.gz
-|   ├── sub3_FA.nii.gz
+|   ├── sub-01_FA.nii.gz
+|   ├── sub-02_FA.nii.gz
+|   ├── sub-03_FA.nii.gz
 │   ├── ...
 │
 ├── individual_masks
-|   ├── sub1_mask.nii.gz
-|   ├── sub2_mask.nii.gz
-|   ├── sub3_mask.nii.gz
+|   ├── sub-01_mask.nii.gz
+|   ├── sub-02_mask.nii.gz
+|   ├── sub-03_mask.nii.gz
 |   ├── ...
 └── ...
 ```
@@ -43,9 +43,9 @@ Each row of a cohort .csv is for one NIfTI file you want to include. The file sh
 "cohort_FA.csv" for scalar FA:
 | ***scalar_name*** | ***source_file***  | ***source_mask_file***  | subject_id    | age    | sex     |
 | :----:        | :----:         | :----:         | :----:        | :----: |  :----: |
-| FA            | FA/sub1_FA.nii.gz | individual_masks/sub1_mask.nii.gz | sub1          | 10     | F       |
-| FA            | FA/sub2_FA.nii.gz | individual_masks/sub2_mask.nii.gz | sub2          | 20     | M       |
-| FA            | FA/sub3_FA.nii.gz | individual_masks/sub3_mask.nii.gz | sub3          | 15     | F       |
+| FA            | FA/sub-01_FA.nii.gz | individual_masks/sub-01_mask.nii.gz | sub-01          | 10     | F       |
+| FA            | FA/sub-02_FA.nii.gz | individual_masks/sub-02_mask.nii.gz | sub-02          | 20     | M       |
+| FA            | FA/sub-03_FA.nii.gz | individual_masks/sub-03_mask.nii.gz | sub-03          | 15     | F       |
 | ...            | ... | ... | ...          | ...     | ...       |
 
 Notes:
@@ -58,12 +58,12 @@ For this case, when running ConVoxel, argument `--relative-root` should be `/hom
 ### Convert NIfTI files to an HDF5 (.h5) file
 Using above described scenario as an example, for FA dataset:
 ``` console
-foo@bar:~$ # first, activate conda environment where `ConFixel` is installed: `conda activate <env_name>`
-foo@bar:~$ convoxel \
-                --group-mask-file group_mask.nii.gz \
-                --cohort-file cohort_FA.csv \
-                --relative-root /home/username/myProject/data \
-                --output-hdf5 FA.h5
+# first, activate conda environment where `ConFixel` is installed: `conda activate <env_name>`
+convoxel \
+    --group-mask-file group_mask.nii.gz \
+    --cohort-file cohort_FA.csv \
+    --relative-root /home/username/myProject/data \
+    --output-hdf5 FA.h5
 ```
 
 Now you should get the HDF5 file "FA.h5" in folder "/home/username/myProject/data". You may use [`ModelArray`](https://pennlinc.github.io/ModelArray/) to perform statistical analysis.
@@ -72,15 +72,15 @@ Now you should get the HDF5 file "FA.h5" in folder "/home/username/myProject/dat
 After running `ModelArray` and getting statistical results in FA.h5 file (say, the analysis name is called "mylm"), you can use `volumestats_write` to convert results into a list of NIfTI files in a folder specified by you.
 
 ``` console
-foo@bar:~$ # first, activate conda environment where software `ConFixel` is installed: `conda activate <env_name>`
-foo@bar:~$ volumestats_write \
-                --group-mask-file group_mask.nii.gz \
-                --cohort-file cohort_FA.csv \
-                --relative-root /home/username/myProject/data \
-                --analysis-name mylm \
-                --input-hdf5 FA.h5 \
-                --output-dir FA_stats \
-                --output-ext .nii.gz    # or ".nii"
+# first, activate conda environment where software `ConFixel` is installed: `conda activate <env_name>`
+volumestats_write \
+    --group-mask-file group_mask.nii.gz \
+    --cohort-file cohort_FA.csv \
+    --relative-root /home/username/myProject/data \
+    --analysis-name mylm \
+    --input-hdf5 FA.h5 \
+    --output-dir FA_stats \
+    --output-ext .nii.gz    # or ".nii"
 ```
 
 Now you should get the results NIfTI images saved in folder "FA_stats". All the converted volume data are saved with data type float32. You can view the images with the image viewer you like.
@@ -88,8 +88,8 @@ Now you should get the results NIfTI images saved in folder "FA_stats". All the 
 ### For additional information:
 You can refer to `--help` for additional information:
 ``` console
-foo@bar:~$ convoxel --help
-foo@bar:~$ volumestats_write --help
+convoxel --help
+volumestats_write --help
 ```
 
 ## Other notes
