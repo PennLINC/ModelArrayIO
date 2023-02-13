@@ -146,8 +146,13 @@ def write_hdf5(group_mask_file, cohort_file,
         scalars[row['scalar_name']].append(scalar_data)   # append to specific scalar_name
         sources_lists[row['scalar_name']].append(row['source_file'])  # append source mif filename to specific scalar_name
 
-    # Write the output
+    # Write the output:
     output_file = op.join(relative_root, output_h5)
+    # make dir if not exist:
+    output_dir = op.dirname(output_file)
+    if not op.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+    # initialize HDF5 file:
     f = h5py.File(output_file, "w")
     
     voxelsh5 = f.create_dataset(name="voxels", data=voxel_table.to_numpy().T)
