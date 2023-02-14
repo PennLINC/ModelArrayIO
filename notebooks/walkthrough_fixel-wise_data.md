@@ -85,7 +85,7 @@ fixelstats_write \
 ```
 Now you can view the results in folder "FD_stats" in `mrview`.
 
-> ⚠️ ⚠️ WARNING ⚠️ ⚠️ : If there are existing images in the `--output-dir`, those existing images won't be overwritten! See [here](#existing-output-folder-and-output-images) for more.
+> ⚠️ ⚠️ WARNING ⚠️ ⚠️ : If there are existing images in the `--output-dir`, those existing images won't be overwritten! See [notes regarding "Existing output folder and output images"](#existing-output-folder-and-output-images) for more.
 
 ### For additional description:
 You can refer to `--help` for additional information:
