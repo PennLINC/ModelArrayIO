@@ -7,7 +7,7 @@ To convert (a list of) voxel-wise data from NIfTI format to .h5 format, you need
 
 In addition, different from converter `ConFixel`, you also need to provide these image files:
 * one group mask: Only voxels within the group mask will be kept during conversion to .h5 file.
-* subject-specific masks: This takes the inconsistent boundary of subject-specific images into account. After conversion, for each subject's scalar mage, voxels outside the subject-specific mask will be set to `NaN`. `ModelArray` will then check if each voxel has sufficient number of subjects to get reliable statistics (see argument `num.subj.lthr.abs` and `num.subj.lthr.rel` in Model fitting functions, e.g., [`ModelArray.lm()`](https://pennlinc.github.io/ModelArray/reference/ModelArray.lm.html)).
+* subject-specific masks (i.e., individual masks): This takes the inconsistent boundary of subject-specific images into account. After conversion, for each subject's scalar mage, voxels outside the subject-specific mask will be set to `NaN`. `ModelArray` will then check if each voxel has sufficient number of subjects to get reliable statistics (see argument `num.subj.lthr.abs` and `num.subj.lthr.rel` in Model fitting functions, e.g., [`ModelArray.lm()`](https://pennlinc.github.io/ModelArray/reference/ModelArray.lm.html)).
     * If you don't have subject-specific masks, that's fine; you can use group mask instead (see below for how to achieve this in .csv file).
 
 ### Cohort's csv file (for each scalar)

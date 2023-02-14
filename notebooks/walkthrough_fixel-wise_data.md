@@ -3,7 +3,7 @@
 For fixel-wise data, we use converter `ConFixel` to convert between fixel-wise data format `.mif` and the HDF5 file format (`.h5`) that ModelArray uses. At this point, we expect you have followed the [Installation guide](../README.md#installation) and installed `ConFixel` software and dependent software `MRtrix` which is needed for fixel-wise data.
 
 ## Prepare data
-To convert (a list of) fixel data from .mif format to .h5 format, you need to prepare a cohort CSV file that provides several basic informations of all .mif files you want to include. We recommend that, for each scalar (e.g. FD/FC/FDC), prepare one .csv file, and thus getting one .h5 file.
+To convert (a list of) fixel-wise data from .mif format to .h5 format, you need to prepare a cohort CSV file that provides several basic informations of all .mif files you want to include. We recommend that, for each scalar (e.g. FD/FC/FDC), prepare one .csv file, and thus getting one .h5 file.
 
 ### Cohort's csv file (for each scalar)
 Each row of a cohort .csv is for one mif file you want to include. The file should at least include these columns (Notes: these column names are fixed, i.e. not user-defined):
@@ -51,7 +51,7 @@ Notes:
 * Columns that must be included are highlighted in ***bold and italics***;
 * The order of columns can be changed.
 
-For this case, when running ConFixel creating hdf5 fixel data, argument **--relative-root** should be "/home/username/myProject/data" 
+For this case, when running ConFixel creating hdf5 fixel-wise data, argument **--relative-root** should be "/home/username/myProject/data" 
 
 
 ## Run ConFixel
