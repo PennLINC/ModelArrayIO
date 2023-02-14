@@ -105,3 +105,5 @@ fixelstats_write --help
 * If there are existing images in the output folder and they have the same filenames as those to be saved, the existing images won't be overwritten. This is because in function `confixel.fixels.nifti2_to_mif()`, we did not turn on `-force` in `mrconvert` (i.e., output files won't be overwritten).
 * In addition, if the output folder already exists, `ConFixel` will not delete it and create a new one. Therefore, any existing files in the output folder will be kept as it is. 
 * So, if the output folder already exists, you might consider deleting it before using `ConFixel` to save new images.
+
+<!--- TODO: above words: to be confirmed! --->
