@@ -85,6 +85,8 @@ fixelstats_write \
 ```
 Now you can view the results in folder "FD_stats" in `mrview`.
 
+> ⚠️ ⚠️ WARNING ⚠️ ⚠️ : If there are existing images in the `--output-dir`, those existing images won't be overwritten! See [here](#existing-output-folder-and-output-images) for more.
+
 ### For additional description:
 You can refer to `--help` for additional information:
 ``` console 
@@ -99,4 +101,7 @@ fixelstats_write --help
 
 ## Other notes
 ### ConFixel: convert from `.h5` to `.mif`
-* If there are already existing images in the output folder, the images won't be overwritten. This is because in function confixel.fixels.nifti2_to_mif, we did not turn on -force in "mrconvert".
+#### Existing output folder and output images
+* If there are existing images in the output folder and they have the same filenames as those to be saved, the existing images won't be overwritten. This is because in function `confixel.fixels.nifti2_to_mif()`, we did not turn on `-force` in `mrconvert` (i.e., output files won't be overwritten).
+* In addition, if the output folder already exists, `ConFixel` will not delete it and create a new one. Therefore, any existing files in the output folder will be kept as it is. 
+* So, if the output folder already exists, you might consider deleting it before using `ConFixel` to save new images.
