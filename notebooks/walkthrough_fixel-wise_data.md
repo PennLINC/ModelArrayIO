@@ -97,13 +97,13 @@ fixelstats_write --help
 <!--TODO: after update please test out: use conda + terminal command `confixel` and `fixelstats_write`; Still using case above as an example -->
 <!-- fixelstats_write: can be tested out with existing results; otherwise have to run for all fixels.. -->
 
-<!-- TODO: also update example*.py and .sh -->
 
 ## Other notes
 ### ConFixel: convert from `.h5` to `.mif`
 #### Existing output folder and output images
+⚠️ ⚠️ WARNING ⚠️ ⚠️ 
 * If there are existing images in the output folder and they have the same filenames as those to be saved, the existing images won't be overwritten. This is because in function `confixel.fixels.nifti2_to_mif()`, we did not turn on `-force` in `mrconvert` (i.e., output files won't be overwritten).
-* In addition, if the output folder already exists, `ConFixel` will not delete it and create a new one. Therefore, any existing files in the output folder will be kept as it is. 
-* So, if the output folder already exists, you might consider deleting it before using `ConFixel` to save new images.
+* In addition, if the output folder already exists, `ConFixel` will not delete it or create a new one. You will only get a message saying "WARNING: Output directory exists". Therefore, any existing files in the output folder will be kept as it is. 
+* So, if the output folder already exists, you may consider manually deleting it before using `ConFixel` to save new images.
 
 <!--- TODO: above words: to be confirmed! --->

@@ -85,6 +85,8 @@ volumestats_write \
 
 Now you should get the results NIfTI images saved in folder "FA_stats". All the converted volume data are saved with data type float32. You can view the images with the image viewer you like.
 
+> ⚠️ ⚠️ WARNING ⚠️ ⚠️ : See [notes regarding "Existing output folder and output images"](#existing-output-folder-and-output-images).
+
 ### For additional information:
 You can refer to `--help` for additional information:
 ``` console
@@ -93,6 +95,14 @@ volumestats_write --help
 ```
 
 ## Other notes
+### ConVoxel: convert from `.h5` to NIfTI
+#### Existing output folder and output images
+⚠️ ⚠️ WARNING ⚠️ ⚠️ 
+* If the output folder already exists, `ConVoxel` will not delete it or create a new one. You will only get a message saying "WARNING: Output directory exists". Therefore, if there were existing files in the output folder, and they are not part of the current list of images to be saved (e.g., results to be saved were changed, but the output folder name was not changed), these files will be kept as it is and won't be deleted.   <!--- confirmed with toy data, 3/9/2023 -->
+    * However, for existing files which are still part of the current list to be saved, they will be replaced. This is different from current implementation of `ConFixel` converter for fixel-wise data.   <!--- confirmed with toy data, 3/9/2023 -->
+* So to avoid confusion and better for version controls, if the output folder already exists, you might consider manually deleting it before using `ConVoxel` to save new images.
+
+
 ### Image of number of observations used
 If you requested `nobs` when running model fitting in `ModelArray`, after conversion back to NIfTI files, you'll get an image called `*_model.nobs.nii*` (number of observations used). With the feature of "subject-specific masks", you'll probably see inhomogeneity in this image.
 
