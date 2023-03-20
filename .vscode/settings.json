@@ -1,5 +1,7 @@
 {
     "python.analysis.extraPaths": [
         "./confixel"
-    ]
+    ],
+    "python.linting.lintOnSave": false,
+    "python.linting.enabled": false
 }
