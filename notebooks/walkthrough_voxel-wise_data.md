@@ -51,7 +51,7 @@ Each row of a cohort .csv is for one NIfTI file you want to include. The file sh
 Notes:
 * Columns that must be included are highlighted in ***bold and italics***;
 * The order of columns can be changed.
-* Please make sure the consistency (see examples as below). They are case sensitive, too! Either upper case or lower case works, just need to be consistent :)
+* Please make sure the consistency (see examples as below). These strings are case sensitive, too! Either upper case or lower case works, just need to be consistent :)
     * Folder name e.g., "FA" in column `source_file` in CSV file v.s. the actual folder name on disk;
     * File names in columns `source_file` and `source_mask_file` in CSV file v.s. the actual file names on disk;
     * Scalar name e.g., "FA" in column `scalar_name` in CSV file v.s. what you will specify when using functions in `ModelArray`;
