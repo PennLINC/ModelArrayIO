@@ -82,7 +82,7 @@ def gather_fixels(index_file, directions_file):
     """
 
     index_img, index_data = mif_to_nifti2(index_file)
-    count_vol = index_data[..., 0]   # number of fixels in each voxel; by index.mif definition
+    count_vol = index_data[..., 0].astype(np.uint32)   # number of fixels in each voxel; by index.mif definition
     id_vol = index_data[..., 1]  # index of the first fixel in this voxel, in the list of all fixels (in directions.mif, FD.mif, etc)
     max_id = id_vol.max()
     max_fixel_id = max_id + int(count_vol[id_vol == max_id])  # = the maximum id of fixels + 1 = # of fixels in entire image
