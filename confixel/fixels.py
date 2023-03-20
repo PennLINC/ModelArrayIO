@@ -42,7 +42,7 @@ def mif_to_nifti2(mif_file):
     if not op.exists(nii_file):
         raise Exception(err)
     nifti2_img = nb.load(nii_file)
-    data = nifti2_img.get_data().squeeze()
+    data = nifti2_img.get_fdata(dtype=np.float32).squeeze()
     # ... do stuff with dirpath
     if dirpath:
         shutil.rmtree(dirpath)
