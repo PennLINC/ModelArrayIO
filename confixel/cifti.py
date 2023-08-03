@@ -64,6 +64,20 @@ def extract_cifti_scalar_data(cifti_file):
     #         vertex_id=np.arange(cifti_data.shape[0]),
     #         structure_name=brain_names)
 
+
+def brain_names_to_dataframe(brain_names):
+    # Make a lookup table for greyordinates
+    structure_ids, structure_names = pd.factorize(brain_names)
+    # Make them a list of strings
+    structure_name_strings = list(map(str, structure_names))
+
+    greyordinate_df = pd.DataFrame(
+        {"vertex_id": np.arange(structure_ids.shape[0]),
+         "structure_id": structure_ids})
+
+    return greyordinate_df, structure_name_strings
+
+
 def write_hdf5(cohort_file, output_h5='fixeldb.h5', relative_root='/'):
     """
     Load all fixeldb data.
@@ -100,9 +114,10 @@ def write_hdf5(cohort_file, output_h5='fixeldb.h5', relative_root='/'):
     output_file = op.join(relative_root, output_h5)
     f = h5py.File(output_file, "w")
 
-    fixelsh5 = f.create_dataset(name="fixels", data=fixel_table.to_numpy().T)
-    fixelsh5.attrs['column_names'] = list(fixel_table.columns)
-
+    greyordinate_table, structure_names = brain_names_to_dataframe(last_brain_names)
+    greyordinatesh5 = f.create_dataset(name="greyordinates", data=greyordinate_table.to_numpy().T)
+    greyordinatesh5.attrs['column_names'] = list(greyordinate_table.columns)
+    greyordinatesh5.attrs['structure_names'] = structure_names
 
     for scalar_name in scalars.keys():  # in the cohort.csv, two or more scalars in one sheet is allowed, and they can be separated to different scalar group.
         one_scalar_h5 = f.create_dataset('scalars/{}/values'.format(scalar_name),
@@ -113,24 +128,16 @@ def write_hdf5(cohort_file, output_h5='fixeldb.h5', relative_root='/'):
 
 
 def get_parser():
-
     parser = argparse.ArgumentParser(
-        description="Create a hdf5 file of fixel data")
-    parser.add_argument(
-        "--index-file", "--index_file",
-        help="Index File",
-        required=True)
-    parser.add_argument(
-        "--directions-file", "--directions_file",
-        help="Directions File",
-        required=True)
+        description="Create a hdf5 file of CIDTI2 dscalar data")
     parser.add_argument(
         "--cohort-file", "--cohort_file",
         help="Path to a csv with demographic info and paths to data.",
         required=True)
     parser.add_argument(
         "--relative-root", "--relative_root",
-        help="Root to which all paths are relative, i.e. defining the (absolute) path to root directory of index_file, directions_file, cohort_file, and output_hdf5.",
+        help="Root to which all paths are relative, i.e. defining the (absolute) "
+        "path to root directory of index_file, directions_file, cohort_file, and output_hdf5.",
         type=op.abspath,
         default="/inputs/")
     parser.add_argument(
@@ -141,7 +148,6 @@ def get_parser():
 
 
 def main():
-
     parser = get_parser()
     args = parser.parse_args()
     status = write_hdf5(cohort_file=args.cohort_file,
