@@ -7,7 +7,7 @@
 
 </p>
 
-`ConFixel` software includes two converters: `ConFixel` for fixel-wise data (`.mif`), and `ConVoxel` for voxel-wise data (NIfTI). Each converter converts between the original image format and the HDF5 file format (`.h5`) that ModelArray uses. 
+`ConFixel` software includes two converters: `ConFixel` for fixel-wise data (`.mif`), and `ConVoxel` for voxel-wise data (NIfTI). Each converter converts between the original image format and the HDF5 file format (`.h5`) that ModelArray uses.
 
 Below lists the commands in each converter. After [installation](#installation), these commands can be directly called in a terminal console.
 
@@ -17,6 +17,9 @@ Below lists the commands in each converter. After [installation](#installation),
 * `ConVoxel` converter for voxel-wise data (NIfTI):
     * NIfTI --> `.h5`: command `convoxel`
     * `.h5` --> NIfTI: command `volumestats_write`
+* `ConCIFTI` converter for greyordinate-wise data (CIFTI2):
+    * CIFTI --> `.h5`: command `concifti`
+    * `.h5` --> CIFTI2: command `ciftistats_write`
 
 ## Installation
 ### Install dependent software MRtrix (only required for fixel-wise data `.mif`)
@@ -50,7 +53,7 @@ We provide [walkthrough for how to use `ConFixel` for fixel-wise data](notebooks
 As `ConFixel` software is usually used together with [ModelArray](https://pennlinc.github.io/ModelArray/), we also provide [a combined walkthrough](https://pennlinc.github.io/ModelArray/articles/walkthrough.html) of ConFixel + ModelArray with example fixel-wise data.
 
 You can also refer to `--help` for additional information:
-``` console 
+``` console
 confixel --help
 ```
 You can replace `confixel` with other commands in ConFixel.
