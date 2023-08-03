@@ -10,7 +10,7 @@ from tqdm import tqdm
 import h5py
 
 
-def extract_cifti_scalar_data(cifti_file):
+def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
     """
     Load a scalar cifti file and get its data and mapping
 
@@ -20,6 +20,8 @@ def extract_cifti_scalar_data(cifti_file):
       cifti_file: pathlike
         CIFTI2 file on disk
 
+      reference_brain_names: np.ndarray
+        Array of vertex names
     Returns:
     --------
 
@@ -55,6 +57,10 @@ def extract_cifti_scalar_data(cifti_file):
     brain_names = brain_axis.name
     if not cifti_data.shape[0] == brain_names.shape[0]:
         raise Exception("Mismatch between the brain names and data array")
+
+    if reference_brain_names is not None:
+        if not (brain_names == reference_brain_names).all():
+            raise Exception(f"Incosistent vertex names in cifti file {cifti_file}")
 
     return cifti_data, brain_names
 
