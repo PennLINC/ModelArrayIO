@@ -25,7 +25,7 @@ Below lists the commands in each converter. After [installation](#installation),
 ### Install dependent software MRtrix (only required for fixel-wise data `.mif`)
 When converting fixel-wise data's format (`.mif`), converter `ConFixel` uses function `mrconvert` from MRtrix, so please make sure MRtrix has been installed. If it's not installed yet, please refer to [MRtrix's webpage](https://www.mrtrix.org/download/) for how to install it. Type `mrview` in the terminal to check whether MRtrix installation is successful.
 
-If your input data is voxel-wise data, you can skip this step.
+If your input data is voxel-wise data or CIFTI (greyordinate-wise) data, you can skip this step.
 
 ### Install `ConFixel` software
 Before installing ConFixel software, you may want to create a conda environment  - see [here](https://pennlinc.github.io/ModelArray/articles/installations.html) for more. If you installed MRtrix in a conda environment, you can directly install ConFixel software in that environment.
