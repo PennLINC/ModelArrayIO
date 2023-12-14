@@ -7,7 +7,7 @@
 
 </p>
 
-`ConFixel` software includes three converters: `ConFixel` for fixel-wise data (`.mif`), `ConVoxel` for voxel-wise data (NIfTI) and `ConCIFTI` for CIFTI2 dscalar files. Each converter converts between the original image format and the HDF5 file format (`.h5`) that ModelArray uses.
+`ConFixel` software includes three converters: `ConFixel` for fixel-wise data (`.mif`), `ConVoxel` for voxel-wise data (NIfTI) and `ConCIFTI` for CIFTI-2 dscalar files. Each converter converts between the original image format and the HDF5 file format (`.h5`) that ModelArray uses.
 
 Below lists the commands in each converter. After [installation](#installation), these commands can be directly called in a terminal console.
 
@@ -17,9 +17,9 @@ Below lists the commands in each converter. After [installation](#installation),
 * `ConVoxel` converter for voxel-wise data (NIfTI):
     * NIfTI --> `.h5`: command `convoxel`
     * `.h5` --> NIfTI: command `volumestats_write`
-* `ConCIFTI` converter for greyordinate-wise data (CIFTI2):
-    * CIFTI --> `.h5`: command `concifti`
-    * `.h5` --> CIFTI2: command `ciftistats_write`
+* `ConCIFTI` converter for greyordinate-wise data (CIFTI-2):
+    * CIFTI-2 --> `.h5`: command `concifti`
+    * `.h5` --> CIFTI-2: command `ciftistats_write`
 
 ## Installation
 ### Install dependent software MRtrix (only required for fixel-wise data `.mif`)
