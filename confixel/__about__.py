@@ -11,7 +11,8 @@ del get_versions
 
 __author__ = 'The PennLINC Developers'
 __copyright__ = 'Copyright 2021, PennLINC, Perelman School of Medicine, University of Pennsylvania'
-__credits__ = ['Matt Cieslak', 'Tinashe Tapera', 'Chenying Zhao', 'Valerie Sydnor', 'Josiane Bourque']
+__credits__ = ['Matt Cieslak', 'Tinashe Tapera', 'Chenying Zhao',
+               'Steven Meisler', 'Valerie Sydnor', 'Josiane Bourque']
 __license__ = '3-clause BSD'
 __maintainer__ = 'Matt Cieslak'
 __status__ = 'Prototype'
