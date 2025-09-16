@@ -5,9 +5,10 @@ from collections import defaultdict
 import nibabel as nb
 import pandas as pd
 import numpy as np
-from collections import defaultdict
 from tqdm import tqdm
 import h5py
+from .h5_storage import create_empty_scalar_matrix_dataset
+from .parser import add_relative_root_arg, add_output_hdf5_arg, add_cohort_arg, add_storage_args
 
 
 
@@ -104,19 +105,37 @@ def h5_to_volumes_wrapper():
 
 def write_hdf5(group_mask_file, cohort_file, 
                output_h5='voxeldb.h5',
-               relative_root='/'):
+               relative_root='/',
+               storage_dtype='float32',
+               compression='gzip',
+               compression_level=4,
+               shuffle=True,
+               chunk_voxels=0,
+               target_chunk_mb=2.0):
     """
-    Load all volume data.
+    Load all volume data and write to an HDF5 file with configurable storage.
     Parameters
     -----------
     group_mask_file: str
-        path to a Nifti1 binary group mask file
+        Path to a NIfTI-1 binary group mask file.
     cohort_file: str
-        path to a csv with demographic info and paths to data
+        Path to a CSV with demographic info and paths to data.
     output_h5: str
-        path to a new .h5 file to be written
+        Path to a new .h5 file to be written.
     relative_root: str
-        path to which group_mask_file and cohort_file (and its contents) are relative
+        Path to which group_mask_file and cohort_file (and its contents) are relative.
+    storage_dtype: str
+        Floating type to store values. Options: 'float32' (default), 'float64'.
+    compression: str
+        HDF5 compression filter. Options: 'gzip' (default), 'lzf', 'none'.
+    compression_level: int
+        Gzip compression level (0-9). Only used when compression == 'gzip'. Default 4.
+    shuffle: bool
+        Enable HDF5 shuffle filter to improve compression. Default True (effective when compression != 'none').
+    chunk_voxels: int
+        Chunk size along the voxel axis. If 0, auto-compute using target_chunk_mb. Default 0.
+    target_chunk_mb: float
+        Target chunk size in MiB when auto-computing chunk_voxels. Default 2.0.
     """
     # gather cohort data
     cohort_df = pd.read_csv(op.join(relative_root, cohort_file))
@@ -154,14 +173,31 @@ def write_hdf5(group_mask_file, cohort_file,
         os.makedirs(output_dir, exist_ok=True)
     # initialize HDF5 file:
     f = h5py.File(output_file, "w")
-    
+
     voxelsh5 = f.create_dataset(name="voxels", data=voxel_table.to_numpy().T)
     voxelsh5.attrs['column_names'] = list(voxel_table.columns)
-    
-    for scalar_name in scalars.keys():  # in the cohort.csv, two or more scalars in one sheet is allowed, and they can be separated to different scalar group.
-        one_scalar_h5 = f.create_dataset('scalars/{}/values'.format(scalar_name),
-                         data=np.row_stack(scalars[scalar_name]))
-        one_scalar_h5.attrs['column_names'] = list(sources_lists[scalar_name])  # column names: list of source .mif filenames
+
+    # Storage handled by utility during dataset creation
+
+    for scalar_name in scalars.keys():
+        num_subjects = len(scalars[scalar_name])
+        num_voxels = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
+        dset = create_empty_scalar_matrix_dataset(
+            f,
+            'scalars/{}/values'.format(scalar_name),
+            num_subjects,
+            num_voxels,
+            storage_dtype=storage_dtype,
+            compression=compression,
+            compression_level=compression_level,
+            shuffle=shuffle,
+            chunk_voxels=chunk_voxels,
+            target_chunk_mb=target_chunk_mb,
+            sources_list=sources_lists[scalar_name])
+
+        for row_idx, row_data in enumerate(scalars[scalar_name]):
+            dset[row_idx, :] = row_data
+
     f.close()
     return int(not op.exists(output_file))
 
@@ -176,11 +212,7 @@ def get_h5_to_volume_parser():
         "--cohort-file", "--cohort_file",
         help="Path to a csv with demographic info and paths to data.",
         required=True)
-    parser.add_argument(
-        "--relative-root", "--relative_root",
-        help="Root to which all paths are relative, i.e. defining the (absolute) path to root directory of group_mask_file, cohort_file, and output_hdf5.",
-        type=op.abspath, 
-        default="/inputs/")
+    add_relative_root_arg(parser)
     parser.add_argument(
         "--analysis-name", "--analysis_name",
         help="Name of the statistical analysis results to be saved.")
@@ -205,19 +237,10 @@ def get_parser():
         "--group-mask-file", "--group_mask_file",
         help="Path to a group mask file",
         required=True)
-    parser.add_argument(
-        "--cohort-file", "--cohort_file",
-        help="Path to a csv with demographic info and paths to data.",
-        required=True)
-    parser.add_argument(
-        "--relative-root", "--relative_root",
-        help="Root to which all paths are relative, i.e. defining the (absolute) path to root directory of group_mask_file, cohort_file, and output_hdf5.",
-        type=op.abspath, 
-        default="/inputs/")
-    parser.add_argument(
-        "--output-hdf5", "--output_hdf5",
-        help="Name of HDF5 (.h5) file where outputs will be saved.", 
-        default="fixelarray.h5")
+    add_cohort_arg(parser)
+    add_relative_root_arg(parser)
+    add_output_hdf5_arg(parser, default_name="fixelarray.h5")
+    add_storage_args(parser)
     return parser
 
 def main():
@@ -226,7 +249,13 @@ def main():
     status = write_hdf5(group_mask_file=args.group_mask_file, 
                         cohort_file=args.cohort_file, 
                         output_h5=args.output_hdf5,
-                        relative_root=args.relative_root)
+                        relative_root=args.relative_root,
+                        storage_dtype=args.dtype,
+                        compression=args.compression,
+                        compression_level=args.compression_level,
+                        shuffle=args.shuffle,
+                        chunk_voxels=args.chunk_voxels,
+                        target_chunk_mb=args.target_chunk_mb)
 
 
     return status

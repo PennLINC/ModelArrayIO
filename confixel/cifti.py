@@ -1,5 +1,4 @@
 import argparse
-import shutil
 import os
 from collections import defaultdict
 import os.path as op
@@ -8,6 +7,8 @@ import nibabel as nb
 import pandas as pd
 from tqdm import tqdm
 import h5py
+from .h5_storage import create_empty_scalar_matrix_dataset
+from .parser import add_relative_root_arg, add_output_hdf5_arg, add_cohort_arg, add_storage_args
 
 
 def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
@@ -84,7 +85,13 @@ def brain_names_to_dataframe(brain_names):
     return greyordinate_df, structure_name_strings
 
 
-def write_hdf5(cohort_file, output_h5='fixeldb.h5', relative_root='/'):
+def write_hdf5(cohort_file, output_h5='fixeldb.h5', relative_root='/',
+               storage_dtype='float32',
+               compression='gzip',
+               compression_level=4,
+               shuffle=True,
+               chunk_voxels=0,
+               target_chunk_mb=2.0):
     """
     Load all fixeldb data.
     Parameters
@@ -125,10 +132,24 @@ def write_hdf5(cohort_file, output_h5='fixeldb.h5', relative_root='/'):
     greyordinatesh5.attrs['column_names'] = list(greyordinate_table.columns)
     greyordinatesh5.attrs['structure_names'] = structure_names
 
-    for scalar_name in scalars.keys():  # in the cohort.csv, two or more scalars in one sheet is allowed, and they can be separated to different scalar group.
-        one_scalar_h5 = f.create_dataset('scalars/{}/values'.format(scalar_name),
-                         data=np.row_stack(scalars[scalar_name]))
-        one_scalar_h5.attrs['column_names'] = list(sources_lists[scalar_name])  # column names: list of source .mif filenames
+    for scalar_name in scalars.keys():
+        num_subjects = len(scalars[scalar_name])
+        num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
+        dset = create_empty_scalar_matrix_dataset(
+            f,
+            'scalars/{}/values'.format(scalar_name),
+            num_subjects,
+            num_items,
+            storage_dtype=storage_dtype,
+            compression=compression,
+            compression_level=compression_level,
+            shuffle=shuffle,
+            chunk_voxels=chunk_voxels,
+            target_chunk_mb=target_chunk_mb,
+            sources_list=sources_lists[scalar_name])
+
+        for row_idx, row_data in enumerate(scalars[scalar_name]):
+            dset[row_idx, :] = row_data
     f.close()
     return int(not op.exists(output_file))
 
@@ -136,20 +157,10 @@ def write_hdf5(cohort_file, output_h5='fixeldb.h5', relative_root='/'):
 def get_parser():
     parser = argparse.ArgumentParser(
         description="Create a hdf5 file of CIDTI2 dscalar data")
-    parser.add_argument(
-        "--cohort-file", "--cohort_file",
-        help="Path to a csv with demographic info and paths to data.",
-        required=True)
-    parser.add_argument(
-        "--relative-root", "--relative_root",
-        help="Root to which all paths are relative, i.e. defining the (absolute) "
-        "path to root directory of index_file, directions_file, cohort_file, and output_hdf5.",
-        type=op.abspath,
-        default="/inputs/")
-    parser.add_argument(
-        "--output-hdf5", "--output_hdf5",
-        help="Name of HDF5 (.h5) file where outputs will be saved.",
-        default="fixelarray.h5")
+    add_cohort_arg(parser)
+    add_relative_root_arg(parser)
+    add_output_hdf5_arg(parser, default_name="fixelarray.h5")
+    add_storage_args(parser)
     return parser
 
 
@@ -158,7 +169,13 @@ def main():
     args = parser.parse_args()
     status = write_hdf5(cohort_file=args.cohort_file,
                         output_h5=args.output_hdf5,
-                        relative_root=args.relative_root)
+                        relative_root=args.relative_root,
+                        storage_dtype=args.dtype,
+                        compression=args.compression,
+                        compression_level=args.compression_level,
+                        shuffle=args.shuffle,
+                        chunk_voxels=args.chunk_voxels,
+                        target_chunk_mb=args.target_chunk_mb)
     return status
 
 

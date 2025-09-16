@@ -3,5 +3,8 @@
         "./confixel"
     ],
     "python.linting.lintOnSave": false,
-    "python.linting.enabled": false
+    "python.linting.enabled": false,
+    "cursorpyright.analysis.extraPaths": [
+        "./confixel"
+    ]
 }
