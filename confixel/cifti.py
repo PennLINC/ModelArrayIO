@@ -52,7 +52,7 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
     brain_axis = brain_axes.pop()
 
 
-    cifti_data = cifti.get_fdata().squeeze()
+    cifti_data = cifti.get_fdata().squeeze().astype(np.float32)
     if not cifti_data.ndim == 1:
         raise Exception("Too many dimensions in the cifti data")
     brain_names = brain_axis.name
