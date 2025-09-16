@@ -7,7 +7,7 @@ import nibabel as nb
 import pandas as pd
 from tqdm import tqdm
 import h5py
-from .h5_storage import create_empty_scalar_matrix_dataset
+from .h5_storage import create_empty_scalar_matrix_dataset, write_rows_in_column_stripes
 from .parser import add_relative_root_arg, add_output_hdf5_arg, add_cohort_arg, add_storage_args
 
 
@@ -148,8 +148,7 @@ def write_hdf5(cohort_file, output_h5='fixeldb.h5', relative_root='/',
             target_chunk_mb=target_chunk_mb,
             sources_list=sources_lists[scalar_name])
 
-        for row_idx, row_data in enumerate(scalars[scalar_name]):
-            dset[row_idx, :] = row_data
+        write_rows_in_column_stripes(dset, scalars[scalar_name])
     f.close()
     return int(not op.exists(output_file))
 

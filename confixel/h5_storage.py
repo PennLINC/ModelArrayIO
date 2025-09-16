@@ -93,3 +93,40 @@ def create_empty_scalar_matrix_dataset(h5file, dataset_path, num_subjects, num_i
     return dset
 
 
+
+def write_rows_in_column_stripes(dset, rows):
+    """
+    Fill a 2D HDF5 dataset by buffering column-aligned stripes to minimize
+    chunk recompression, using about one chunk's worth of memory.
+
+    Parameters
+    ----------
+    dset : h5py.Dataset
+        Target dataset with shape (num_subjects, num_items) and chunking set.
+    rows : Sequence[np.ndarray]
+        List/sequence of 1D arrays, one per subject, length == num_items.
+        Each will be cast on write to dset.dtype if needed.
+    """
+    num_subjects, num_items = dset.shape
+    if len(rows) != num_subjects:
+        raise ValueError("rows length does not match dataset subjects dimension")
+    stripe_width = dset.chunks[1] if dset.chunks is not None else max(1, num_items // 8)
+    logger.info("Stripe-writing dataset %s with stripe width=%d (chunks=%s)",
+                dset.name, stripe_width, str(dset.chunks))
+
+    buf = np.empty((num_subjects, stripe_width), dtype=dset.dtype)
+    for start in range(0, num_items, stripe_width):
+        end = min(start + stripe_width, num_items)
+        width = end - start
+        if width != stripe_width:
+            # resize buffer view on last partial stripe
+            buf_view = buf[:, :width]
+        else:
+            buf_view = buf
+        for i, row in enumerate(rows):
+            # slice is contiguous; cast on assignment if needed
+            buf_view[i, :] = row[start:end]
+        logger.debug("Writing stripe [%d:%d] to %s", start, end, dset.name)
+        dset[:, start:end] = buf_view
+    logger.info("Finished stripe-writing dataset %s", dset.name)
+
