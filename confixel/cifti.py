@@ -167,6 +167,9 @@ def get_parser():
 def main():
     parser = get_parser()
     args = parser.parse_args()
+    import logging
+    logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO),
+                        format='[%(levelname)s] %(name)s: %(message)s')
     status = write_hdf5(cohort_file=args.cohort_file,
                         output_h5=args.output_hdf5,
                         relative_root=args.relative_root,

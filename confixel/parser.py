@@ -64,6 +64,12 @@ def add_storage_args(parser):
         type=float,
         help="Target chunk size in MiB when auto-computing item chunk length. Default 2.0",
         default=2.0)
+    parser.add_argument(
+        "--log-level", "--log_level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging level (default INFO; set to WARNING to reduce verbosity)",
+        default="INFO")
     return parser
 
 

@@ -260,6 +260,9 @@ def main():
 
     parser = get_parser()
     args = parser.parse_args()
+    import logging
+    logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO),
+                        format='[%(levelname)s] %(name)s: %(message)s')
     status = write_hdf5(index_file=args.index_file,
                         directions_file=args.directions_file,
                         cohort_file=args.cohort_file,

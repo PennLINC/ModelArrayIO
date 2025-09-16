@@ -1,4 +1,7 @@
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def resolve_dtype(storage_dtype):
@@ -31,7 +34,10 @@ def compute_chunk_shape_full_subjects(num_subjects, num_items, item_chunk, targe
         target_bytes = float(target_chunk_mb) * 1024.0 * 1024.0
         items_per_chunk = max(1, int(target_bytes / (bytes_per_value * subjects_per_chunk)))
         items_per_chunk = min(items_per_chunk, num_items)
-    return (subjects_per_chunk, items_per_chunk)
+    chunk = (subjects_per_chunk, items_per_chunk)
+    logger.debug("Computed chunk shape: %s (subjects=%d, items=%d, item_chunk=%s, target_chunk_mb=%.2f)",
+                 chunk, num_subjects, num_items, str(item_chunk), float(target_chunk_mb))
+    return chunk
 
 
 def create_scalar_matrix_dataset(h5file, dataset_path, stacked_values, sources_list,
@@ -46,7 +52,8 @@ def create_scalar_matrix_dataset(h5file, dataset_path, stacked_values, sources_l
     num_subjects, num_items = stacked_values.shape
     chunk_shape = compute_chunk_shape_full_subjects(num_subjects, num_items, chunk_voxels,
                                                     target_chunk_mb, storage_np_dtype)
-
+    logger.info("Creating dataset %s with shape (%d, %d), dtype=%s, chunks=%s, compression=%s",
+                dataset_path, num_subjects, num_items, storage_np_dtype, chunk_shape, str(comp))
     dset = h5file.create_dataset(
         dataset_path,
         shape=(num_subjects, num_items),
@@ -55,7 +62,9 @@ def create_scalar_matrix_dataset(h5file, dataset_path, stacked_values, sources_l
         compression=comp,
         compression_opts=comp_opts if comp == 'gzip' else None,
         shuffle=use_shuffle)
+    logger.info("Writing full dataset %s to HDF5 (this may take a while)...", dataset_path)
     dset[...] = stacked_values
+    logger.info("Finished writing dataset %s", dataset_path)
     if sources_list is not None:
         dset.attrs['column_names'] = list(sources_list)
     return dset
@@ -69,7 +78,8 @@ def create_empty_scalar_matrix_dataset(h5file, dataset_path, num_subjects, num_i
 
     chunk_shape = compute_chunk_shape_full_subjects(num_subjects, num_items, chunk_voxels,
                                                     target_chunk_mb, storage_np_dtype)
-
+    logger.info("Creating empty dataset %s with shape (%d, %d), dtype=%s, chunks=%s, compression=%s",
+                dataset_path, num_subjects, num_items, storage_np_dtype, chunk_shape, str(comp))
     dset = h5file.create_dataset(
         dataset_path,
         shape=(num_subjects, num_items),
