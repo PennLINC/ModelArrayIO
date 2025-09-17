@@ -5,6 +5,7 @@ import os.path as op
 import numpy as np
 import nibabel as nb
 import pandas as pd
+import logging
 from tqdm import tqdm
 import h5py
 from .h5_storage import create_empty_scalar_matrix_dataset, write_rows_in_column_stripes
@@ -230,7 +231,7 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
 
     for result_col, result_name in enumerate(results_names):
         valid_result_name = result_name.replace(" ", "_").replace("/", "_")
-        out_cifti = op.join(cifti_output_dir, analysis_name + "_" + valid_result_name + '.nii')
+        out_cifti = op.join(cifti_output_dir, analysis_name + "_" + valid_result_name + '.dscalar.nii')
         temp_cifti2 = nb.Cifti2Image(
             results_matrix[result_col, :].reshape(1,-1),
             header=cifti.header,
@@ -240,7 +241,7 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
         # if this result is p.value, also write out 1-p.value (1m.p.value)
         if "p.value" in valid_result_name:   # the result name contains "p.value" (from R package broom)
             valid_result_name_1mpvalue = valid_result_name.replace("p.value", "1m.p.value")
-            out_cifti_1mpvalue = op.join(cifti_output_dir, analysis_name + "_" + valid_result_name_1mpvalue + '.mif')
+            out_cifti_1mpvalue = op.join(cifti_output_dir, analysis_name + "_" + valid_result_name_1mpvalue + '.dscalar.nii')
             output_mifvalues_1mpvalue = 1 - results_matrix[result_col, :]   # 1 minus
             temp_nifti2_1mpvalue = nb.Cifti2Image(
                 output_mifvalues_1mpvalue.reshape(1, -1),
@@ -259,10 +260,17 @@ def h5_to_ciftis():
         print("WARNING: Output directory exists")
     os.makedirs(out_cifti_dir, exist_ok=True)
 
-    # Get an example mif file
-    cohort_df = pd.read_csv(op.join(args.relative_root, args.cohort_file))
-    example_cifti = op.join(args.relative_root, cohort_df['source_file'][0])
-    h5_input = op.join(args.relative_root, args.input_hdf5)
+    # Get an example cifti
+    if args.example_cifti is None:
+        logging.warning("No example cifti file provided, using the first cifti file from the cohort file")
+        cohort_df = pd.read_csv(args.cohort_file)
+        example_cifti = op.join(args.relative_root, cohort_df['source_file'][0])
+    else:
+        example_cifti = args.example_cifti
+        if not op.exists(example_cifti):
+            raise ValueError(f"Example cifti file {example_cifti} does not exist")
+
+    h5_input = args.input_hdf5
     analysis_name = args.analysis_name
     _h5_to_ciftis(example_cifti, h5_input, analysis_name, out_cifti_dir)
 
@@ -287,6 +295,10 @@ def get_h5_to_ciftis_parser():
     parser.add_argument(
         "--output-dir", "--output_dir",
         help="Fixel directory where outputs will be saved. If the directory does not exist, it will be automatically created.")
+    parser.add_argument(
+        "--example-cifti", "--example_cifti",
+        help="Path to an example cifti file.",
+        required=False)
     return parser
 
 
