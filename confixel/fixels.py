@@ -252,6 +252,12 @@ def get_parser():
         type=float,
         help="Target chunk size in MiB when auto-computing item chunk length. Default 2.0",
         default=2.0)
+    parser.add_argument(
+        "--log-level", "--log_level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging level (default INFO; set to WARNING to reduce verbosity)",
+        default="INFO")
     return parser
 
 
@@ -321,7 +327,7 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
                          range(results_matrix.shape[0])]
 
     # Make output directory if it does not exist
-    if op.isdir(fixel_output_dir) == False:
+    if not op.isdir(fixel_output_dir):
         os.mkdir(fixel_output_dir)
         
     for result_col, result_name in enumerate(results_names):
