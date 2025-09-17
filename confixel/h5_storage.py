@@ -26,6 +26,14 @@ def resolve_compression(compression, compression_level, shuffle):
 
 
 def compute_chunk_shape_full_subjects(num_subjects, num_items, item_chunk, target_chunk_mb, storage_np_dtype):
+    # Fail fast on zero-sized dimensions to avoid invalid chunk shapes and division by zero
+    num_subjects = int(num_subjects)
+    num_items = int(num_items)
+    if num_subjects <= 0 or num_items <= 0:
+        raise ValueError(
+            f"Cannot compute chunk shape with zero-length dimension: num_subjects={num_subjects}, num_items={num_items}"
+        )
+
     subjects_per_chunk = num_subjects
     if int(item_chunk) > 0:
         items_per_chunk = min(int(item_chunk), num_items)

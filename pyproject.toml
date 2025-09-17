@@ -1,0 +1,65 @@
+[build-system]
+requires = [
+  "hatchling>=1.24",
+  "hatch-vcs>=0.3",
+]
+build-backend = "hatchling.build"
+
+[project]
+name = "confixel"
+description = "ConFixel (python) is companion converter software for ModelArray for converting data back and forth from the HDF5 file format"
+readme = "README.md"
+requires-python = ">=3.7"
+license = { file = "LICENSE" }
+authors = [
+  { name = "The PennLINC developers", email = "Matthew.Cieslak@pennmedicine.upenn.edu" },
+]
+maintainers = [
+  { name = "Matt Cieslak", email = "Matthew.Cieslak@pennmedicine.upenn.edu" },
+]
+keywords = ["neuroimaging", "modelarray", "hdf5", "fixel", "nifti", "cifti"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: BSD License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+]
+
+# Runtime dependencies
+dependencies = [
+  "nibabel>=2.2.1",
+  "numpy>=1.13.3",
+  "pandas",
+  "tqdm",
+  "h5py",
+]
+
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/PennLINC/ConFixel"
+Repository = "https://github.com/PennLINC/ConFixel"
+
+[project.scripts]
+confixel = "confixel.fixels:main"
+convoxel = "confixel.voxels:main"
+concifti = "confixel.cifti:main"
+fixelstats_write = "confixel.fixels:h5_to_fixels"
+volumestats_write = "confixel.voxels:h5_to_volumes_wrapper"
+ciftistats_write = "confixel.cifti:h5_to_ciftis"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+# Hatch will overwrite this file during build with the computed version
+version-file = "confixel/__about__.py"
+
+[tool.hatch.build]
+# Default include is the package itself; no special configuration needed
+# Keeping section for future customization

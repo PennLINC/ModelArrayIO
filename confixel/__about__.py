@@ -6,7 +6,7 @@ Base module variables
 """
 
 from ._version import get_versions
-__version__ = get_versions()['version']
+__version__ = "0.0.0.dev0"  # replaced at build time by hatch-vcs
 del get_versions
 
 __author__ = 'The PennLINC Developers'

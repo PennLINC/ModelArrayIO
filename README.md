@@ -30,21 +30,26 @@ If your input data is voxel-wise data or CIFTI (greyordinate-wise) data, you can
 ### Install `ConFixel` software
 Before installing ConFixel software, you may want to create a conda environment  - see [here](https://pennlinc.github.io/ModelArray/articles/installations.html) for more. If you installed MRtrix in a conda environment, you can directly install ConFixel software in that environment.
 
-You can install `ConFixel` software from [GitHub](https://github.com/PennLINC/ConFixel):
+You can install `ConFixel` software from `GitHub`:
 
 ``` console
 git clone https://github.com/PennLINC/ConFixel.git
 cd ConFixel
-pip install .   # for end user
-
-# you may remove the original source code if you are an end user:
-cd ..
-rm -r ConFixel
+pip install .   # build via pyproject.toml
 ```
-If you are a developer, and if there is any update in the source code locally, you may update the installation with:
+
+If you are a developer, and if there is any update in the source code locally, you may update the installation with an editable install:
+
 ``` console
-# Supporse you're in root directory of ConFixel source code:
-pip install -e .    # for developer to update
+# From the repository root
+pip install -e .
+```
+
+Alternatively, if you have `hatch` installed, you can build wheels/sdist locally:
+
+``` console
+hatch build
+pip install dist/*.whl
 ```
 
 ## How to use
