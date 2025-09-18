@@ -62,6 +62,4 @@ version-file = "modelarrayio/__about__.py"
 # Default include is the package itself; no special configuration needed
 # Keeping section for future customization
 exclude = []
-packages = [
-  { include = "modelarrayio" },
-]
+packages = ["modelarrayio"]
