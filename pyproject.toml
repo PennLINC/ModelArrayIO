@@ -6,10 +6,10 @@ requires = [
 build-backend = "hatchling.build"
 
 [project]
-name = "confixel"
+name = "modelarrayio"
 description = "ConFixel (python) is companion converter software for ModelArray for converting data back and forth from the HDF5 file format"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [
   { name = "The PennLINC developers", email = "Matthew.Cieslak@pennmedicine.upenn.edu" },
@@ -23,11 +23,9 @@ classifiers = [
   "Intended Audience :: Science/Research",
   "License :: OSI Approved :: BSD License",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.7",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 ]
 
 # Runtime dependencies
@@ -42,24 +40,28 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-Homepage = "https://github.com/PennLINC/ConFixel"
-Repository = "https://github.com/PennLINC/ConFixel"
+Homepage = "https://github.com/PennLINC/ModelArrayIO"
+Repository = "https://github.com/PennLINC/ModelArrayIO"
 
 [project.scripts]
-confixel = "confixel.fixels:main"
-convoxel = "confixel.voxels:main"
-concifti = "confixel.cifti:main"
-fixelstats_write = "confixel.fixels:h5_to_fixels"
-volumestats_write = "confixel.voxels:h5_to_volumes_wrapper"
-ciftistats_write = "confixel.cifti:h5_to_ciftis"
+confixel = "modelarrayio.fixels:main"
+convoxel = "modelarrayio.voxels:main"
+concifti = "modelarrayio.cifti:main"
+fixelstats_write = "modelarrayio.fixels:h5_to_fixels"
+volumestats_write = "modelarrayio.voxels:h5_to_volumes_wrapper"
+ciftistats_write = "modelarrayio.cifti:h5_to_ciftis"
 
 [tool.hatch.version]
 source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
 # Hatch will overwrite this file during build with the computed version
-version-file = "confixel/__about__.py"
+version-file = "modelarrayio/__about__.py"
 
 [tool.hatch.build]
 # Default include is the package itself; no special configuration needed
 # Keeping section for future customization
+exclude = []
+packages = [
+  { include = "modelarrayio" },
+]
