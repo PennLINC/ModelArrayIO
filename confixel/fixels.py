@@ -10,6 +10,7 @@ import nibabel as nb
 import pandas as pd
 from tqdm import tqdm
 import h5py
+from .h5_storage import create_empty_scalar_matrix_dataset, write_rows_in_column_stripes
 
 def find_mrconvert():
     program = 'mrconvert'
@@ -124,7 +125,13 @@ def gather_fixels(index_file, directions_file):
 
 def write_hdf5(index_file, directions_file, cohort_file, 
                 output_h5='fixeldb.h5',
-               relative_root='/'):
+               relative_root='/',
+               storage_dtype='float32',
+               compression='gzip',
+               compression_level=4,
+               shuffle=True,
+               chunk_voxels=0,
+               target_chunk_mb=2.0):
     """
     Load all fixeldb data.
     Parameters
@@ -167,10 +174,23 @@ def write_hdf5(index_file, directions_file, cohort_file,
     voxelsh5 = f.create_dataset(name="voxels", data=voxel_table.to_numpy().T)
     voxelsh5.attrs['column_names'] = list(voxel_table.columns)
     
-    for scalar_name in scalars.keys():  # in the cohort.csv, two or more scalars in one sheet is allowed, and they can be separated to different scalar group.
-        one_scalar_h5 = f.create_dataset('scalars/{}/values'.format(scalar_name),
-                         data=np.row_stack(scalars[scalar_name]))
-        one_scalar_h5.attrs['column_names'] = list(sources_lists[scalar_name])  # column names: list of source .mif filenames
+    for scalar_name in scalars.keys():
+        num_subjects = len(scalars[scalar_name])
+        num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
+        dset = create_empty_scalar_matrix_dataset(
+            f,
+            'scalars/{}/values'.format(scalar_name),
+            num_subjects,
+            num_items,
+            storage_dtype=storage_dtype,
+            compression=compression,
+            compression_level=compression_level,
+            shuffle=shuffle,
+            chunk_voxels=chunk_voxels,
+            target_chunk_mb=target_chunk_mb,
+            sources_list=sources_lists[scalar_name])
+
+        write_rows_in_column_stripes(dset, scalars[scalar_name])
     f.close()
     return int(not op.exists(output_file))
 
@@ -200,6 +220,44 @@ def get_parser():
         "--output-hdf5", "--output_hdf5",
         help="Name of HDF5 (.h5) file where outputs will be saved.", 
         default="fixelarray.h5")
+    # Storage configuration (match voxels.py)
+    parser.add_argument(
+        "--dtype",
+        help="Floating dtype for storing values: float32 (default) or float64",
+        choices=["float32", "float64"],
+        default="float32")
+    parser.add_argument(
+        "--compression",
+        help="HDF5 compression filter: gzip (default), lzf, none",
+        choices=["gzip", "lzf", "none"],
+        default="gzip")
+    parser.add_argument(
+        "--compression-level", "--compression_level",
+        type=int,
+        help="Gzip compression level 0-9 (only if --compression=gzip). Default 4",
+        default=4)
+    parser.add_argument(
+        "--no-shuffle",
+        dest="shuffle",
+        action="store_false",
+        help="Disable HDF5 shuffle filter (enabled by default if compression is used).")
+    parser.set_defaults(shuffle=True)
+    parser.add_argument(
+        "--chunk-voxels", "--chunk_voxels",
+        type=int,
+        help="Chunk size along fixel/voxel axis. If 0, auto-compute based on --target-chunk-mb and number of subjects",
+        default=0)
+    parser.add_argument(
+        "--target-chunk-mb", "--target_chunk_mb",
+        type=float,
+        help="Target chunk size in MiB when auto-computing item chunk length. Default 2.0",
+        default=2.0)
+    parser.add_argument(
+        "--log-level", "--log_level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging level (default INFO; set to WARNING to reduce verbosity)",
+        default="INFO")
     return parser
 
 
@@ -207,11 +265,20 @@ def main():
 
     parser = get_parser()
     args = parser.parse_args()
+    import logging
+    logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO),
+                        format='[%(levelname)s] %(name)s: %(message)s')
     status = write_hdf5(index_file=args.index_file,
                         directions_file=args.directions_file,
                         cohort_file=args.cohort_file,
                         output_h5=args.output_hdf5,
-                        relative_root=args.relative_root)
+                        relative_root=args.relative_root,
+                        storage_dtype=args.dtype,
+                        compression=args.compression,
+                        compression_level=args.compression_level,
+                        shuffle=args.shuffle,
+                        chunk_voxels=args.chunk_voxels,
+                        target_chunk_mb=args.target_chunk_mb)
     return status
 
 
@@ -260,7 +327,7 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
                          range(results_matrix.shape[0])]
 
     # Make output directory if it does not exist
-    if op.isdir(fixel_output_dir) == False:
+    if not op.isdir(fixel_output_dir):
         os.mkdir(fixel_output_dir)
         
     for result_col, result_name in enumerate(results_names):
