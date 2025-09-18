@@ -1,4 +1,11 @@
-# ConFixel
+# ConFixel: Moved to ModelArrayIO
+
+ConFixel has moved beyond fixels and handles a lot of other modalities.
+It also got optimized!
+[Going forward, ConFixel is now ModelArrayIO.](https://pennlinc.github.io/ModelArrayIO/). 
+This repository will be left here because the URL is in the publication.
+
+
 `ConFixel` is companion converter software for [ModelArray](https://pennlinc.github.io/ModelArray/) for converting data back and forth from the HDF5 file format.
 
 <p align="center">
