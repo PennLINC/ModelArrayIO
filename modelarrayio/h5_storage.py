@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,7 @@ def write_rows_in_column_stripes(dset, rows):
                 dset.name, stripe_width, str(dset.chunks))
 
     buf = np.empty((num_subjects, stripe_width), dtype=dset.dtype)
-    for start in range(0, num_elements, stripe_width):
+    for start in tqdm(range(0, num_elements, stripe_width)):
         end = min(start + stripe_width, num_elements)
         width = end - start
         if width != stripe_width:
@@ -134,7 +135,7 @@ def write_rows_in_column_stripes(dset, rows):
         for i, row in enumerate(rows):
             # slice is contiguous; cast on assignment if needed
             buf_view[i, :] = row[start:end]
-        logger.info("Writing stripe [%d:%d] to %s", start, end, dset.name)
+        logger.debug("Writing stripe [%d:%d] to %s", start, end, dset.name)
         dset[:, start:end] = buf_view
     logger.info("Finished stripe-writing dataset %s", dset.name)
 
