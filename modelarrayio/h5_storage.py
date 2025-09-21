@@ -1,4 +1,6 @@
 import numpy as np
+import h5py
+import pandas as pd
 import logging
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -127,7 +129,7 @@ def create_empty_scalar_matrix_dataset(
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
-    sources_list=None,
+    sources_list=None | pd.Series,
 ):
     storage_np_dtype = resolve_dtype(storage_dtype)
     comp, comp_opts, use_shuffle = resolve_compression(
@@ -156,8 +158,25 @@ def create_empty_scalar_matrix_dataset(
         shuffle=use_shuffle,
     )
     if sources_list is not None:
-        dset.attrs["column_names"] = list(sources_list)
+        write_column_names(h5file, dataset_path, sources_list)
     return dset
+
+
+def write_column_names(h5_file: h5py.File, scalar: str, sources: pd.Series):
+    # Ensure 1-D array of UTF-8 strings
+    values = sources.astype(str).to_numpy()
+    grp = h5_file.require_group(f"scalars/{scalar}")
+
+    # Variable-length UTF-8 string dtype
+    vlen_str = h5py.string_dtype(encoding="utf-8")
+
+    # Create 1-D dataset of strings
+    grp.create_dataset(
+        "column_names",
+        data=values,
+        dtype=vlen_str,
+        shape=(len(values),),
+    )
 
 
 def write_rows_in_column_stripes(dset, rows):
