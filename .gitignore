@@ -132,4 +132,5 @@ dmypy.json
 .DS_Store
 
 # vscode:
-.vscode/**/*modelarrayio/__about__.py
+.vscode/**/*
+modelarrayio/__about__.py
