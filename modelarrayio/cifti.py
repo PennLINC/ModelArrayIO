@@ -9,7 +9,11 @@ import logging
 from tqdm import tqdm
 import h5py
 from .h5_storage import create_empty_scalar_matrix_dataset, write_rows_in_column_stripes
-from .parser import add_relative_root_arg, add_output_hdf5_arg, add_cohort_arg, add_storage_args
+from .tiledb_storage import (
+    create_empty_scalar_matrix_array as tdb_create_empty,
+    write_rows_in_column_stripes as tdb_write_stripes,
+)
+from .parser import add_relative_root_arg, add_output_hdf5_arg, add_cohort_arg, add_storage_args, add_backend_arg, add_output_tiledb_arg, add_tiledb_storage_args
 
 
 def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
@@ -86,13 +90,18 @@ def brain_names_to_dataframe(brain_names):
     return greyordinate_df, structure_name_strings
 
 
-def write_hdf5(cohort_file, output_h5='fixeldb.h5', relative_root='/',
+def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_tdb='arraydb.tdb', relative_root='/',
                storage_dtype='float32',
                compression='gzip',
                compression_level=4,
                shuffle=True,
                chunk_voxels=0,
-               target_chunk_mb=2.0):
+               target_chunk_mb=2.0,
+               tdb_compression='zstd',
+               tdb_compression_level=5,
+               tdb_shuffle=True,
+               tdb_tile_voxels=0,
+               tdb_target_tile_mb=2.0):
     """
     Load all fixeldb data.
     Parameters
@@ -125,33 +134,57 @@ def write_hdf5(cohort_file, output_h5='fixeldb.h5', relative_root='/',
         sources_lists[row['scalar_name']].append(row['source_file'])  # append source mif filename to specific scalar_name
 
     # Write the output
-    output_file = op.join(relative_root, output_h5)
-    f = h5py.File(output_file, "w")
+    if backend == 'hdf5':
+        output_file = op.join(relative_root, output_h5)
+        f = h5py.File(output_file, "w")
 
-    greyordinate_table, structure_names = brain_names_to_dataframe(last_brain_names)
-    greyordinatesh5 = f.create_dataset(name="greyordinates", data=greyordinate_table.to_numpy().T)
-    greyordinatesh5.attrs['column_names'] = list(greyordinate_table.columns)
-    greyordinatesh5.attrs['structure_names'] = structure_names
+        greyordinate_table, structure_names = brain_names_to_dataframe(last_brain_names)
+        greyordinatesh5 = f.create_dataset(name="greyordinates", data=greyordinate_table.to_numpy().T)
+        greyordinatesh5.attrs['column_names'] = list(greyordinate_table.columns)
+        greyordinatesh5.attrs['structure_names'] = structure_names
 
-    for scalar_name in scalars.keys():
-        num_subjects = len(scalars[scalar_name])
-        num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
-        dset = create_empty_scalar_matrix_dataset(
-            f,
-            'scalars/{}/values'.format(scalar_name),
-            num_subjects,
-            num_items,
-            storage_dtype=storage_dtype,
-            compression=compression,
-            compression_level=compression_level,
-            shuffle=shuffle,
-            chunk_voxels=chunk_voxels,
-            target_chunk_mb=target_chunk_mb,
-            sources_list=sources_lists[scalar_name])
+        for scalar_name in scalars.keys():
+            num_subjects = len(scalars[scalar_name])
+            num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
+            dset = create_empty_scalar_matrix_dataset(
+                f,
+                'scalars/{}/values'.format(scalar_name),
+                num_subjects,
+                num_items,
+                storage_dtype=storage_dtype,
+                compression=compression,
+                compression_level=compression_level,
+                shuffle=shuffle,
+                chunk_voxels=chunk_voxels,
+                target_chunk_mb=target_chunk_mb,
+                sources_list=sources_lists[scalar_name])
 
-        write_rows_in_column_stripes(dset, scalars[scalar_name])
-    f.close()
-    return int(not op.exists(output_file))
+            write_rows_in_column_stripes(dset, scalars[scalar_name])
+        f.close()
+        return int(not op.exists(output_file))
+    else:
+        base_uri = op.join(relative_root, output_tdb)
+        os.makedirs(base_uri, exist_ok=True)
+        for scalar_name in scalars.keys():
+            num_subjects = len(scalars[scalar_name])
+            num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
+            dataset_path = f'scalars/{scalar_name}/values'
+            tdb_create_empty(
+                base_uri,
+                dataset_path,
+                num_subjects,
+                num_items,
+                storage_dtype=storage_dtype,
+                compression=tdb_compression,
+                compression_level=tdb_compression_level,
+                shuffle=tdb_shuffle,
+                tile_voxels=tdb_tile_voxels,
+                target_tile_mb=tdb_target_tile_mb,
+                sources_list=sources_lists[scalar_name],
+            )
+            uri = op.join(base_uri, dataset_path)
+            tdb_write_stripes(uri, scalars[scalar_name])
+        return 0
 
 
 def get_parser():
@@ -160,7 +193,10 @@ def get_parser():
     add_cohort_arg(parser)
     add_relative_root_arg(parser)
     add_output_hdf5_arg(parser, default_name="fixelarray.h5")
+    add_output_tiledb_arg(parser, default_name="arraydb.tdb")
+    add_backend_arg(parser)
     add_storage_args(parser)
+    add_tiledb_storage_args(parser)
     return parser
 
 
@@ -170,15 +206,22 @@ def main():
     import logging
     logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO),
                         format='[%(levelname)s] %(name)s: %(message)s')
-    status = write_hdf5(cohort_file=args.cohort_file,
-                        output_h5=args.output_hdf5,
-                        relative_root=args.relative_root,
-                        storage_dtype=args.dtype,
-                        compression=args.compression,
-                        compression_level=args.compression_level,
-                        shuffle=args.shuffle,
-                        chunk_voxels=args.chunk_voxels,
-                        target_chunk_mb=args.target_chunk_mb)
+    status = write_storage(cohort_file=args.cohort_file,
+                           backend=args.backend,
+                           output_h5=args.output_hdf5,
+                           output_tdb=args.output_tiledb,
+                           relative_root=args.relative_root,
+                           storage_dtype=args.dtype,
+                           compression=args.compression,
+                           compression_level=args.compression_level,
+                           shuffle=args.shuffle,
+                           chunk_voxels=args.chunk_voxels,
+                           target_chunk_mb=args.target_chunk_mb,
+                           tdb_compression=args.tdb_compression,
+                           tdb_compression_level=args.tdb_compression_level,
+                           tdb_shuffle=args.tdb_shuffle,
+                           tdb_tile_voxels=args.tdb_tile_voxels,
+                           tdb_target_tile_mb=args.tdb_target_tile_mb)
     return status
 
 

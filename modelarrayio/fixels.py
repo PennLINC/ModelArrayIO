@@ -11,6 +11,10 @@ import pandas as pd
 from tqdm import tqdm
 import h5py
 from .h5_storage import create_empty_scalar_matrix_dataset, write_rows_in_column_stripes
+from .tiledb_storage import (
+    create_empty_scalar_matrix_array as tdb_create_empty,
+    write_rows_in_column_stripes as tdb_write_stripes,
+)
 
 def find_mrconvert():
     program = 'mrconvert'
@@ -123,15 +127,22 @@ def gather_fixels(index_file, directions_file):
     return fixel_table, voxel_table
 
 
-def write_hdf5(index_file, directions_file, cohort_file, 
-                output_h5='fixeldb.h5',
-               relative_root='/',
-               storage_dtype='float32',
-               compression='gzip',
-               compression_level=4,
-               shuffle=True,
-               chunk_voxels=0,
-               target_chunk_mb=2.0):
+def write_storage(index_file, directions_file, cohort_file,
+                  backend='hdf5',
+                  output_h5='fixeldb.h5',
+                  output_tdb='arraydb.tdb',
+                  relative_root='/',
+                  storage_dtype='float32',
+                  compression='gzip',
+                  compression_level=4,
+                  shuffle=True,
+                  chunk_voxels=0,
+                  target_chunk_mb=2.0,
+                  tdb_compression='zstd',
+                  tdb_compression_level=5,
+                  tdb_shuffle=True,
+                  tdb_tile_voxels=0,
+                  tdb_target_tile_mb=2.0):
     """
     Load all fixeldb data.
     Parameters
@@ -165,34 +176,58 @@ def write_hdf5(index_file, directions_file, cohort_file,
         sources_lists[row['scalar_name']].append(row['source_file'])  # append source mif filename to specific scalar_name
 
     # Write the output
-    output_file = op.join(relative_root, output_h5)
-    f = h5py.File(output_file, "w")
-    
-    fixelsh5 = f.create_dataset(name="fixels", data=fixel_table.to_numpy().T)
-    fixelsh5.attrs['column_names'] = list(fixel_table.columns)
-    
-    voxelsh5 = f.create_dataset(name="voxels", data=voxel_table.to_numpy().T)
-    voxelsh5.attrs['column_names'] = list(voxel_table.columns)
-    
-    for scalar_name in scalars.keys():
-        num_subjects = len(scalars[scalar_name])
-        num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
-        dset = create_empty_scalar_matrix_dataset(
-            f,
-            'scalars/{}/values'.format(scalar_name),
-            num_subjects,
-            num_items,
-            storage_dtype=storage_dtype,
-            compression=compression,
-            compression_level=compression_level,
-            shuffle=shuffle,
-            chunk_voxels=chunk_voxels,
-            target_chunk_mb=target_chunk_mb,
-            sources_list=sources_lists[scalar_name])
+    if backend == 'hdf5':
+        output_file = op.join(relative_root, output_h5)
+        f = h5py.File(output_file, "w")
 
-        write_rows_in_column_stripes(dset, scalars[scalar_name])
-    f.close()
-    return int(not op.exists(output_file))
+        fixelsh5 = f.create_dataset(name="fixels", data=fixel_table.to_numpy().T)
+        fixelsh5.attrs['column_names'] = list(fixel_table.columns)
+
+        voxelsh5 = f.create_dataset(name="voxels", data=voxel_table.to_numpy().T)
+        voxelsh5.attrs['column_names'] = list(voxel_table.columns)
+
+        for scalar_name in scalars.keys():
+            num_subjects = len(scalars[scalar_name])
+            num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
+            dset = create_empty_scalar_matrix_dataset(
+                f,
+                'scalars/{}/values'.format(scalar_name),
+                num_subjects,
+                num_items,
+                storage_dtype=storage_dtype,
+                compression=compression,
+                compression_level=compression_level,
+                shuffle=shuffle,
+                chunk_voxels=chunk_voxels,
+                target_chunk_mb=target_chunk_mb,
+                sources_list=sources_lists[scalar_name])
+
+            write_rows_in_column_stripes(dset, scalars[scalar_name])
+        f.close()
+        return int(not op.exists(output_file))
+    else:
+        base_uri = op.join(relative_root, output_tdb)
+        os.makedirs(base_uri, exist_ok=True)
+        for scalar_name in scalars.keys():
+            num_subjects = len(scalars[scalar_name])
+            num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
+            dataset_path = f'scalars/{scalar_name}/values'
+            tdb_create_empty(
+                base_uri,
+                dataset_path,
+                num_subjects,
+                num_items,
+                storage_dtype=storage_dtype,
+                compression=tdb_compression,
+                compression_level=tdb_compression_level,
+                shuffle=tdb_shuffle,
+                tile_voxels=tdb_tile_voxels,
+                target_tile_mb=tdb_target_tile_mb,
+                sources_list=sources_lists[scalar_name],
+            )
+            uri = op.join(base_uri, dataset_path)
+            tdb_write_stripes(uri, scalars[scalar_name])
+        return 0
 
 
 def get_parser():
@@ -220,6 +255,15 @@ def get_parser():
         "--output-hdf5", "--output_hdf5",
         help="Name of HDF5 (.h5) file where outputs will be saved.", 
         default="fixelarray.h5")
+    parser.add_argument(
+        "--output-tiledb", "--output_tiledb",
+        help="Base URI (directory) where TileDB arrays will be created.", 
+        default="arraydb.tdb")
+    parser.add_argument(
+        "--backend",
+        help="Storage backend for subject-by-element matrix",
+        choices=["hdf5", "tiledb"],
+        default="hdf5")
     # Storage configuration (match voxels.py)
     parser.add_argument(
         "--dtype",
@@ -232,25 +276,51 @@ def get_parser():
         choices=["gzip", "lzf", "none"],
         default="gzip")
     parser.add_argument(
+        "--tdb-compression", "--tdb_compression",
+        help="TileDB compression: zstd (default), gzip, none",
+        choices=["zstd", "gzip", "none"],
+        default="zstd")
+    parser.add_argument(
         "--compression-level", "--compression_level",
         type=int,
         help="Gzip compression level 0-9 (only if --compression=gzip). Default 4",
         default=4)
     parser.add_argument(
+        "--tdb-compression-level", "--tdb_compression_level",
+        type=int,
+        help="Compression level for TileDB (codec-dependent).",
+        default=5)
+    parser.add_argument(
         "--no-shuffle",
         dest="shuffle",
         action="store_false",
         help="Disable HDF5 shuffle filter (enabled by default if compression is used).")
+    parser.add_argument(
+        "--tdb-no-shuffle",
+        dest="tdb_shuffle",
+        action="store_false",
+        help="Disable TileDB shuffle filter (enabled by default).")
     parser.set_defaults(shuffle=True)
+    parser.set_defaults(tdb_shuffle=True)
     parser.add_argument(
         "--chunk-voxels", "--chunk_voxels",
         type=int,
         help="Chunk size along fixel/voxel axis. If 0, auto-compute based on --target-chunk-mb and number of subjects",
         default=0)
     parser.add_argument(
+        "--tdb-tile-voxels", "--tdb_tile_voxels",
+        type=int,
+        help="Tile length along item axis for TileDB. If 0, auto-compute based on --tdb-target-tile-mb",
+        default=0)
+    parser.add_argument(
         "--target-chunk-mb", "--target_chunk_mb",
         type=float,
         help="Target chunk size in MiB when auto-computing item chunk length. Default 2.0",
+        default=2.0)
+    parser.add_argument(
+        "--tdb-target-tile-mb", "--tdb_target_tile_mb",
+        type=float,
+        help="Target tile size in MiB when auto-computing item tile length. Default 2.0",
         default=2.0)
     parser.add_argument(
         "--log-level", "--log_level",
@@ -268,17 +338,24 @@ def main():
     import logging
     logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO),
                         format='[%(levelname)s] %(name)s: %(message)s')
-    status = write_hdf5(index_file=args.index_file,
-                        directions_file=args.directions_file,
-                        cohort_file=args.cohort_file,
-                        output_h5=args.output_hdf5,
-                        relative_root=args.relative_root,
-                        storage_dtype=args.dtype,
-                        compression=args.compression,
-                        compression_level=args.compression_level,
-                        shuffle=args.shuffle,
-                        chunk_voxels=args.chunk_voxels,
-                        target_chunk_mb=args.target_chunk_mb)
+    status = write_storage(index_file=args.index_file,
+                           directions_file=args.directions_file,
+                           cohort_file=args.cohort_file,
+                           backend=args.backend,
+                           output_h5=args.output_hdf5,
+                           output_tdb=args.output_tiledb,
+                           relative_root=args.relative_root,
+                           storage_dtype=args.dtype,
+                           compression=args.compression,
+                           compression_level=args.compression_level,
+                           shuffle=args.shuffle,
+                           chunk_voxels=args.chunk_voxels,
+                           target_chunk_mb=args.target_chunk_mb,
+                           tdb_compression=args.tdb_compression,
+                           tdb_compression_level=args.tdb_compression_level,
+                           tdb_shuffle=args.tdb_shuffle,
+                           tdb_tile_voxels=args.tdb_tile_voxels,
+                           tdb_target_tile_mb=args.tdb_target_tile_mb)
     return status
 
 

@@ -35,6 +35,7 @@ dependencies = [
   "pandas",
   "tqdm",
   "h5py",
+  "tiledb",
 ]
 
 dynamic = ["version"]

@@ -73,4 +73,57 @@ def add_storage_args(parser):
     return parser
 
 
+def add_backend_arg(parser):
+    parser.add_argument(
+        "--backend",
+        help="Storage backend for subject-by-element matrix",
+        choices=["hdf5", "tiledb"],
+        default="hdf5")
+    return parser
+
+
+def add_output_tiledb_arg(parser, default_name="arraydb.tdb"):
+    parser.add_argument(
+        "--output-tiledb", "--output_tiledb",
+        help=(
+            "Base URI (directory) where TileDB arrays will be created. "
+            "If relative, it is joined to --relative-root."
+        ),
+        default=default_name)
+    return parser
+
+
+def add_tiledb_storage_args(parser):
+    parser.add_argument(
+        "--tdb-compression", "--tdb_compression",
+        help="TileDB compression: zstd (default), gzip, none",
+        choices=["zstd", "gzip", "none"],
+        default="zstd")
+    parser.add_argument(
+        "--tdb-compression-level", "--tdb_compression_level",
+        type=int,
+        help="Compression level for TileDB (codec-dependent).",
+        default=5)
+    parser.add_argument(
+        "--tdb-no-shuffle",
+        dest="tdb_shuffle",
+        action="store_false",
+        help="Disable TileDB shuffle filter (enabled by default).")
+    parser.set_defaults(tdb_shuffle=True)
+    parser.add_argument(
+        "--tdb-tile-voxels", "--tdb_tile_voxels",
+        type=int,
+        help=(
+            "Tile length along item axis. If 0, auto-compute based on --tdb-target-tile-mb and "
+            "number of subjects"
+        ),
+        default=0)
+    parser.add_argument(
+        "--tdb-target-tile-mb", "--tdb_target_tile_mb",
+        type=float,
+        help="Target tile size in MiB when auto-computing item tile length. Default 2.0",
+        default=2.0)
+    return parser
+
+
 
