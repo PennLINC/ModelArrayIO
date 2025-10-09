@@ -165,9 +165,9 @@ def create_empty_scalar_matrix_dataset(
 def write_column_names(h5_file: h5py.File, scalar: str, sources: pd.Series | list):
     # Ensure 1-D array of UTF-8 strings
     if isinstance(sources, list):
-        values = np.array(list(map(str, sources)))
+        values = np.array(list(map(str, sources)), dtype=object)
     else:
-        values = sources.astype(str).to_numpy()
+        values = sources.astype(str).to_numpy().astype(object)
     grp = h5_file.require_group(f"scalars/{scalar}")
 
     # Variable-length UTF-8 string dtype
