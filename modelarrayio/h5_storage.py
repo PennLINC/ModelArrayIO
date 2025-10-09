@@ -129,7 +129,7 @@ def create_empty_scalar_matrix_dataset(
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
-    sources_list=None | pd.Series,
+    sources_list=None | pd.Series | list,
 ):
     storage_np_dtype = resolve_dtype(storage_dtype)
     comp, comp_opts, use_shuffle = resolve_compression(
@@ -162,9 +162,12 @@ def create_empty_scalar_matrix_dataset(
     return dset
 
 
-def write_column_names(h5_file: h5py.File, scalar: str, sources: pd.Series):
+def write_column_names(h5_file: h5py.File, scalar: str, sources: pd.Series | list):
     # Ensure 1-D array of UTF-8 strings
-    values = sources.astype(str).to_numpy()
+    if isinstance(sources, list):
+        values = np.array(list(map(str, sources)))
+    else:
+        values = sources.astype(str).to_numpy()
     grp = h5_file.require_group(f"scalars/{scalar}")
 
     # Variable-length UTF-8 string dtype
