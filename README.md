@@ -40,8 +40,8 @@ Before installing ConFixel software, you may want to create a conda environment 
 You can install `ConFixel` software from `GitHub`:
 
 ``` console
-git clone https://github.com/PennLINC/ConFixel.git
-cd ConFixel
+git clone https://github.com/PennLINC/ModelArrayIO.git
+cd ModelArrayIO
 pip install .   # build via pyproject.toml
 ```
 
