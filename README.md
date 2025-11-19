@@ -34,14 +34,14 @@ When converting fixel-wise data's format (`.mif`), converter `ConFixel` uses fun
 
 If your input data is voxel-wise data or CIFTI (greyordinate-wise) data, you can skip this step.
 
-### Install `ConFixel` software
-Before installing ConFixel software, you may want to create a conda environment  - see [here](https://pennlinc.github.io/ModelArray/articles/installations.html) for more. If you installed MRtrix in a conda environment, you can directly install ConFixel software in that environment.
+### Install `ModelArrayIO` software
+Before installing ModelArrayIO software, you may want to create a conda environment  - see [here](https://pennlinc.github.io/ModelArray/articles/installations.html) for more. If you installed MRtrix in a conda environment, you can directly install ConFixel software in that environment.
 
-You can install `ConFixel` software from `GitHub`:
+You can install `ModelArrayIO` software from `GitHub`:
 
 ``` console
-git clone https://github.com/PennLINC/ConFixel.git
-cd ConFixel
+git clone https://github.com/PennLINC/ModelArrayIO.git
+cd ModelArrayIO
 pip install .   # build via pyproject.toml
 ```
 
