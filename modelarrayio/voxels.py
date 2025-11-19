@@ -52,12 +52,55 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
     # results in .h5 file:
     h5_data = h5py.File(h5_file, "r")
     results_matrix = h5_data['results/' + analysis_name + '/results_matrix']
-    names_data = results_matrix.attrs['colnames']  # NOTE: results_matrix: need to be transposed...
-    # print(results_matrix.shape)   
+    # NOTE: results_matrix may need to be transposed depending on writer conventions
+    # Attempt to read column names: prefer attribute; fallback to dataset-based names
+    def _decode_names(arr):
+        try:
+            if isinstance(arr, (list, tuple)):
+                seq = arr
+            elif isinstance(arr, np.ndarray):
+                seq = arr.tolist()
+            else:
+                seq = [arr]
+            out = []
+            for x in seq:
+                if isinstance(x, (bytes, bytearray, np.bytes_)):
+                    s = x.decode('utf-8', errors='ignore')
+                else:
+                    s = str(x)
+                s = s.rstrip('\x00').strip()
+                out.append(s)
+            return out
+        except Exception:
+            return None
 
+    results_names = None
+    # 1) Try attribute (backward compatibility)
     try:
-        results_names = names_data.tolist()
+        names_attr = results_matrix.attrs.get('colnames', None)
+        if names_attr is not None:
+            results_names = _decode_names(names_attr)
     except Exception:
+        results_names = None
+
+    # 2) Fallback to dataset-based column names (new format)
+    if not results_names:
+        candidate_paths = [
+            f"results/{analysis_name}/column_names",
+            f"results/{analysis_name}/results_matrix/column_names",
+        ]
+        for p in candidate_paths:
+            if p in h5_data:
+                try:
+                    names_ds = h5_data[p][()]
+                    results_names = _decode_names(names_ds)
+                    if results_names:
+                        break
+                except Exception:
+                    continue
+
+    # 3) Final fallback to generated names
+    if not results_names:
         print("Unable to read column names, using 'componentNNN' instead")
         results_names = ['component%03d' % (n + 1) for n in
                          range(results_matrix.shape[0])]
