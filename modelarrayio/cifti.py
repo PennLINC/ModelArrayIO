@@ -2,6 +2,7 @@ import argparse
 import os
 from collections import defaultdict
 import os.path as op
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 import nibabel as nb
 import pandas as pd
@@ -101,7 +102,8 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
                tdb_compression_level=5,
                tdb_shuffle=True,
                tdb_tile_voxels=0,
-               tdb_target_tile_mb=2.0):
+               tdb_target_tile_mb=2.0,
+               tdb_workers=None):
     """
     Load all fixeldb data.
     Parameters
@@ -165,7 +167,8 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
     else:
         base_uri = op.join(relative_root, output_tdb)
         os.makedirs(base_uri, exist_ok=True)
-        for scalar_name in scalars.keys():
+        scalar_names = list(scalars.keys())
+        for scalar_name in scalar_names:
             num_subjects = len(scalars[scalar_name])
             num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
             dataset_path = f'scalars/{scalar_name}/values'
@@ -182,8 +185,35 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
                 target_tile_mb=tdb_target_tile_mb,
                 sources_list=sources_lists[scalar_name],
             )
+
+        def _write_scalar_to_tdb(scalar_name):
+            dataset_path = f'scalars/{scalar_name}/values'
             uri = op.join(base_uri, dataset_path)
             tdb_write_stripes(uri, scalars[scalar_name])
+
+        if not scalar_names:
+            return 0
+
+        # Determine worker count: explicit value takes precedence; fallback to CPU count.
+        worker_count = tdb_workers if isinstance(tdb_workers, int) and tdb_workers > 0 else None
+        if worker_count is None:
+            cpu_count = os.cpu_count() or 1
+            worker_count = min(len(scalar_names), max(1, cpu_count))
+        else:
+            worker_count = min(len(scalar_names), worker_count)
+
+        if worker_count <= 1:
+            for scalar_name in scalar_names:
+                _write_scalar_to_tdb(scalar_name)
+        else:
+            desc = "TileDB scalars"
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                futures = {
+                    executor.submit(_write_scalar_to_tdb, scalar_name): scalar_name
+                    for scalar_name in scalar_names
+                }
+                for future in tqdm(as_completed(futures), total=len(futures), desc=desc):
+                    future.result()
         return 0
 
 
@@ -221,7 +251,8 @@ def main():
                            tdb_compression_level=args.tdb_compression_level,
                            tdb_shuffle=args.tdb_shuffle,
                            tdb_tile_voxels=args.tdb_tile_voxels,
-                           tdb_target_tile_mb=args.tdb_target_tile_mb)
+                           tdb_target_tile_mb=args.tdb_target_tile_mb,
+                           tdb_workers=args.tdb_workers)
     return status
 
 

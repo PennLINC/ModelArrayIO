@@ -123,6 +123,14 @@ def add_tiledb_storage_args(parser):
         type=float,
         help="Target tile size in MiB when auto-computing item tile length. Default 2.0",
         default=2.0)
+    parser.add_argument(
+        "--tdb-workers", "--tdb_workers",
+        type=int,
+        help=(
+            "Maximum number of TileDB write workers. Default 0 (auto, uses CPU count). "
+            "Set to 1 to disable parallel writes."
+        ),
+        default=0)
     return parser
 
 
