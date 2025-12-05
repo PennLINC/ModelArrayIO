@@ -134,4 +134,16 @@ def add_tiledb_storage_args(parser):
     return parser
 
 
+def add_scalar_columns_arg(parser):
+    parser.add_argument(
+        "--scalar-columns", "--scalar_columns",
+        nargs="+",
+        help=(
+            "Column names containing scalar file paths when the cohort table is in wide format. "
+            "If omitted, the cohort file must include 'scalar_name' and 'source_file' columns."
+        ),
+    )
+    return parser
+
+
 

@@ -1,6 +1,6 @@
 import argparse
 import os
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import os.path as op
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
@@ -13,8 +13,51 @@ from .h5_storage import create_empty_scalar_matrix_dataset, write_rows_in_column
 from .tiledb_storage import (
     create_empty_scalar_matrix_array as tdb_create_empty,
     write_rows_in_column_stripes as tdb_write_stripes,
+    write_column_names as tdb_write_column_names,
 )
-from .parser import add_relative_root_arg, add_output_hdf5_arg, add_cohort_arg, add_storage_args, add_backend_arg, add_output_tiledb_arg, add_tiledb_storage_args
+from .parser import add_relative_root_arg, add_output_hdf5_arg, add_cohort_arg, add_storage_args, add_backend_arg, add_output_tiledb_arg, add_tiledb_storage_args, add_scalar_columns_arg
+
+
+def _cohort_to_long_dataframe(cohort_df, scalar_columns=None):
+    scalar_columns = [col for col in (scalar_columns or []) if col]
+    if scalar_columns:
+        missing = [col for col in scalar_columns if col not in cohort_df.columns]
+        if missing:
+            raise ValueError(f"Wide-format cohort is missing scalar columns: {missing}")
+        records = []
+        for _, row in cohort_df.iterrows():
+            for scalar_col in scalar_columns:
+                source_val = row[scalar_col]
+                if pd.isna(source_val) or source_val is None:
+                    continue
+                source_str = str(source_val).strip()
+                if not source_str:
+                    continue
+                records.append({"scalar_name": scalar_col, "source_file": source_str})
+        return pd.DataFrame.from_records(records, columns=["scalar_name", "source_file"])
+
+    required = {"scalar_name", "source_file"}
+    missing = required - set(cohort_df.columns)
+    if missing:
+        raise ValueError(f"Cohort file must contain columns {sorted(required)} when --scalar-columns is not used.")
+
+    long_df = cohort_df[list(required)].copy()
+    long_df = long_df.dropna(subset=["scalar_name", "source_file"])
+    long_df["scalar_name"] = long_df["scalar_name"].astype(str).str.strip()
+    long_df["source_file"] = long_df["source_file"].astype(str).str.strip()
+    long_df = long_df[(long_df["scalar_name"] != "") & (long_df["source_file"] != "")]
+    return long_df.reset_index(drop=True)
+
+
+def _build_scalar_sources(long_df):
+    scalar_sources = OrderedDict()
+    for row in long_df.itertuples(index=False):
+        scalar = str(row.scalar_name)
+        source = str(row.source_file)
+        if not scalar or not source:
+            continue
+        scalar_sources.setdefault(scalar, []).append(source)
+    return scalar_sources
 
 
 def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
@@ -103,7 +146,8 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
                tdb_shuffle=True,
                tdb_tile_voxels=0,
                tdb_target_tile_mb=2.0,
-               tdb_workers=None):
+               tdb_workers=None,
+               scalar_columns=None):
     """
     Load all fixeldb data.
     Parameters
@@ -120,23 +164,30 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
         path to which index_file, directions_file and cohort_file (and its contents) are relative
     """
 
-    # gather cohort data
-    cohort_df = pd.read_csv(op.join(relative_root, cohort_file))
+    cohort_path = op.join(relative_root, cohort_file)
+    cohort_df = pd.read_csv(cohort_path)
+    cohort_long = _cohort_to_long_dataframe(cohort_df, scalar_columns=scalar_columns)
+    if cohort_long.empty:
+        raise ValueError("Cohort file does not contain any scalar entries after normalization.")
+    scalar_sources = _build_scalar_sources(cohort_long)
+    if not scalar_sources:
+        raise ValueError("Unable to derive scalar sources from cohort file.")
 
-    # upload each cohort's data
-    scalars = defaultdict(list)
-    sources_lists = defaultdict(list)
-    last_brain_names = None
-    for ix, row in tqdm(cohort_df.iterrows(), total=cohort_df.shape[0]):   # ix: index of row (start from 0); row: one row of data
-        scalar_file = op.join(relative_root, row['source_file'])
-        cifti_data, brain_names = extract_cifti_scalar_data(
-            scalar_file, reference_brain_names=last_brain_names)
-        last_brain_names = brain_names.copy()
-        scalars[row['scalar_name']].append(cifti_data)   # append to specific scalar_name
-        sources_lists[row['scalar_name']].append(row['source_file'])  # append source mif filename to specific scalar_name
-
-    # Write the output
     if backend == 'hdf5':
+        scalars = defaultdict(list)
+        last_brain_names = None
+        for row in tqdm(
+            cohort_long.itertuples(index=False),
+            total=cohort_long.shape[0],
+            desc="Loading CIFTI scalars",
+        ):
+            scalar_file = op.join(relative_root, row.source_file)
+            cifti_data, brain_names = extract_cifti_scalar_data(
+                scalar_file, reference_brain_names=last_brain_names
+            )
+            last_brain_names = brain_names.copy()
+            scalars[row.scalar_name].append(cifti_data)
+
         output_file = op.join(relative_root, output_h5)
         f = h5py.File(output_file, "w")
 
@@ -159,7 +210,7 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
                 shuffle=shuffle,
                 chunk_voxels=chunk_voxels,
                 target_chunk_mb=target_chunk_mb,
-                sources_list=sources_lists[scalar_name])
+                sources_list=scalar_sources[scalar_name])
 
             write_rows_in_column_stripes(dset, scalars[scalar_name])
         f.close()
@@ -167,11 +218,28 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
     else:
         base_uri = op.join(relative_root, output_tdb)
         os.makedirs(base_uri, exist_ok=True)
-        scalar_names = list(scalars.keys())
-        for scalar_name in scalar_names:
-            num_subjects = len(scalars[scalar_name])
-            num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
+        if not scalar_sources:
+            return 0
+
+        # Establish a reference brain axis once to ensure consistent ordering across workers.
+        first_scalar, first_sources = next(iter(scalar_sources.items()))
+        first_path = op.join(relative_root, first_sources[0])
+        _, reference_brain_names = extract_cifti_scalar_data(first_path)
+
+        def _process_scalar_job(scalar_name, source_files):
             dataset_path = f'scalars/{scalar_name}/values'
+            rows = []
+            for source_file in source_files:
+                scalar_file = op.join(relative_root, source_file)
+                cifti_data, _ = extract_cifti_scalar_data(
+                    scalar_file, reference_brain_names=reference_brain_names
+                )
+                rows.append(cifti_data)
+
+            num_subjects = len(rows)
+            if num_subjects == 0:
+                return scalar_name
+            num_items = rows[0].shape[0]
             tdb_create_empty(
                 base_uri,
                 dataset_path,
@@ -183,18 +251,15 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
                 shuffle=tdb_shuffle,
                 tile_voxels=tdb_tile_voxels,
                 target_tile_mb=tdb_target_tile_mb,
-                sources_list=sources_lists[scalar_name],
+                sources_list=source_files,
             )
-
-        def _write_scalar_to_tdb(scalar_name):
-            dataset_path = f'scalars/{scalar_name}/values'
+            # write column names array for ModelArray compatibility
+            tdb_write_column_names(base_uri, scalar_name, source_files)
             uri = op.join(base_uri, dataset_path)
-            tdb_write_stripes(uri, scalars[scalar_name])
+            tdb_write_stripes(uri, rows)
+            return scalar_name
 
-        if not scalar_names:
-            return 0
-
-        # Determine worker count: explicit value takes precedence; fallback to CPU count.
+        scalar_names = list(scalar_sources.keys())
         worker_count = tdb_workers if isinstance(tdb_workers, int) and tdb_workers > 0 else None
         if worker_count is None:
             cpu_count = os.cpu_count() or 1
@@ -204,12 +269,12 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
 
         if worker_count <= 1:
             for scalar_name in scalar_names:
-                _write_scalar_to_tdb(scalar_name)
+                _process_scalar_job(scalar_name, scalar_sources[scalar_name])
         else:
             desc = "TileDB scalars"
             with ThreadPoolExecutor(max_workers=worker_count) as executor:
                 futures = {
-                    executor.submit(_write_scalar_to_tdb, scalar_name): scalar_name
+                    executor.submit(_process_scalar_job, scalar_name, scalar_sources[scalar_name]): scalar_name
                     for scalar_name in scalar_names
                 }
                 for future in tqdm(as_completed(futures), total=len(futures), desc=desc):
@@ -221,6 +286,7 @@ def get_parser():
     parser = argparse.ArgumentParser(
         description="Create a hdf5 file of CIDTI2 dscalar data")
     add_cohort_arg(parser)
+    add_scalar_columns_arg(parser)
     add_relative_root_arg(parser)
     add_output_hdf5_arg(parser, default_name="fixelarray.h5")
     add_output_tiledb_arg(parser, default_name="arraydb.tdb")
@@ -252,7 +318,8 @@ def main():
                            tdb_shuffle=args.tdb_shuffle,
                            tdb_tile_voxels=args.tdb_tile_voxels,
                            tdb_target_tile_mb=args.tdb_target_tile_mb,
-                           tdb_workers=args.tdb_workers)
+                           tdb_workers=args.tdb_workers,
+                           scalar_columns=args.scalar_columns)
     return status
 
 

@@ -222,15 +222,32 @@ def write_rows_in_column_stripes(uri: str, rows: Sequence[np.ndarray]):
 
 def write_column_names(base_uri: str, scalar: str, sources: Sequence[str]):
     """
-    Store column names as metadata on the TileDB group for the given scalar.
-    This mirrors HDF5's practice of storing names alongside the data.
+    Store column names as a 1D dense TileDB array for the given scalar.
+    This mirrors the HDF5 dataset approach and scales to large cohorts.
     """
+    sources = list(map(str, sources))
+    uri = os.path.join(base_uri, "scalars", scalar, "column_names")
+    _ensure_parent_group(uri)
+
+    n = len(sources)
+    dim_idx = tiledb.Dim(name="idx", domain=(0, max(n - 1, 0)), tile=max(1, min(n, 1024)), dtype=np.int64)
+    dom = tiledb.Domain(dim_idx)
+    attr_values = tiledb.Attr(name="values", dtype=np.unicode_)
+    schema = tiledb.ArraySchema(domain=dom, attrs=[attr_values], sparse=False)
+
+    if tiledb.object_type(uri):
+        tiledb.remove(uri)
+    tiledb.Array.create(uri, schema)
+
+    with tiledb.open(uri, "w") as A:
+        A[:] = {"values": np.array(sources, dtype=object)}
+
+    # Also write metadata on the parent group for quick discovery (optional)
     group_uri = os.path.join(base_uri, "scalars", scalar)
-    if not tiledb.object_type(group_uri):
-        tiledb.group_create(group_uri)
-    with tiledb.Group(group_uri, "w") as G:
+    if tiledb.object_type(group_uri):
         try:
-            G.meta["column_names"] = json.dumps(list(map(str, sources)))
+            with tiledb.Group(group_uri, "w") as G:
+                G.meta["column_names"] = json.dumps(sources)
         except Exception:
             logger.warning("Failed to write column_names metadata for group %s", group_uri)
 
