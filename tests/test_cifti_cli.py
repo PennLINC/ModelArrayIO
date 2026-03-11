@@ -61,7 +61,6 @@ def test_concifti_cli_creates_expected_hdf5(tmp_path):
         "--dtype", "float32",
         "--compression", "gzip",
         "--compression-level", "1",
-        "--shuffle", "True",
         "--chunk-voxels", "0",
         "--target-chunk-mb", "1.0",
     ]
