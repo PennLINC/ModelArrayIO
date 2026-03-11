@@ -38,6 +38,9 @@ dependencies = [
   "tiledb",
 ]
 
+[project.optional-dependencies]
+s3 = ["boto3"]
+
 dynamic = ["version"]
 
 [project.urls]
@@ -51,6 +54,11 @@ concifti = "modelarrayio.cifti:main"
 fixelstats_write = "modelarrayio.fixels:h5_to_fixels"
 volumestats_write = "modelarrayio.voxels:h5_to_volumes_wrapper"
 ciftistats_write = "modelarrayio.cifti:h5_to_ciftis"
+
+[tool.pytest.ini_options]
+markers = [
+    "s3: tests that require network access to public S3 (deselect with '-m not s3')",
+]
 
 [tool.hatch.version]
 source = "vcs"

@@ -158,7 +158,9 @@ def create_empty_scalar_matrix_dataset(
         shuffle=use_shuffle,
     )
     if sources_list is not None:
-        write_column_names(h5file, dataset_path, sources_list)
+        # dataset_path is e.g. 'scalars/FA/values'; extract the scalar name segment
+        scalar_name = dataset_path.split('/')[1] if dataset_path.count('/') >= 2 else dataset_path
+        write_column_names(h5file, scalar_name, sources_list)
     return dset
 
 
