@@ -16,7 +16,7 @@ from .tiledb_storage import (
     write_column_names as tdb_write_column_names,
 )
 from .parser import add_relative_root_arg, add_output_hdf5_arg, add_cohort_arg, add_storage_args, add_backend_arg, add_output_tiledb_arg, add_tiledb_storage_args, add_scalar_columns_arg, add_s3_workers_arg
-from .s3_utils import is_s3_path
+from .s3_utils import is_s3_path, load_nibabel
 
 
 def _cohort_to_long_dataframe(cohort_df, scalar_columns=None):
@@ -84,7 +84,7 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
 
     """
 
-    cifti = nb.load(cifti_file)
+    cifti = cifti_file if hasattr(cifti_file, 'get_fdata') else nb.load(cifti_file)
     cifti_hdr = cifti.header
     axes = [cifti_hdr.get_axis(i) for i in range(cifti.ndim)]
     if len(axes) > 2:
@@ -151,8 +151,6 @@ def _load_cohort_cifti(cohort_long, relative_root, s3_workers):
     reference_brain_names : np.ndarray
         Brain structure names from the first file, for building greyordinate table.
     """
-    from .s3_utils import open_path
-
     # Assign stable per-scalar subject indices in cohort order
     scalar_subj_counter = defaultdict(int)
     rows_with_idx = []
@@ -164,23 +162,13 @@ def _load_cohort_cifti(cohort_long, relative_root, s3_workers):
     # Load the first file serially to get the reference brain axis
     first_sn, _, first_src = rows_with_idx[0]
     first_path = first_src if is_s3_path(first_src) else op.join(relative_root, first_src)
-    local_first, is_temp = open_path(first_path)
-    try:
-        first_data, reference_brain_names = extract_cifti_scalar_data(local_first)
-    finally:
-        if is_temp:
-            os.unlink(local_first)
+    first_data, reference_brain_names = extract_cifti_scalar_data(load_nibabel(first_path, cifti=True))
 
     def _worker(job):
         sn, subj_idx, src = job
-        local_path, is_temp = open_path(src)
-        try:
-            arr, _ = extract_cifti_scalar_data(
-                local_path, reference_brain_names=reference_brain_names
-            )
-        finally:
-            if is_temp:
-                os.unlink(local_path)
+        arr, _ = extract_cifti_scalar_data(
+            load_nibabel(src, cifti=True), reference_brain_names=reference_brain_names
+        )
         return sn, subj_idx, arr
 
     if s3_workers > 1 and len(rows_with_idx) > 1:

@@ -38,10 +38,10 @@ dependencies = [
   "tiledb",
 ]
 
+dynamic = ["version"]
+
 [project.optional-dependencies]
 s3 = ["boto3"]
-
-dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://github.com/PennLINC/ModelArrayIO"

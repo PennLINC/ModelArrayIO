@@ -23,7 +23,7 @@ from .parser import (
     add_tiledb_storage_args,
     add_s3_workers_arg,
 )
-from .s3_utils import is_s3_path
+from .s3_utils import is_s3_path, load_nibabel
 
 
 def _load_cohort_voxels(cohort_df, group_mask_matrix, relative_root, s3_workers):
@@ -41,8 +41,6 @@ def _load_cohort_voxels(cohort_df, group_mask_matrix, relative_root, s3_workers)
     sources_lists : dict[str, list[str]]
         Per-scalar ordered list of source file paths (for HDF5 metadata).
     """
-    from .s3_utils import open_path
-
     scalar_subj_counter = defaultdict(int)
     jobs = []
     sources_lists = defaultdict(list)
@@ -60,15 +58,9 @@ def _load_cohort_voxels(cohort_df, group_mask_matrix, relative_root, s3_workers)
 
     def _worker(job):
         sn, subj_idx, scalar_path, mask_path = job
-        local_scalar, s_temp = open_path(scalar_path)
-        local_mask, m_temp = open_path(mask_path)
-        try:
-            arr = flattened_image(local_scalar, local_mask, group_mask_matrix)
-        finally:
-            if s_temp:
-                os.unlink(local_scalar)
-            if m_temp:
-                os.unlink(local_mask)
+        scalar_img = load_nibabel(scalar_path)
+        mask_img = load_nibabel(mask_path)
+        arr = flattened_image(scalar_img, mask_img, group_mask_matrix)
         return sn, subj_idx, arr
 
     if s3_workers > 1:
@@ -97,10 +89,10 @@ def _load_cohort_voxels(cohort_df, group_mask_matrix, relative_root, s3_workers)
 
 
 def flattened_image(scalar_image, scalar_mask, group_mask_matrix):
-    scalar_mask_img = nb.load(scalar_mask)
+    scalar_mask_img = scalar_mask if hasattr(scalar_mask, 'get_fdata') else nb.load(scalar_mask)
     scalar_mask_matrix = scalar_mask_img.get_fdata() > 0
-    
-    scalar_img = nb.load(scalar_image)
+
+    scalar_img = scalar_image if hasattr(scalar_image, 'get_fdata') else nb.load(scalar_image)
     scalar_matrix = scalar_img.get_fdata()
 
     scalar_matrix[np.logical_not(scalar_mask_matrix)] = np.nan

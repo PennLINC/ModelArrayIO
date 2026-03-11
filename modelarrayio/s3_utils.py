@@ -1,6 +1,7 @@
-import os
+import gzip
 import logging
-import tempfile
+import os
+from io import BytesIO
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -11,11 +12,15 @@ def is_s3_path(path: str) -> bool:
     return str(path).startswith("s3://")
 
 
-def download_s3_file(s3_path: str) -> str:
-    """Download an S3 object to a local temporary file.
+def _make_s3_client():
+    """Create a boto3 S3 client.
 
-    Returns the local path. The caller is responsible for deleting the file.
-    Requires boto3: pip install modelarrayio[s3].
+    Uses anonymous (unsigned) access when the environment variable
+    MODELARRAYIO_S3_ANON=1 is set (useful for public buckets such as
+    fcp-indi).  Otherwise the standard boto3 credential chain is used
+    (env vars, ~/.aws/credentials, IAM instance profile, etc.).
+
+    Raises ImportError if boto3 is not installed.
     """
     try:
         import boto3
@@ -24,46 +29,54 @@ def download_s3_file(s3_path: str) -> str:
             "boto3 is required for s3:// paths. "
             "Install with: pip install modelarrayio[s3]"
         )
-    parsed = urlparse(s3_path)
-    bucket = parsed.netloc
-    key = parsed.path.lstrip("/")
-    # Preserve compound extensions (e.g. .nii.gz) so nibabel can identify
-    # the format from the tempfile name.
-    fname = os.path.basename(key)
-    if fname.endswith(".nii.gz"):
-        suffix = ".nii.gz"
-    elif fname.endswith(".mif.gz"):
-        suffix = ".mif.gz"
-    else:
-        suffix = os.path.splitext(fname)[-1] or ".tmp"
-    fd, local_path = tempfile.mkstemp(suffix=suffix)
-    os.close(fd)
-    # Honour MODELARRAYIO_S3_ANON=1 for public buckets (e.g. testing against
-    # fcp-indi). In production the standard boto3 credential chain is used.
     anon = os.environ.get("MODELARRAYIO_S3_ANON", "").lower() in ("1", "true", "yes")
     if anon:
         from botocore import UNSIGNED
         from botocore.config import Config
-        s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
-    else:
-        s3 = boto3.client("s3")
-    logger.debug("Downloading s3://%s/%s -> %s", bucket, key, local_path)
-    s3.download_file(bucket, key, local_path)
-    return local_path
+        return boto3.client("s3", config=Config(signature_version=UNSIGNED))
+    return boto3.client("s3")
 
 
-def open_path(path: str) -> tuple[str, bool]:
-    """Resolve a path to a local file, downloading from S3 if needed.
+def load_nibabel(path: str, *, cifti: bool = False):
+    """Load a nibabel image from a local path or an s3:// URI.
 
-    Intended for use inside worker functions where relative_root has already
-    been applied to local paths before job submission.
+    For s3:// paths the object is downloaded directly into memory via
+    ``get_object``; no temporary file is written to disk.  The bytes are
+    decompressed in-memory if the key ends with ``.gz``, then handed to
+    nibabel through its ``FileHolder`` / ``from_file_map`` API.
+
+    Parameters
+    ----------
+    path : str
+        Local file path or s3:// URI.
+    cifti : bool
+        Pass ``True`` for CIFTI-2 files (``.dscalar.nii`` etc.) so that
+        nibabel returns a ``Cifti2Image`` with proper axes.  ``False``
+        (default) returns a ``Nifti1Image``.
 
     Returns
     -------
-    local_path : str
-    is_temp : bool
-        True if the caller must delete ``local_path`` after use.
+    nibabel.FileBasedImage
     """
-    if is_s3_path(path):
-        return download_s3_file(path), True
-    return path, False
+    import nibabel as nb
+
+    if not is_s3_path(path):
+        return nb.load(path)
+
+    parsed = urlparse(path)
+    bucket = parsed.netloc
+    key = parsed.path.lstrip("/")
+
+    logger.debug("Loading s3://%s/%s into memory", bucket, key)
+    data = _make_s3_client().get_object(Bucket=bucket, Key=key)["Body"].read()
+
+    if os.path.basename(key).endswith(".gz"):
+        data = gzip.decompress(data)
+
+    from nibabel.filebasedimages import FileHolder
+    fh = FileHolder(fileobj=BytesIO(data))
+    file_map = {"header": fh, "image": fh}
+
+    if cifti:
+        return nb.Cifti2Image.from_file_map(file_map)
+    return nb.Nifti1Image.from_file_map(file_map)
