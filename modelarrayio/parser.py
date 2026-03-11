@@ -134,6 +134,20 @@ def add_tiledb_storage_args(parser):
     return parser
 
 
+def add_s3_workers_arg(parser):
+    parser.add_argument(
+        "--s3-workers", "--s3_workers",
+        type=int,
+        default=1,
+        help=(
+            "Number of parallel worker processes for loading image files. "
+            "Set > 1 to enable parallel downloads when cohort paths begin with s3://. "
+            "Default 1 (serial)."
+        ),
+    )
+    return parser
+
+
 def add_scalar_columns_arg(parser):
     parser.add_argument(
         "--scalar-columns", "--scalar_columns",

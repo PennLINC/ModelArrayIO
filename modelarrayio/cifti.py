@@ -15,7 +15,8 @@ from .tiledb_storage import (
     write_rows_in_column_stripes as tdb_write_stripes,
     write_column_names as tdb_write_column_names,
 )
-from .parser import add_relative_root_arg, add_output_hdf5_arg, add_cohort_arg, add_storage_args, add_backend_arg, add_output_tiledb_arg, add_tiledb_storage_args, add_scalar_columns_arg
+from .parser import add_relative_root_arg, add_output_hdf5_arg, add_cohort_arg, add_storage_args, add_backend_arg, add_output_tiledb_arg, add_tiledb_storage_args, add_scalar_columns_arg, add_s3_workers_arg
+from .s3_utils import is_s3_path, load_nibabel
 
 
 def _cohort_to_long_dataframe(cohort_df, scalar_columns=None):
@@ -83,7 +84,7 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
 
     """
 
-    cifti = nb.load(cifti_file)
+    cifti = cifti_file if hasattr(cifti_file, 'get_fdata') else nb.load(cifti_file)
     cifti_hdr = cifti.header
     axes = [cifti_hdr.get_axis(i) for i in range(cifti.ndim)]
     if len(axes) > 2:
@@ -134,6 +135,75 @@ def brain_names_to_dataframe(brain_names):
     return greyordinate_df, structure_name_strings
 
 
+def _load_cohort_cifti(cohort_long, relative_root, s3_workers):
+    """Load all CIFTI scalar rows from the cohort, optionally in parallel.
+
+    The first file is always loaded serially to obtain the reference brain
+    structure axis used for validation. When s3_workers > 1, remaining rows
+    are submitted to a ThreadPoolExecutor and collected via as_completed.
+    Threads share memory so reference_brain_names is accessed directly with
+    no copying overhead.
+
+    Returns
+    -------
+    scalars : dict[str, list[np.ndarray]]
+        Per-scalar ordered list of 1-D subject arrays, ready for stripe-write.
+    reference_brain_names : np.ndarray
+        Brain structure names from the first file, for building greyordinate table.
+    """
+    # Assign stable per-scalar subject indices in cohort order
+    scalar_subj_counter = defaultdict(int)
+    rows_with_idx = []
+    for row in cohort_long.itertuples(index=False):
+        subj_idx = scalar_subj_counter[row.scalar_name]
+        scalar_subj_counter[row.scalar_name] += 1
+        rows_with_idx.append((row.scalar_name, subj_idx, row.source_file))
+
+    # Load the first file serially to get the reference brain axis
+    first_sn, _, first_src = rows_with_idx[0]
+    first_path = first_src if is_s3_path(first_src) else op.join(relative_root, first_src)
+    first_data, reference_brain_names = extract_cifti_scalar_data(load_nibabel(first_path, cifti=True))
+
+    def _worker(job):
+        sn, subj_idx, src = job
+        arr, _ = extract_cifti_scalar_data(
+            load_nibabel(src, cifti=True), reference_brain_names=reference_brain_names
+        )
+        return sn, subj_idx, arr
+
+    if s3_workers > 1 and len(rows_with_idx) > 1:
+        results = {first_sn: {0: first_data}}
+        jobs = [
+            (sn, subj_idx, src if is_s3_path(src) else op.join(relative_root, src))
+            for sn, subj_idx, src in rows_with_idx[1:]
+        ]
+        with ThreadPoolExecutor(max_workers=s3_workers) as pool:
+            futures = {pool.submit(_worker, job): job for job in jobs}
+            for future in tqdm(
+                as_completed(futures),
+                total=len(futures),
+                desc="Loading CIFTI data",
+            ):
+                sn, subj_idx, arr = future.result()
+                results.setdefault(sn, {})[subj_idx] = arr
+        scalars = {
+            sn: [results[sn][i] for i in range(cnt)]
+            for sn, cnt in scalar_subj_counter.items()
+        }
+    else:
+        scalars = defaultdict(list)
+        scalars[first_sn].append(first_data)
+        remaining = [
+            (sn, subj_idx, src if is_s3_path(src) else op.join(relative_root, src))
+            for sn, subj_idx, src in rows_with_idx[1:]
+        ]
+        for job in tqdm(remaining, desc="Loading CIFTI data"):
+            sn, subj_idx, arr = _worker(job)
+            scalars[sn].append(arr)
+
+    return scalars, reference_brain_names
+
+
 def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_tdb='arraydb.tdb', relative_root='/',
                storage_dtype='float32',
                compression='gzip',
@@ -147,7 +217,8 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
                tdb_tile_voxels=0,
                tdb_target_tile_mb=2.0,
                tdb_workers=None,
-               scalar_columns=None):
+               scalar_columns=None,
+               s3_workers=1):
     """
     Load all fixeldb data.
     Parameters
@@ -174,19 +245,9 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
         raise ValueError("Unable to derive scalar sources from cohort file.")
 
     if backend == 'hdf5':
-        scalars = defaultdict(list)
-        last_brain_names = None
-        for row in tqdm(
-            cohort_long.itertuples(index=False),
-            total=cohort_long.shape[0],
-            desc="Loading CIFTI scalars",
-        ):
-            scalar_file = op.join(relative_root, row.source_file)
-            cifti_data, brain_names = extract_cifti_scalar_data(
-                scalar_file, reference_brain_names=last_brain_names
-            )
-            last_brain_names = brain_names.copy()
-            scalars[row.scalar_name].append(cifti_data)
+        scalars, last_brain_names = _load_cohort_cifti(
+            cohort_long, relative_root, s3_workers
+        )
 
         output_file = op.join(relative_root, output_h5)
         f = h5py.File(output_file, "w")
@@ -293,6 +354,7 @@ def get_parser():
     add_backend_arg(parser)
     add_storage_args(parser)
     add_tiledb_storage_args(parser)
+    add_s3_workers_arg(parser)
     return parser
 
 
@@ -319,7 +381,8 @@ def main():
                            tdb_tile_voxels=args.tdb_tile_voxels,
                            tdb_target_tile_mb=args.tdb_target_tile_mb,
                            tdb_workers=args.tdb_workers,
-                           scalar_columns=args.scalar_columns)
+                           scalar_columns=args.scalar_columns,
+                           s3_workers=args.s3_workers)
     return status
 
 
@@ -395,7 +458,7 @@ def h5_to_ciftis():
     parser = get_h5_to_ciftis_parser()
     args = parser.parse_args()
 
-    out_cifti_dir = op.join(args.relative_root, args.output_dir)  # absolute path for output dir
+    out_cifti_dir = op.abspath(args.output_dir)  # absolute path for output dir
 
     if op.exists(out_cifti_dir):
         print("WARNING: Output directory exists")
@@ -422,7 +485,7 @@ def get_h5_to_ciftis_parser():
     parser.add_argument(
         "--cohort-file", "--cohort_file",
         help="Path to a csv with demographic info and paths to data.",
-        required=True)
+        )
     parser.add_argument(
         "--relative-root", "--relative_root",
         help="Root to which all paths are relative, i.e. defining the (absolute) path to root directory of index_file, directions_file, cohort_file, input_hdf5, and output_dir.",

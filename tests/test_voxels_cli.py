@@ -82,7 +82,6 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
         "--dtype", "float32",
         "--compression", "gzip",
         "--compression-level", "1",
-        "--shuffle", "True",
         "--chunk-voxels", "0",
         "--target-chunk-mb", "1.0",
     ]
@@ -94,13 +93,13 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
     # Validate HDF5 contents
     with h5py.File(out_h5, "r") as h5:
         assert "voxels" in h5
-        vox = np.array(h5["voxels"])  # stored as transposed table (3, N)
-        assert vox.shape[0] == 3
+        vox = np.array(h5["voxels"])  # stored as transposed table (4, N): voxel_id, i, j, k
+        assert vox.shape[0] == 4
         ijk = np.vstack(np.nonzero(group_mask))  # (3, N) ordered by i, then j, then k
         assert vox.shape[1] == ijk.shape[1]
 
-        # Check ordering matches nonzero order (allow exact match)
-        assert np.array_equal(vox, ijk)
+        # Rows 1-3 are i, j, k (row 0 is voxel_id)
+        assert np.array_equal(vox[1:], ijk)
 
         # Scalars dataset
         dset = h5["scalars/FA/values"]
