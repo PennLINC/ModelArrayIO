@@ -9,7 +9,7 @@ import os.path as op
 
 
 def main():
-    sys.path.insert(0, op.abspath('.'))
+    sys.path.insert(0, op.join(op.abspath('.'), 'src'))
     from modelarrayio.__about__ import __version__
     print(__version__)
 

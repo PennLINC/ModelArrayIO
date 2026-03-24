@@ -1,12 +1,12 @@
+import csv
 import os
 import os.path as op
-import csv
 import subprocess
 import sys
 
-import numpy as np
-import nibabel as nb
 import h5py
+import nibabel as nb
+import numpy as np
 
 
 def _make_nifti(data, affine=None):
@@ -25,7 +25,7 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
     group_mask = np.zeros(shape, dtype=bool)
     # Create a sparse pattern of true voxels
     true_coords = [(0, 1, 1), (1, 2, 3), (2, 4, 5), (3, 0, 0), (4, 5, 6), (1, 1, 4), (2, 2, 2)]
-    for (i, j, k) in true_coords:
+    for i, j, k in true_coords:
         group_mask[i, j, k] = True
 
     # Save group mask
@@ -38,7 +38,7 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
     for sidx in range(2):
         # Scalar volume encodes f(i,j,k)
         scalar = np.zeros(shape, dtype=np.float32)
-        for (i, j, k) in true_coords:
+        for i, j, k in true_coords:
             scalar[i, j, k] = _ijk_value(i, j, k) + sidx  # slight per-subject shift
 
         # Individual mask: subject 1 omits one voxel
@@ -50,8 +50,8 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
         scalar_img = _make_nifti(scalar)
         mask_img = _make_nifti(indiv_mask.astype(np.uint8))
 
-        scalar_path = tmp_path / f"sub-{sidx+1}_scalar.nii.gz"
-        mask_path = tmp_path / f"sub-{sidx+1}_mask.nii.gz"
+        scalar_path = tmp_path / f"sub-{sidx + 1}_scalar.nii.gz"
+        mask_path = tmp_path / f"sub-{sidx + 1}_mask.nii.gz"
         scalar_img.to_filename(scalar_path)
         mask_img.to_filename(mask_path)
         subjects.append((str(scalar_path.name), str(mask_path.name)))
@@ -62,11 +62,13 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
         writer = csv.DictWriter(f, fieldnames=["scalar_name", "source_file", "source_mask_file"])
         writer.writeheader()
         for sidx, (scalar_name, mask_name) in enumerate(subjects):
-            writer.writerow({
-                "scalar_name": "FA",
-                "source_file": scalar_name,
-                "source_mask_file": mask_name,
-            })
+            writer.writerow(
+                {
+                    "scalar_name": "FA",
+                    "source_file": scalar_name,
+                    "source_mask_file": mask_name,
+                }
+            )
 
     # Run CLI using module to avoid PATH issues
     out_h5 = tmp_path / "out.h5"
@@ -74,16 +76,26 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
         sys.executable,
         "-m",
         "modelarrayio.voxels",
-        "--group-mask-file", str(group_mask_file.name),
-        "--cohort-file", str(cohort_csv.name),
-        "--relative-root", str(tmp_path),
-        "--output-hdf5", str(out_h5.name),
-        "--backend", "hdf5",
-        "--dtype", "float32",
-        "--compression", "gzip",
-        "--compression-level", "1",
-        "--chunk-voxels", "0",
-        "--target-chunk-mb", "1.0",
+        "--group-mask-file",
+        str(group_mask_file.name),
+        "--cohort-file",
+        str(cohort_csv.name),
+        "--relative-root",
+        str(tmp_path),
+        "--output-hdf5",
+        str(out_h5.name),
+        "--backend",
+        "hdf5",
+        "--dtype",
+        "float32",
+        "--compression",
+        "gzip",
+        "--compression-level",
+        "1",
+        "--chunk-voxels",
+        "0",
+        "--target-chunk-mb",
+        "1.0",
     ]
     env = os.environ.copy()
     proc = subprocess.run(cmd, cwd=str(tmp_path), env=env, capture_output=True, text=True)
@@ -110,7 +122,12 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
         # Column names exist and match subjects count
         grp = h5["scalars/FA"]
         assert "column_names" in grp
-        colnames = list(map(lambda x: x.decode("utf-8") if isinstance(x, bytes) else str(x), grp["column_names"][...]))
+        colnames = list(
+            map(
+                lambda x: x.decode("utf-8") if isinstance(x, bytes) else str(x),
+                grp["column_names"][...],
+            )
+        )
         assert len(colnames) == 2
 
         # Spot-check a voxel mapping (pick the third voxel)
@@ -131,5 +148,3 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
             assert np.isnan(v1)
         else:
             assert np.isclose(v1, expected_s1, equal_nan=True)
-
-

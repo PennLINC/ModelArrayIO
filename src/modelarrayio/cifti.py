@@ -1,22 +1,32 @@
 import argparse
-import os
-from collections import defaultdict, OrderedDict
-import os.path as op
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import numpy as np
-import nibabel as nb
-import pandas as pd
 import logging
-from tqdm import tqdm
+import os
+import os.path as op
+from collections import OrderedDict, defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import h5py
+import nibabel as nb
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
+
 from .h5_storage import create_empty_scalar_matrix_dataset, write_rows_in_column_stripes
-from .tiledb_storage import (
-    create_empty_scalar_matrix_array as tdb_create_empty,
-    write_rows_in_column_stripes as tdb_write_stripes,
-    write_column_names as tdb_write_column_names,
+from .parser import (
+    add_backend_arg,
+    add_cohort_arg,
+    add_output_hdf5_arg,
+    add_output_tiledb_arg,
+    add_relative_root_arg,
+    add_s3_workers_arg,
+    add_scalar_columns_arg,
+    add_storage_args,
+    add_tiledb_storage_args,
 )
-from .parser import add_relative_root_arg, add_output_hdf5_arg, add_cohort_arg, add_storage_args, add_backend_arg, add_output_tiledb_arg, add_tiledb_storage_args, add_scalar_columns_arg, add_s3_workers_arg
 from .s3_utils import is_s3_path, load_nibabel
+from .tiledb_storage import create_empty_scalar_matrix_array as tdb_create_empty
+from .tiledb_storage import write_column_names as tdb_write_column_names
+from .tiledb_storage import write_rows_in_column_stripes as tdb_write_stripes
 
 
 def _cohort_to_long_dataframe(cohort_df, scalar_columns=None):
@@ -40,7 +50,9 @@ def _cohort_to_long_dataframe(cohort_df, scalar_columns=None):
     required = {"scalar_name", "source_file"}
     missing = required - set(cohort_df.columns)
     if missing:
-        raise ValueError(f"Cohort file must contain columns {sorted(required)} when --scalar-columns is not used.")
+        raise ValueError(
+            f"Cohort file must contain columns {sorted(required)} when --scalar-columns is not used."
+        )
 
     long_df = cohort_df[list(required)].copy()
     long_df = long_df.dropna(subset=["scalar_name", "source_file"])
@@ -84,7 +96,7 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
 
     """
 
-    cifti = cifti_file if hasattr(cifti_file, 'get_fdata') else nb.load(cifti_file)
+    cifti = cifti_file if hasattr(cifti_file, "get_fdata") else nb.load(cifti_file)
     cifti_hdr = cifti.header
     axes = [cifti_hdr.get_axis(i) for i in range(cifti.ndim)]
     if len(axes) > 2:
@@ -101,7 +113,6 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
         raise Exception(f"Only one brain axis should be present. Found {brain_axes}")
     brain_axis = brain_axes.pop()
 
-
     cifti_data = cifti.get_fdata().squeeze().astype(np.float32)
     if not cifti_data.ndim == 1:
         raise Exception("Too many dimensions in the cifti data")
@@ -114,7 +125,6 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
             raise Exception(f"Incosistent vertex names in cifti file {cifti_file}")
 
     return cifti_data, brain_names
-
 
     # vertex_table = pd.DataFrame(
     #     dict(
@@ -129,8 +139,8 @@ def brain_names_to_dataframe(brain_names):
     structure_name_strings = list(map(str, structure_names))
 
     greyordinate_df = pd.DataFrame(
-        {"vertex_id": np.arange(structure_ids.shape[0]),
-         "structure_id": structure_ids})
+        {"vertex_id": np.arange(structure_ids.shape[0]), "structure_id": structure_ids}
+    )
 
     return greyordinate_df, structure_name_strings
 
@@ -162,7 +172,9 @@ def _load_cohort_cifti(cohort_long, relative_root, s3_workers):
     # Load the first file serially to get the reference brain axis
     first_sn, _, first_src = rows_with_idx[0]
     first_path = first_src if is_s3_path(first_src) else op.join(relative_root, first_src)
-    first_data, reference_brain_names = extract_cifti_scalar_data(load_nibabel(first_path, cifti=True))
+    first_data, reference_brain_names = extract_cifti_scalar_data(
+        load_nibabel(first_path, cifti=True)
+    )
 
     def _worker(job):
         sn, subj_idx, src = job
@@ -187,8 +199,7 @@ def _load_cohort_cifti(cohort_long, relative_root, s3_workers):
                 sn, subj_idx, arr = future.result()
                 results.setdefault(sn, {})[subj_idx] = arr
         scalars = {
-            sn: [results[sn][i] for i in range(cnt)]
-            for sn, cnt in scalar_subj_counter.items()
+            sn: [results[sn][i] for i in range(cnt)] for sn, cnt in scalar_subj_counter.items()
         }
     else:
         scalars = defaultdict(list)
@@ -204,21 +215,27 @@ def _load_cohort_cifti(cohort_long, relative_root, s3_workers):
     return scalars, reference_brain_names
 
 
-def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_tdb='arraydb.tdb', relative_root='/',
-               storage_dtype='float32',
-               compression='gzip',
-               compression_level=4,
-               shuffle=True,
-               chunk_voxels=0,
-               target_chunk_mb=2.0,
-               tdb_compression='zstd',
-               tdb_compression_level=5,
-               tdb_shuffle=True,
-               tdb_tile_voxels=0,
-               tdb_target_tile_mb=2.0,
-               tdb_workers=None,
-               scalar_columns=None,
-               s3_workers=1):
+def write_storage(
+    cohort_file,
+    backend="hdf5",
+    output_h5="fixeldb.h5",
+    output_tdb="arraydb.tdb",
+    relative_root="/",
+    storage_dtype="float32",
+    compression="gzip",
+    compression_level=4,
+    shuffle=True,
+    chunk_voxels=0,
+    target_chunk_mb=2.0,
+    tdb_compression="zstd",
+    tdb_compression_level=5,
+    tdb_shuffle=True,
+    tdb_tile_voxels=0,
+    tdb_target_tile_mb=2.0,
+    tdb_workers=None,
+    scalar_columns=None,
+    s3_workers=1,
+):
     """
     Load all fixeldb data.
     Parameters
@@ -244,25 +261,25 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
     if not scalar_sources:
         raise ValueError("Unable to derive scalar sources from cohort file.")
 
-    if backend == 'hdf5':
-        scalars, last_brain_names = _load_cohort_cifti(
-            cohort_long, relative_root, s3_workers
-        )
+    if backend == "hdf5":
+        scalars, last_brain_names = _load_cohort_cifti(cohort_long, relative_root, s3_workers)
 
         output_file = op.join(relative_root, output_h5)
         f = h5py.File(output_file, "w")
 
         greyordinate_table, structure_names = brain_names_to_dataframe(last_brain_names)
-        greyordinatesh5 = f.create_dataset(name="greyordinates", data=greyordinate_table.to_numpy().T)
-        greyordinatesh5.attrs['column_names'] = list(greyordinate_table.columns)
-        greyordinatesh5.attrs['structure_names'] = structure_names
+        greyordinatesh5 = f.create_dataset(
+            name="greyordinates", data=greyordinate_table.to_numpy().T
+        )
+        greyordinatesh5.attrs["column_names"] = list(greyordinate_table.columns)
+        greyordinatesh5.attrs["structure_names"] = structure_names
 
         for scalar_name in scalars.keys():
             num_subjects = len(scalars[scalar_name])
             num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
             dset = create_empty_scalar_matrix_dataset(
                 f,
-                'scalars/{}/values'.format(scalar_name),
+                "scalars/{}/values".format(scalar_name),
                 num_subjects,
                 num_items,
                 storage_dtype=storage_dtype,
@@ -271,7 +288,8 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
                 shuffle=shuffle,
                 chunk_voxels=chunk_voxels,
                 target_chunk_mb=target_chunk_mb,
-                sources_list=scalar_sources[scalar_name])
+                sources_list=scalar_sources[scalar_name],
+            )
 
             write_rows_in_column_stripes(dset, scalars[scalar_name])
         f.close()
@@ -288,7 +306,7 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
         _, reference_brain_names = extract_cifti_scalar_data(first_path)
 
         def _process_scalar_job(scalar_name, source_files):
-            dataset_path = f'scalars/{scalar_name}/values'
+            dataset_path = f"scalars/{scalar_name}/values"
             rows = []
             for source_file in source_files:
                 scalar_file = op.join(relative_root, source_file)
@@ -335,7 +353,9 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
             desc = "TileDB scalars"
             with ThreadPoolExecutor(max_workers=worker_count) as executor:
                 futures = {
-                    executor.submit(_process_scalar_job, scalar_name, scalar_sources[scalar_name]): scalar_name
+                    executor.submit(
+                        _process_scalar_job, scalar_name, scalar_sources[scalar_name]
+                    ): scalar_name
                     for scalar_name in scalar_names
                 }
                 for future in tqdm(as_completed(futures), total=len(futures), desc=desc):
@@ -344,8 +364,7 @@ def write_storage(cohort_file, backend='hdf5', output_h5='fixeldb.h5', output_td
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(
-        description="Create a hdf5 file of CIDTI2 dscalar data")
+    parser = argparse.ArgumentParser(description="Create a hdf5 file of CIDTI2 dscalar data")
     add_cohort_arg(parser)
     add_scalar_columns_arg(parser)
     add_relative_root_arg(parser)
@@ -362,27 +381,32 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
     import logging
-    logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO),
-                        format='[%(levelname)s] %(name)s: %(message)s')
-    status = write_storage(cohort_file=args.cohort_file,
-                           backend=args.backend,
-                           output_h5=args.output_hdf5,
-                           output_tdb=args.output_tiledb,
-                           relative_root=args.relative_root,
-                           storage_dtype=args.dtype,
-                           compression=args.compression,
-                           compression_level=args.compression_level,
-                           shuffle=args.shuffle,
-                           chunk_voxels=args.chunk_voxels,
-                           target_chunk_mb=args.target_chunk_mb,
-                           tdb_compression=args.tdb_compression,
-                           tdb_compression_level=args.tdb_compression_level,
-                           tdb_shuffle=args.tdb_shuffle,
-                           tdb_tile_voxels=args.tdb_tile_voxels,
-                           tdb_target_tile_mb=args.tdb_target_tile_mb,
-                           tdb_workers=args.tdb_workers,
-                           scalar_columns=args.scalar_columns,
-                           s3_workers=args.s3_workers)
+
+    logging.basicConfig(
+        level=getattr(logging, str(args.log_level).upper(), logging.INFO),
+        format="[%(levelname)s] %(name)s: %(message)s",
+    )
+    status = write_storage(
+        cohort_file=args.cohort_file,
+        backend=args.backend,
+        output_h5=args.output_hdf5,
+        output_tdb=args.output_tiledb,
+        relative_root=args.relative_root,
+        storage_dtype=args.dtype,
+        compression=args.compression,
+        compression_level=args.compression_level,
+        shuffle=args.shuffle,
+        chunk_voxels=args.chunk_voxels,
+        target_chunk_mb=args.target_chunk_mb,
+        tdb_compression=args.tdb_compression,
+        tdb_compression_level=args.tdb_compression_level,
+        tdb_shuffle=args.tdb_shuffle,
+        tdb_tile_voxels=args.tdb_tile_voxels,
+        tdb_target_tile_mb=args.tdb_target_tile_mb,
+        tdb_workers=args.tdb_workers,
+        scalar_columns=args.scalar_columns,
+        s3_workers=args.s3_workers,
+    )
     return status
 
 
@@ -416,8 +440,8 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
     # Get a template nifti image.
     cifti = nb.load(example_cifti)
     h5_data = h5py.File(h5_file, "r")
-    results_matrix = h5_data['results/' + analysis_name + '/results_matrix']
-    names_data = results_matrix.attrs['colnames']  # NOTE: results_matrix: need to be transposed...
+    results_matrix = h5_data["results/" + analysis_name + "/results_matrix"]
+    names_data = results_matrix.attrs["colnames"]  # NOTE: results_matrix: need to be transposed...
     # print(results_matrix.shape)
 
     # print(h5_data['results/' + analysis_name + '/results_matrix'].attrs['column_names'])
@@ -426,8 +450,7 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
         results_names = names_data.tolist()
     except Exception:
         print("Unable to read column names, using 'componentNNN' instead")
-        results_names = ['component%03d' % (n + 1) for n in
-                         range(results_matrix.shape[0])]
+        results_names = ["component%03d" % (n + 1) for n in range(results_matrix.shape[0])]
 
     # Make output directory if it does not exist
     if not op.isdir(cifti_output_dir):
@@ -435,22 +458,30 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
 
     for result_col, result_name in enumerate(results_names):
         valid_result_name = result_name.replace(" ", "_").replace("/", "_")
-        out_cifti = op.join(cifti_output_dir, analysis_name + "_" + valid_result_name + '.dscalar.nii')
+        out_cifti = op.join(
+            cifti_output_dir, analysis_name + "_" + valid_result_name + ".dscalar.nii"
+        )
         temp_cifti2 = nb.Cifti2Image(
-            results_matrix[result_col, :].reshape(1,-1),
+            results_matrix[result_col, :].reshape(1, -1),
             header=cifti.header,
-            nifti_header=cifti.nifti_header)
+            nifti_header=cifti.nifti_header,
+        )
         temp_cifti2.to_filename(out_cifti)
 
         # if this result is p.value, also write out 1-p.value (1m.p.value)
-        if "p.value" in valid_result_name:   # the result name contains "p.value" (from R package broom)
+        if (
+            "p.value" in valid_result_name
+        ):  # the result name contains "p.value" (from R package broom)
             valid_result_name_1mpvalue = valid_result_name.replace("p.value", "1m.p.value")
-            out_cifti_1mpvalue = op.join(cifti_output_dir, analysis_name + "_" + valid_result_name_1mpvalue + '.dscalar.nii')
-            output_mifvalues_1mpvalue = 1 - results_matrix[result_col, :]   # 1 minus
+            out_cifti_1mpvalue = op.join(
+                cifti_output_dir, analysis_name + "_" + valid_result_name_1mpvalue + ".dscalar.nii"
+            )
+            output_mifvalues_1mpvalue = 1 - results_matrix[result_col, :]  # 1 minus
             temp_nifti2_1mpvalue = nb.Cifti2Image(
                 output_mifvalues_1mpvalue.reshape(1, -1),
                 header=cifti.header,
-                nifti_header=cifti.nifti_header)
+                nifti_header=cifti.nifti_header,
+            )
             temp_nifti2_1mpvalue.to_filename(out_cifti_1mpvalue)
 
 
@@ -466,9 +497,11 @@ def h5_to_ciftis():
 
     # Get an example cifti
     if args.example_cifti is None:
-        logging.warning("No example cifti file provided, using the first cifti file from the cohort file")
+        logging.warning(
+            "No example cifti file provided, using the first cifti file from the cohort file"
+        )
         cohort_df = pd.read_csv(args.cohort_file)
-        example_cifti = op.join(args.relative_root, cohort_df['source_file'][0])
+        example_cifti = op.join(args.relative_root, cohort_df["source_file"][0])
     else:
         example_cifti = args.example_cifti
         if not op.exists(example_cifti):
@@ -481,31 +514,39 @@ def h5_to_ciftis():
 
 def get_h5_to_ciftis_parser():
     parser = argparse.ArgumentParser(
-        description="Create a directory with cifti results from an hdf5 file")
+        description="Create a directory with cifti results from an hdf5 file"
+    )
     parser.add_argument(
-        "--cohort-file", "--cohort_file",
+        "--cohort-file",
+        "--cohort_file",
         help="Path to a csv with demographic info and paths to data.",
-        )
+    )
     parser.add_argument(
-        "--relative-root", "--relative_root",
+        "--relative-root",
+        "--relative_root",
         help="Root to which all paths are relative, i.e. defining the (absolute) path to root directory of index_file, directions_file, cohort_file, input_hdf5, and output_dir.",
-        type=os.path.abspath)
+        type=os.path.abspath,
+    )
     parser.add_argument(
-        "--analysis-name", "--analysis_name",
-        help="Name for the statistical analysis results to be saved.")
+        "--analysis-name",
+        "--analysis_name",
+        help="Name for the statistical analysis results to be saved.",
+    )
     parser.add_argument(
-        "--input-hdf5", "--input_hdf5",
-        help="Name of HDF5 (.h5) file where results outputs are saved.")
+        "--input-hdf5",
+        "--input_hdf5",
+        help="Name of HDF5 (.h5) file where results outputs are saved.",
+    )
     parser.add_argument(
-        "--output-dir", "--output_dir",
-        help="Fixel directory where outputs will be saved. If the directory does not exist, it will be automatically created.")
+        "--output-dir",
+        "--output_dir",
+        help="Fixel directory where outputs will be saved. If the directory does not exist, it will be automatically created.",
+    )
     parser.add_argument(
-        "--example-cifti", "--example_cifti",
-        help="Path to an example cifti file.",
-        required=False)
+        "--example-cifti", "--example_cifti", help="Path to an example cifti file.", required=False
+    )
     return parser
 
 
 if __name__ == "__main__":
     main()
-

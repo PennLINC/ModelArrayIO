@@ -1,6 +1,6 @@
-import os
 import json
 import logging
+import os
 from typing import Sequence
 
 import numpy as np
@@ -102,8 +102,12 @@ def create_scalar_matrix_array(
     _ensure_parent_group(uri)
 
     # Domain and schema
-    dim_subjects = tiledb.Dim(name="subjects", domain=(0, num_subjects - 1), tile=tile_shape[0], dtype=np.int64)
-    dim_items = tiledb.Dim(name="items", domain=(0, num_items - 1), tile=tile_shape[1], dtype=np.int64)
+    dim_subjects = tiledb.Dim(
+        name="subjects", domain=(0, num_subjects - 1), tile=tile_shape[0], dtype=np.int64
+    )
+    dim_items = tiledb.Dim(
+        name="items", domain=(0, num_items - 1), tile=tile_shape[1], dtype=np.int64
+    )
     dom = tiledb.Domain(dim_subjects, dim_items)
     attr_filters = _build_filter_list(compression, compression_level, shuffle)
     attr_values = tiledb.Attr(name="values", dtype=storage_np_dtype, filters=attr_filters)
@@ -153,8 +157,12 @@ def create_empty_scalar_matrix_array(
     uri = os.path.join(base_uri, dataset_path)
     _ensure_parent_group(uri)
 
-    dim_subjects = tiledb.Dim(name="subjects", domain=(0, num_subjects - 1), tile=tile_shape[0], dtype=np.int64)
-    dim_items = tiledb.Dim(name="items", domain=(0, num_items - 1), tile=tile_shape[1], dtype=np.int64)
+    dim_subjects = tiledb.Dim(
+        name="subjects", domain=(0, num_subjects - 1), tile=tile_shape[0], dtype=np.int64
+    )
+    dim_items = tiledb.Dim(
+        name="items", domain=(0, num_items - 1), tile=tile_shape[1], dtype=np.int64
+    )
     dom = tiledb.Domain(dim_subjects, dim_items)
     attr_filters = _build_filter_list(compression, compression_level, shuffle)
     attr_values = tiledb.Attr(name="values", dtype=storage_np_dtype, filters=attr_filters)
@@ -230,7 +238,9 @@ def write_column_names(base_uri: str, scalar: str, sources: Sequence[str]):
     _ensure_parent_group(uri)
 
     n = len(sources)
-    dim_idx = tiledb.Dim(name="idx", domain=(0, max(n - 1, 0)), tile=max(1, min(n, 1024)), dtype=np.int64)
+    dim_idx = tiledb.Dim(
+        name="idx", domain=(0, max(n - 1, 0)), tile=max(1, min(n, 1024)), dtype=np.int64
+    )
     dom = tiledb.Domain(dim_idx)
     attr_values = tiledb.Attr(name="values", dtype=np.unicode_)
     schema = tiledb.ArraySchema(domain=dom, attrs=[attr_values], sparse=False)
@@ -250,5 +260,3 @@ def write_column_names(base_uri: str, scalar: str, sources: Sequence[str]):
                 G.meta["column_names"] = json.dumps(sources)
         except Exception:
             logger.warning("Failed to write column_names metadata for group %s", group_uri)
-
-

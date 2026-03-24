@@ -26,13 +26,13 @@ def _make_s3_client():
         import boto3
     except ImportError:
         raise ImportError(
-            "boto3 is required for s3:// paths. "
-            "Install with: pip install modelarrayio[s3]"
+            "boto3 is required for s3:// paths. " "Install with: pip install modelarrayio[s3]"
         )
     anon = os.environ.get("MODELARRAYIO_S3_ANON", "").lower() in ("1", "true", "yes")
     if anon:
         from botocore import UNSIGNED
         from botocore.config import Config
+
         return boto3.client("s3", config=Config(signature_version=UNSIGNED))
     return boto3.client("s3")
 
@@ -74,6 +74,7 @@ def load_nibabel(path: str, *, cifti: bool = False):
         data = gzip.decompress(data)
 
     from nibabel.filebasedimages import FileHolder
+
     fh = FileHolder(fileobj=BytesIO(data))
     file_map = {"header": fh, "image": fh}
 

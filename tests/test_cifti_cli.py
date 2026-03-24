@@ -1,13 +1,13 @@
+import csv
 import os
 import os.path as op
-import csv
 import subprocess
 import sys
 
-import numpy as np
-import nibabel as nb
-from nibabel.cifti2.cifti2_axes import ScalarAxis, BrainModelAxis
 import h5py
+import nibabel as nb
+import numpy as np
+from nibabel.cifti2.cifti2_axes import BrainModelAxis, ScalarAxis
 
 
 def _make_synthetic_cifti_dscalar(mask_bool: np.ndarray, values: np.ndarray) -> nb.Cifti2Image:
@@ -34,7 +34,7 @@ def test_concifti_cli_creates_expected_hdf5(tmp_path):
     for sidx in range(2):
         vals = np.arange(n_grayordinates, dtype=np.float32) + sidx
         img = _make_synthetic_cifti_dscalar(mask, vals)
-        path = tmp_path / f"sub-{sidx+1}.dscalar.nii"
+        path = tmp_path / f"sub-{sidx + 1}.dscalar.nii"
         img.to_filename(path)
         subjects.append(str(path.name))
 
@@ -44,25 +44,36 @@ def test_concifti_cli_creates_expected_hdf5(tmp_path):
         writer = csv.DictWriter(f, fieldnames=["scalar_name", "source_file"])
         writer.writeheader()
         for sname in subjects:
-            writer.writerow({
-                "scalar_name": "THICK",
-                "source_file": sname,
-            })
+            writer.writerow(
+                {
+                    "scalar_name": "THICK",
+                    "source_file": sname,
+                }
+            )
 
     out_h5 = tmp_path / "out_cifti.h5"
     cmd = [
         sys.executable,
         "-m",
         "modelarrayio.cifti",
-        "--cohort-file", str(cohort_csv.name),
-        "--relative-root", str(tmp_path),
-        "--output-hdf5", str(out_h5.name),
-        "--backend", "hdf5",
-        "--dtype", "float32",
-        "--compression", "gzip",
-        "--compression-level", "1",
-        "--chunk-voxels", "0",
-        "--target-chunk-mb", "1.0",
+        "--cohort-file",
+        str(cohort_csv.name),
+        "--relative-root",
+        str(tmp_path),
+        "--output-hdf5",
+        str(out_h5.name),
+        "--backend",
+        "hdf5",
+        "--dtype",
+        "float32",
+        "--compression",
+        "gzip",
+        "--compression-level",
+        "1",
+        "--chunk-voxels",
+        "0",
+        "--target-chunk-mb",
+        "1.0",
     ]
     env = os.environ.copy()
     proc = subprocess.run(cmd, cwd=str(tmp_path), env=env, capture_output=True, text=True)
@@ -92,11 +103,14 @@ def test_concifti_cli_creates_expected_hdf5(tmp_path):
         # Column names exist and match subjects count
         grp = h5["scalars/THICK"]
         assert "column_names" in grp
-        colnames = list(map(lambda x: x.decode("utf-8") if isinstance(x, bytes) else str(x), grp["column_names"][...]))
+        colnames = list(
+            map(
+                lambda x: x.decode("utf-8") if isinstance(x, bytes) else str(x),
+                grp["column_names"][...],
+            )
+        )
         assert len(colnames) == 2
 
         # Spot-check a couple values
         assert np.isclose(float(dset[0, 0]), 0.0)
         assert np.isclose(float(dset[1, 0]), 1.0)
-
-

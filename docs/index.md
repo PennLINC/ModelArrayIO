@@ -1,0 +1,4 @@
+# ModelArrayIO
+
+```{include} ../README.md
+```

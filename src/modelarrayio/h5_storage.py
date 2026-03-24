@@ -1,7 +1,8 @@
-import numpy as np
-import h5py
-import pandas as pd
 import logging
+
+import h5py
+import numpy as np
+import pandas as pd
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -50,9 +51,7 @@ def compute_chunk_shape_full_subjects(
     else:
         bytes_per_value = np.dtype(storage_np_dtype).itemsize
         target_bytes = float(target_chunk_mb) * 1024.0 * 1024.0
-        items_per_chunk = max(
-            1, int(target_bytes / (bytes_per_value * subjects_per_chunk))
-        )
+        items_per_chunk = max(1, int(target_bytes / (bytes_per_value * subjects_per_chunk)))
         items_per_chunk = min(items_per_chunk, num_items)
     chunk = (subjects_per_chunk, items_per_chunk)
     logger.debug(
@@ -79,9 +78,7 @@ def create_scalar_matrix_dataset(
     target_chunk_mb=2.0,
 ):
     storage_np_dtype = resolve_dtype(storage_dtype)
-    comp, comp_opts, use_shuffle = resolve_compression(
-        compression, compression_level, shuffle
-    )
+    comp, comp_opts, use_shuffle = resolve_compression(compression, compression_level, shuffle)
 
     if stacked_values.dtype != storage_np_dtype:
         stacked_values = stacked_values.astype(storage_np_dtype)
@@ -108,9 +105,7 @@ def create_scalar_matrix_dataset(
         compression_opts=comp_opts if comp == "gzip" else None,
         shuffle=use_shuffle,
     )
-    logger.info(
-        "Writing full dataset %s to HDF5 (this may take a while)...", dataset_path
-    )
+    logger.info("Writing full dataset %s to HDF5 (this may take a while)...", dataset_path)
     dset[...] = stacked_values
     logger.info("Finished writing dataset %s", dataset_path)
     if sources_list is not None:
@@ -132,9 +127,7 @@ def create_empty_scalar_matrix_dataset(
     sources_list=None | pd.Series | list,
 ):
     storage_np_dtype = resolve_dtype(storage_dtype)
-    comp, comp_opts, use_shuffle = resolve_compression(
-        compression, compression_level, shuffle
-    )
+    comp, comp_opts, use_shuffle = resolve_compression(compression, compression_level, shuffle)
 
     chunk_shape = compute_chunk_shape_full_subjects(
         num_subjects, num_items, chunk_voxels, target_chunk_mb, storage_np_dtype
@@ -159,7 +152,7 @@ def create_empty_scalar_matrix_dataset(
     )
     if sources_list is not None:
         # dataset_path is e.g. 'scalars/FA/values'; extract the scalar name segment
-        scalar_name = dataset_path.split('/')[1] if dataset_path.count('/') >= 2 else dataset_path
+        scalar_name = dataset_path.split("/")[1] if dataset_path.count("/") >= 2 else dataset_path
         write_column_names(h5file, scalar_name, sources_list)
     return dset
 
@@ -200,9 +193,7 @@ def write_rows_in_column_stripes(dset, rows):
     num_subjects, num_elements = dset.shape
     if len(rows) != num_subjects:
         raise ValueError("rows length does not match dataset subjects dimension")
-    stripe_width = (
-        dset.chunks[1] if dset.chunks is not None else max(1, num_elements // 8)
-    )
+    stripe_width = dset.chunks[1] if dset.chunks is not None else max(1, num_elements // 8)
     logger.info(
         "Stripe-writing dataset %s with stripe width=%d (chunks=%s)",
         dset.name,
