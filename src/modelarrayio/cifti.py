@@ -301,7 +301,7 @@ def write_storage(
             return 0
 
         # Establish a reference brain axis once to ensure consistent ordering across workers.
-        first_scalar, first_sources = next(iter(scalar_sources.items()))
+        _first_scalar, first_sources = next(iter(scalar_sources.items()))
         first_path = op.join(relative_root, first_sources[0])
         _, reference_brain_names = extract_cifti_scalar_data(first_path)
 

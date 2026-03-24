@@ -89,7 +89,7 @@ def gather_fixels(index_file, directions_file):
         path to a Nifti2 directions file
     """
 
-    index_img, index_data = mif_to_nifti2(index_file)
+    _index_img, index_data = mif_to_nifti2(index_file)
     count_vol = index_data[..., 0].astype(
         np.uint32
     )  # number of fixels in each voxel; by index.mif definition
@@ -123,23 +123,23 @@ def gather_fixels(index_file, directions_file):
     sorted_coords = voxel_coords[id_sort]
 
     voxel_table = pd.DataFrame(
-        dict(
-            voxel_id=np.arange(voxel_coords.shape[0]),
-            i=sorted_coords[:, 0],
-            j=sorted_coords[:, 1],
-            k=sorted_coords[:, 2],
-        )
+        {
+            'voxel_id': np.arange(voxel_coords.shape[0]),
+            'i': sorted_coords[:, 0],
+            'j': sorted_coords[:, 1],
+            'k': sorted_coords[:, 2],
+        }
     )
 
-    directions_img, directions_data = mif_to_nifti2(directions_file)
+    _directions_img, directions_data = mif_to_nifti2(directions_file)
     fixel_table = pd.DataFrame(
-        dict(
-            fixel_id=fixel_ids,
-            voxel_id=fixel_voxel_ids,
-            x=directions_data[:, 0],
-            y=directions_data[:, 1],
-            z=directions_data[:, 2],
-        )
+        {
+            'fixel_id': fixel_ids,
+            'voxel_id': fixel_voxel_ids,
+            'x': directions_data[:, 0],
+            'y': directions_data[:, 1],
+            'z': directions_data[:, 2],
+        }
     )
 
     return fixel_table, voxel_table
@@ -192,11 +192,11 @@ def write_storage(
     scalars = defaultdict(list)
     sources_lists = defaultdict(list)
     print('Extracting .mif data...')
-    for ix, row in tqdm(
+    for _ix, row in tqdm(
         cohort_df.iterrows(), total=cohort_df.shape[0]
     ):  # ix: index of row (start from 0); row: one row of data
         scalar_file = op.join(relative_root, row['source_file'])
-        scalar_img, scalar_data = mif_to_nifti2(scalar_file)
+        _scalar_img, scalar_data = mif_to_nifti2(scalar_file)
         scalars[row['scalar_name']].append(scalar_data)  # append to specific scalar_name
         sources_lists[row['scalar_name']].append(
             row['source_file']

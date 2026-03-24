@@ -122,12 +122,7 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
         # Column names exist and match subjects count
         grp = h5['scalars/FA']
         assert 'column_names' in grp
-        colnames = list(
-            map(
-                lambda x: x.decode('utf-8') if isinstance(x, bytes) else str(x),
-                grp['column_names'][...],
-            )
-        )
+        colnames = [x.decode('utf-8') if isinstance(x, bytes) else str(x) for x in grp['column_names'][...]]
         assert len(colnames) == 2
 
         # Spot-check a voxel mapping (pick the third voxel)

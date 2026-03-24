@@ -294,12 +294,12 @@ def write_storage(
 
     # voxel_table: records the coordinations of the nonzero voxels; coord starts from 0 (because using python)
     voxel_table = pd.DataFrame(
-        dict(
-            voxel_id=np.arange(voxel_coords.shape[0]),
-            i=voxel_coords[:, 0],
-            j=voxel_coords[:, 1],
-            k=voxel_coords[:, 2],
-        )
+        {
+            'voxel_id': np.arange(voxel_coords.shape[0]),
+            'i': voxel_coords[:, 0],
+            'j': voxel_coords[:, 1],
+            'k': voxel_coords[:, 2],
+        }
     )
 
     # upload each cohort's data
