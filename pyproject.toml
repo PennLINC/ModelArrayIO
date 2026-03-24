@@ -42,6 +42,7 @@ doc = [
   "sphinx>=6.2.1",
   "myst-parser>=2",
   "sphinx-argparse",
+  "sphinx-copybutton",
   "sphinx_rtd_theme",
   "sphinxcontrib-apidoc",
   "sphinxcontrib-bibtex",
