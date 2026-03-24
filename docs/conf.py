@@ -35,7 +35,7 @@ suppress_warnings = ['image.not_readable']
 sys.path.append(os.path.abspath('sphinxext'))
 sys.path.insert(0, os.path.abspath('../modelarrayio'))
 
-from github_link import make_linkcode_resolve
+from github_link import make_linkcode_resolve  # noqa: E402
 
 # The following is used by sphinx.ext.linkcode to provide links to github
 linkcode_resolve = make_linkcode_resolve(
