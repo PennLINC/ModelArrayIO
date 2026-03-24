@@ -11,6 +11,15 @@ author = 'PennLINC developers'
 
 extensions = [
     'myst_parser',
+    'sphinx.ext.napoleon',
+    'matplotlib.sphinxext.plot_directive',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.autosectionlabel',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.doctest',
+    'sphinx.ext.ifconfig',
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.linkcode',
     'sphinxarg.ext',
     'sphinx_copybutton',
     'sphinx_rtd_theme',
