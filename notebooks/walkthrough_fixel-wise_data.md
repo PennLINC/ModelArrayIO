@@ -1,6 +1,6 @@
 # Walkthrough for fixel-wise data conversion
 
-For fixel-wise data, we use converter `ConFixel` to convert between fixel-wise data format `.mif` and the HDF5 file format (`.h5`) that ModelArray uses. At this point, we expect you have followed the [Installation guide](../README.md#installation) and installed `ConFixel` software and dependent software `MRtrix` which is needed for fixel-wise data.
+For fixel-wise data, use the **`confixel`** command (from the **ModelArrayIO** Python package) to convert between MRtrix `.mif` files and the HDF5 file format (`.h5`) that ModelArray uses. This guide assumes you followed the [installation guide](../README.md#installation), installed **ModelArrayIO**, and installed **MRtrix** for fixel-wise workflows.
 
 ## Prepare data
 To convert (a list of) fixel-wise data from .mif format to .h5 format, you need to prepare a cohort CSV file that provides several basic informations of all .mif files you want to include. We recommend that, for each scalar (e.g. FD/FC/FDC), prepare one .csv file, and thus getting one .h5 file.
@@ -55,10 +55,10 @@ Notes:
     * File names in column `source_file` in CSV file v.s. the actual file names on disk; 
     * Scalar name e.g., "FD" in column `scalar_name` in CSV file v.s. what you will specify when using functions in `ModelArray`;
 
-For this case, when running ConFixel creating hdf5 fixel-wise data, argument **--relative-root** should be "/home/username/myProject/data" 
+For this case, when running `confixel` to create HDF5 fixel-wise data, argument **--relative-root** should be "/home/username/myProject/data" 
 
 
-## Run ConFixel
+## Run `confixel` and `fixelstats_write`
 ### Convert .mif files to an HDF5 (.h5) file
 Using above described scenario as an example, for FD dataset:
 ``` console
@@ -70,7 +70,6 @@ confixel \
     --relative-root /home/username/myProject/data \
     --output-hdf5 FD.h5
 ```
-<!-- ^ above is tested -->
 
 Now you should get the HDF5 file "FD.h5" in folder "/home/username/myProject/data". You may use [ModelArray](https://pennlinc.github.io/ModelArray/) to perform statistical analysis.
 
@@ -98,16 +97,11 @@ confixel --help
 fixelstats_write --help
 ```
 
-<!--TODO: after update please test out: use conda + terminal command `confixel` and `fixelstats_write`; Still using case above as an example -->
-<!-- fixelstats_write: can be tested out with existing results; otherwise have to run for all fixels.. -->
-
 
 ## Other notes
-### ConFixel: convert from `.h5` to `.mif`
+### Export from `.h5` to `.mif` (`fixelstats_write`)
 #### Existing output folder and output images
 ⚠️ ⚠️ WARNING ⚠️ ⚠️ 
-* If there are existing images in the output folder and they have the same filenames as those to be saved, the existing images won't be overwritten. This is because in function `confixel.fixels.nifti2_to_mif()`, we did not turn on `-force` in `mrconvert` (i.e., output files won't be overwritten).
-* In addition, if the output folder already exists, `ConFixel` will not delete it or create a new one. You will only get a message saying "WARNING: Output directory exists". Therefore, any existing files in the output folder will be kept as it is. 
-* So, if the output folder already exists, you may consider manually deleting it before using `ConFixel` to save new images.
-
-<!--- TODO: above words: to be confirmed! --->
+* If there are existing images in the output folder and they have the same filenames as those to be saved, the existing images won't be overwritten. This is because in `modelarrayio.fixels.nifti2_to_mif()`, we did not turn on `-force` in `mrconvert` (i.e., output files won't be overwritten).
+* In addition, if the output folder already exists, `fixelstats_write` will not delete it or create a new one. You will only get a message saying "WARNING: Output directory exists". Therefore, any existing files in the output folder will be kept as it is. 
+* So, if the output folder already exists, you may consider manually deleting it before using `fixelstats_write` to save new images.

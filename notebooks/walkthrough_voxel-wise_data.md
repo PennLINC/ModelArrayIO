@@ -1,11 +1,11 @@
 # Walkthrough for voxel-wise data conversion
 
-For voxel-wise data, we use converter `ConVoxel`. In general, `ConVoxel` is very similar to converter `ConFixel`.
+For voxel-wise data, use the **`convoxel`** command from **ModelArrayIO**. In general, the voxel workflow is very similar to the fixel workflow (`confixel`).
 
 ## Prepare data
 To convert (a list of) voxel-wise data from NIfTI format to .h5 format, you need to prepare a cohort CSV file that provides several basic informations of all NIfTI files you want to include. We recommend that, for each scalar (e.g. FA), prepare one .csv file, and thus getting one .h5 file.
 
-In addition, different from converter `ConFixel`, you also need to provide these image files:
+In addition, unlike the fixel pipeline, you also need to provide these image files:
 * one group mask: Only voxels within the group mask will be kept during conversion to .h5 file.
 * subject-specific masks (i.e., individual masks): This takes the inconsistent boundary of subject-specific images into account. After conversion, for each subject's scalar mage, voxels outside the subject-specific mask will be set to `NaN`. `ModelArray` will then check if each voxel has sufficient number of subjects to get reliable statistics (see argument `num.subj.lthr.abs` and `num.subj.lthr.rel` in Model fitting functions, e.g., [`ModelArray.lm()`](https://pennlinc.github.io/ModelArray/reference/ModelArray.lm.html)).
     * If you don't have subject-specific masks, that's fine; you can use group mask instead (see below for how to achieve this in .csv file).
@@ -56,13 +56,13 @@ Notes:
     * File names in columns `source_file` and `source_mask_file` in CSV file v.s. the actual file names on disk;
     * Scalar name e.g., "FA" in column `scalar_name` in CSV file v.s. what you will specify when using functions in `ModelArray`;
 
-For this case, when running ConVoxel, argument `--relative-root` should be `/home/username/myProject/data`
+For this case, when running `convoxel`, argument `--relative-root` should be `/home/username/myProject/data`
 
-## Run ConVoxel
+## Run `convoxel` and `volumestats_write`
 ### Convert NIfTI files to an HDF5 (.h5) file
 Using above described scenario as an example, for FA dataset:
 ``` console
-# first, activate conda environment where `ConFixel` is installed: `conda activate <env_name>`
+# first, activate conda environment where ModelArrayIO is installed: `conda activate <env_name>`
 convoxel \
     --group-mask-file group_mask.nii.gz \
     --cohort-file cohort_FA.csv \
@@ -76,7 +76,7 @@ Now you should get the HDF5 file "FA.h5" in folder "/home/username/myProject/dat
 After running `ModelArray` and getting statistical results in FA.h5 file (say, the analysis name is called "mylm"), you can use `volumestats_write` to convert results into a list of NIfTI files in a folder specified by you.
 
 ``` console
-# first, activate conda environment where software `ConFixel` is installed: `conda activate <env_name>`
+# first, activate conda environment where ModelArrayIO is installed: `conda activate <env_name>`
 volumestats_write \
     --group-mask-file group_mask.nii.gz \
     --cohort-file cohort_FA.csv \
@@ -99,12 +99,12 @@ volumestats_write --help
 ```
 
 ## Other notes
-### ConVoxel: convert from `.h5` to NIfTI
+### `volumestats_write`: convert from `.h5` to NIfTI
 #### Existing output folder and output images
 ⚠️ ⚠️ WARNING ⚠️ ⚠️ 
-* If the output folder already exists, `ConVoxel` will not delete it or create a new one. You will only get a message saying "WARNING: Output directory exists". Therefore, if there were existing files in the output folder, and they are not part of the current list of images to be saved (e.g., results to be saved were changed, but the output folder name was not changed), these files will be kept as it is and won't be deleted.   <!--- confirmed with toy data, 3/9/2023 -->
-    * However, for existing files which are still part of the current list to be saved, they will be replaced. This is different from current implementation of `ConFixel` converter for fixel-wise data.   <!--- confirmed with toy data, 3/9/2023 -->
-* So to avoid confusion and better for version controls, if the output folder already exists, you might consider manually deleting it before using `ConVoxel` to save new images.
+* If the output folder already exists, `volumestats_write` will not delete it or create a new one. You will only get a message saying "WARNING: Output directory exists". Therefore, if there were existing files in the output folder, and they are not part of the current list of images to be saved (e.g., results to be saved were changed, but the output folder name was not changed), these files will be kept as it is and won't be deleted.
+    * However, for existing files which are still part of the current list to be saved, they will be replaced. This differs from the fixel-wise `fixelstats_write` behavior (which does not overwrite existing `.mif` outputs via `mrconvert` without `-force`).
+* So to avoid confusion and better for version controls, if the output folder already exists, you might consider manually deleting it before using `volumestats_write` to save new images.
 
 
 ### Image of number of observations used
