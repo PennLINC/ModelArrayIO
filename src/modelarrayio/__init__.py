@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -9,21 +8,25 @@ from .__about__ import __version__
 
 __author__ = 'The PennLINC Developers'
 __copyright__ = 'Copyright 2021, PennLINC, Perelman School of Medicine, University of Pennsylvania'
-__credits__ = ['Matt Cieslak', 'Tinashe Tapera', 'Chenying Zhao',
-               'Steven Meisler', 'Valerie Sydnor', 'Josiane Bourque']
+__credits__ = [
+    'Matt Cieslak',
+    'Tinashe Tapera',
+    'Chenying Zhao',
+    'Steven Meisler',
+    'Valerie Sydnor',
+    'Josiane Bourque',
+]
 __license__ = '3-clause BSD'
 __maintainer__ = 'Matt Cieslak'
 __status__ = 'Prototype'
 __url__ = 'https://github.com/PennLINC/ModelArrayIO'
 __packagename__ = 'modelarrayio'
-__description__ = "ModelArrayIO converters for fixel/voxel/greyordinate data"
+__description__ = 'ModelArrayIO converters for fixel/voxel/greyordinate data'
 __longdesc__ = """\
 A package that converts between imaging formats and the HDF5 file format used by ModelArray.
 """
 
-DOWNLOAD_URL = (
-    'https://github.com/pennlinc/{name}/archive/{ver}.tar.gz'.format(
-        name=__packagename__, ver=__version__))
+DOWNLOAD_URL = f'https://github.com/pennlinc/{__packagename__}/archive/{__version__}.tar.gz'
 
 
 SETUP_REQUIRES = [
@@ -41,13 +44,12 @@ REQUIRES = [
     'h5py',
 ]
 
-LINKS_REQUIRES = [
-]
+LINKS_REQUIRES = []
 
 TESTS_REQUIRES = [
-    "mock",
-    "codecov",
-    "pytest",
+    'mock',
+    'codecov',
+    'pytest',
 ]
 
 EXTRA_REQUIRES = {
@@ -68,8 +70,7 @@ EXTRA_REQUIRES = {
 EXTRA_REQUIRES['docs'] = EXTRA_REQUIRES['doc']
 
 # Enable a handle to install all extra dependencies at once
-EXTRA_REQUIRES['all'] = list(set([
-    v for deps in EXTRA_REQUIRES.values() for v in deps]))
+EXTRA_REQUIRES['all'] = list(set([v for deps in EXTRA_REQUIRES.values() for v in deps]))
 
 CLASSIFIERS = [
     'Development Status :: 3 - Alpha',
@@ -80,5 +81,3 @@ CLASSIFIERS = [
     'Programming Language :: Python :: 3.6',
     'Programming Language :: Python :: 3.7',
 ]
-
-

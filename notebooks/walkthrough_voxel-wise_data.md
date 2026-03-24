@@ -3,7 +3,7 @@
 For voxel-wise data, we use converter `ConVoxel`. In general, `ConVoxel` is very similar to converter `ConFixel`.
 
 ## Prepare data
-To convert (a list of) voxel-wise data from NIfTI format to .h5 format, you need to prepare a cohort CSV file that provides several basic informations of all NIfTI files you want to include. We recommend that, for each scalar (e.g. FA), prepare one .csv file, and thus getting one .h5 file.
+To convert (a list of) voxel-wise data from NIfTI format to .h5 format, you need to prepare a cohort CSV file that provides basic information for all NIfTI files you want to include. We recommend that, for each scalar (e.g. FA), prepare one .csv file, and thus getting one .h5 file.
 
 In addition, different from converter `ConFixel`, you also need to provide these image files:
 * one group mask: Only voxels within the group mask will be kept during conversion to .h5 file.
@@ -101,7 +101,7 @@ volumestats_write --help
 ## Other notes
 ### ConVoxel: convert from `.h5` to NIfTI
 #### Existing output folder and output images
-⚠️ ⚠️ WARNING ⚠️ ⚠️ 
+⚠️ ⚠️ WARNING ⚠️ ⚠️
 * If the output folder already exists, `ConVoxel` will not delete it or create a new one. You will only get a message saying "WARNING: Output directory exists". Therefore, if there were existing files in the output folder, and they are not part of the current list of images to be saved (e.g., results to be saved were changed, but the output folder name was not changed), these files will be kept as it is and won't be deleted.   <!--- confirmed with toy data, 3/9/2023 -->
     * However, for existing files which are still part of the current list to be saved, they will be replaced. This is different from current implementation of `ConFixel` converter for fixel-wise data.   <!--- confirmed with toy data, 3/9/2023 -->
 * So to avoid confusion and better for version controls, if the output folder already exists, you might consider manually deleting it before using `ConVoxel` to save new images.
