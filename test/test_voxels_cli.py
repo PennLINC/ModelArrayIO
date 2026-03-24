@@ -61,7 +61,7 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
     with cohort_csv.open('w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=['scalar_name', 'source_file', 'source_mask_file'])
         writer.writeheader()
-        for sidx, (scalar_name, mask_name) in enumerate(subjects):
+        for _sidx, (scalar_name, mask_name) in enumerate(subjects):
             writer.writerow(
                 {
                     'scalar_name': 'FA',
@@ -98,7 +98,9 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
         '1.0',
     ]
     env = os.environ.copy()
-    proc = subprocess.run(cmd, cwd=str(tmp_path), env=env, capture_output=True, text=True)
+    proc = subprocess.run(
+        cmd, cwd=str(tmp_path), env=env, capture_output=True, text=True, check=False
+    )
     assert proc.returncode == 0, f'convoxel failed: {proc.stdout}\n{proc.stderr}'
     assert op.exists(out_h5)
 
@@ -122,7 +124,9 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
         # Column names exist and match subjects count
         grp = h5['scalars/FA']
         assert 'column_names' in grp
-        colnames = [x.decode('utf-8') if isinstance(x, bytes) else str(x) for x in grp['column_names'][...]]
+        colnames = [
+            x.decode('utf-8') if isinstance(x, bytes) else str(x) for x in grp['column_names'][...]
+        ]
         assert len(colnames) == 2
 
         # Spot-check a voxel mapping (pick the third voxel)

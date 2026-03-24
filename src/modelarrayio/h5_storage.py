@@ -28,7 +28,7 @@ def resolve_compression(compression, compression_level, shuffle):
     if comp == 'gzip':
         try:
             gzip_level = int(compression_level)
-        except Exception:
+        except (TypeError, ValueError):
             gzip_level = 4
         gzip_level = max(0, min(9, gzip_level))
     return comp, gzip_level, use_shuffle

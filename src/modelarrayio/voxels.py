@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import os.path as op
 from collections import defaultdict
@@ -24,6 +25,8 @@ from .parser import (
 from .s3_utils import is_s3_path, load_nibabel
 from .tiledb_storage import create_empty_scalar_matrix_array as tdb_create_empty
 from .tiledb_storage import write_rows_in_column_stripes as tdb_write_stripes
+
+logger = logging.getLogger(__name__)
 
 
 def _load_cohort_voxels(cohort_df, group_mask_matrix, relative_root, s3_workers):
@@ -137,7 +140,7 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
                 s = s.rstrip('\x00').strip()
                 out.append(s)
             return out
-        except Exception:
+        except (AttributeError, OSError, TypeError, ValueError):
             return None
 
     results_names = None
@@ -146,7 +149,7 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
         names_attr = results_matrix.attrs.get('colnames', None)
         if names_attr is not None:
             results_names = _decode_names(names_attr)
-    except Exception:
+    except (OSError, RuntimeError, TypeError, ValueError):
         results_names = None
 
     # 2) Fallback to dataset-based column names (new format)
@@ -162,13 +165,14 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
                     results_names = _decode_names(names_ds)
                     if results_names:
                         break
-                except Exception:
+                except (KeyError, OSError, RuntimeError, TypeError, ValueError):
+                    logger.debug('Could not read column names from %s', p, exc_info=True)
                     continue
 
     # 3) Final fallback to generated names
     if not results_names:
         print("Unable to read column names, using 'componentNNN' instead")
-        results_names = ['component%03d' % (n + 1) for n in range(results_matrix.shape[0])]
+        results_names = [f'component{n + 1:03d}' for n in range(results_matrix.shape[0])]
 
     # # Make output directory if it does not exist  # has been done in h5_to_volumes_wrapper()
     # if op.isdir(volume_output_dir) == False:

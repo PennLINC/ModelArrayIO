@@ -455,9 +455,9 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
 
     try:
         results_names = names_data.tolist()
-    except Exception:
+    except (AttributeError, OSError, TypeError, ValueError):
         print("Unable to read column names, using 'componentNNN' instead")
-        results_names = ['component%03d' % (n + 1) for n in range(results_matrix.shape[0])]
+        results_names = [f'component{n + 1:03d}' for n in range(results_matrix.shape[0])]
 
     # Make output directory if it does not exist
     if not op.isdir(fixel_output_dir):

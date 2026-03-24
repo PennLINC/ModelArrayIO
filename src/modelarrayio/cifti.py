@@ -28,6 +28,8 @@ from .tiledb_storage import create_empty_scalar_matrix_array as tdb_create_empty
 from .tiledb_storage import write_column_names as tdb_write_column_names
 from .tiledb_storage import write_rows_in_column_stripes as tdb_write_stripes
 
+logger = logging.getLogger(__name__)
+
 
 def _cohort_to_long_dataframe(cohort_df, scalar_columns=None):
     scalar_columns = [col for col in (scalar_columns or []) if col]
@@ -448,9 +450,9 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
 
     try:
         results_names = names_data.tolist()
-    except Exception:
+    except (AttributeError, OSError, TypeError, ValueError):
         print("Unable to read column names, using 'componentNNN' instead")
-        results_names = ['component%03d' % (n + 1) for n in range(results_matrix.shape[0])]
+        results_names = [f'component{n + 1:03d}' for n in range(results_matrix.shape[0])]
 
     # Make output directory if it does not exist
     if not op.isdir(cifti_output_dir):
@@ -497,7 +499,7 @@ def h5_to_ciftis():
 
     # Get an example cifti
     if args.example_cifti is None:
-        logging.warning(
+        logger.warning(
             'No example cifti file provided, using the first cifti file from the cohort file'
         )
         cohort_df = pd.read_csv(args.cohort_file)

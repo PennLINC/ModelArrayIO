@@ -1,10 +1,10 @@
 # Configuration file for the Sphinx documentation builder.
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 project = 'ModelArrayIO'
-copyright = f'2017-{datetime.today().strftime("%Y")}, PennLINC developers'
+copyright = f'2017-{datetime.now(tz=UTC).strftime("%Y")}, PennLINC developers'
 author = 'PennLINC developers'
 
 extensions = [
