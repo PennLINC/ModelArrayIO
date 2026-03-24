@@ -3,27 +3,27 @@
 
 from datetime import datetime
 
-project = "ModelArrayIO"
-copyright = f"2017-{datetime.today().strftime('%Y')}, PennLINC developers"
-author = "PennLINC developers"
+project = 'ModelArrayIO'
+copyright = f'2017-{datetime.today().strftime("%Y")}, PennLINC developers'
+author = 'PennLINC developers'
 
 extensions = [
-    "myst_parser",
-    "sphinx_copybutton",
-    "sphinx_rtd_theme",
+    'myst_parser',
+    'sphinx_copybutton',
+    'sphinx_rtd_theme',
 ]
 
-templates_path = ["_templates"]
+templates_path = ['_templates']
 source_suffix = {
-    ".md": "markdown",
+    '.md': 'markdown',
 }
 
-master_doc = "index"
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+master_doc = 'index'
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
-html_theme = "sphinx_rtd_theme"
-html_static_path = ["_static"]
-html_title = "ModelArrayIO"
+html_theme = 'sphinx_rtd_theme'
+html_static_path = ['_static']
+html_title = 'ModelArrayIO'
 
 myst_heading_slugs = True
-suppress_warnings = ["image.not_readable"]
+suppress_warnings = ['image.not_readable']

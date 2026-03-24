@@ -46,11 +46,11 @@ def _load_cohort_voxels(cohort_df, group_mask_matrix, relative_root, s3_workers)
     sources_lists = defaultdict(list)
 
     for _, row in cohort_df.iterrows():
-        sn = row["scalar_name"]
+        sn = row['scalar_name']
         subj_idx = scalar_subj_counter[sn]
         scalar_subj_counter[sn] += 1
-        src = row["source_file"]
-        msk = row["source_mask_file"]
+        src = row['source_file']
+        msk = row['source_mask_file']
         scalar_path = src if is_s3_path(src) else op.join(relative_root, src)
         mask_path = msk if is_s3_path(msk) else op.join(relative_root, msk)
         jobs.append((sn, subj_idx, scalar_path, mask_path))
@@ -70,7 +70,7 @@ def _load_cohort_voxels(cohort_df, group_mask_matrix, relative_root, s3_workers)
             for future in tqdm(
                 as_completed(futures),
                 total=len(futures),
-                desc="Loading voxel data",
+                desc='Loading voxel data',
             ):
                 sn, subj_idx, arr = future.result()
                 results[sn][subj_idx] = arr
@@ -79,7 +79,7 @@ def _load_cohort_voxels(cohort_df, group_mask_matrix, relative_root, s3_workers)
         }
     else:
         scalars = defaultdict(list)
-        for job in tqdm(jobs, desc="Loading voxel data"):
+        for job in tqdm(jobs, desc='Loading voxel data'):
             sn, subj_idx, arr = _worker(job)
             scalars[sn].append(arr)
 
@@ -87,16 +87,16 @@ def _load_cohort_voxels(cohort_df, group_mask_matrix, relative_root, s3_workers)
 
 
 def flattened_image(scalar_image, scalar_mask, group_mask_matrix):
-    scalar_mask_img = scalar_mask if hasattr(scalar_mask, "get_fdata") else nb.load(scalar_mask)
+    scalar_mask_img = scalar_mask if hasattr(scalar_mask, 'get_fdata') else nb.load(scalar_mask)
     scalar_mask_matrix = scalar_mask_img.get_fdata() > 0
 
-    scalar_img = scalar_image if hasattr(scalar_image, "get_fdata") else nb.load(scalar_image)
+    scalar_img = scalar_image if hasattr(scalar_image, 'get_fdata') else nb.load(scalar_image)
     scalar_matrix = scalar_img.get_fdata()
 
     scalar_matrix[np.logical_not(scalar_mask_matrix)] = np.nan
-    return scalar_matrix[
-        group_mask_matrix
-    ].squeeze()  # .shape = (#voxels,)  # squeeze() is to remove the 2nd dimension which is not necessary
+    return (
+        scalar_matrix[group_mask_matrix].squeeze()
+    )  # .shape = (#voxels,)  # squeeze() is to remove the 2nd dimension which is not necessary
 
 
 def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, volume_output_dir):
@@ -115,8 +115,8 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
     )  # modify the data type (mask's data type could be uint8...)
 
     # results in .h5 file:
-    h5_data = h5py.File(h5_file, "r")
-    results_matrix = h5_data["results/" + analysis_name + "/results_matrix"]
+    h5_data = h5py.File(h5_file, 'r')
+    results_matrix = h5_data['results/' + analysis_name + '/results_matrix']
 
     # NOTE: results_matrix may need to be transposed depending on writer conventions
     # Attempt to read column names: prefer attribute; fallback to dataset-based names
@@ -131,10 +131,10 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
             out = []
             for x in seq:
                 if isinstance(x, (bytes, bytearray, np.bytes_)):
-                    s = x.decode("utf-8", errors="ignore")
+                    s = x.decode('utf-8', errors='ignore')
                 else:
                     s = str(x)
-                s = s.rstrip("\x00").strip()
+                s = s.rstrip('\x00').strip()
                 out.append(s)
             return out
         except Exception:
@@ -143,7 +143,7 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
     results_names = None
     # 1) Try attribute (backward compatibility)
     try:
-        names_attr = results_matrix.attrs.get("colnames", None)
+        names_attr = results_matrix.attrs.get('colnames', None)
         if names_attr is not None:
             results_names = _decode_names(names_attr)
     except Exception:
@@ -152,8 +152,8 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
     # 2) Fallback to dataset-based column names (new format)
     if not results_names:
         candidate_paths = [
-            f"results/{analysis_name}/column_names",
-            f"results/{analysis_name}/results_matrix/column_names",
+            f'results/{analysis_name}/column_names',
+            f'results/{analysis_name}/results_matrix/column_names',
         ]
         for p in candidate_paths:
             if p in h5_data:
@@ -168,7 +168,7 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
     # 3) Final fallback to generated names
     if not results_names:
         print("Unable to read column names, using 'componentNNN' instead")
-        results_names = ["component%03d" % (n + 1) for n in range(results_matrix.shape[0])]
+        results_names = ['component%03d' % (n + 1) for n in range(results_matrix.shape[0])]
 
     # # Make output directory if it does not exist  # has been done in h5_to_volumes_wrapper()
     # if op.isdir(volume_output_dir) == False:
@@ -176,10 +176,10 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
 
     # for loop: save stat metric results one by one:
     for result_col, result_name in enumerate(results_names):
-        valid_result_name = result_name.replace(" ", "_").replace("/", "_")
+        valid_result_name = result_name.replace(' ', '_').replace('/', '_')
 
         out_file = op.join(
-            volume_output_dir, analysis_name + "_" + valid_result_name + output_extension
+            volume_output_dir, analysis_name + '_' + valid_result_name + output_extension
         )
         output = np.zeros(group_mask_matrix.shape)
         data_tosave = results_matrix[result_col, :]
@@ -192,12 +192,12 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
 
         # if this result is p.value, also write out 1-p.value (1m.p.value)
         if (
-            "p.value" in valid_result_name
+            'p.value' in valid_result_name
         ):  # the result name contains "p.value" (from R package broom)
-            valid_result_name_1mpvalue = valid_result_name.replace("p.value", "1m.p.value")
+            valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
             out_file_1mpvalue = op.join(
                 volume_output_dir,
-                analysis_name + "_" + valid_result_name_1mpvalue + output_extension,
+                analysis_name + '_' + valid_result_name_1mpvalue + output_extension,
             )
             output_1mpvalue = np.zeros(group_mask_matrix.shape)
             data_tosave = 1 - results_matrix[result_col, :]  # 1 minus
@@ -220,7 +220,7 @@ def h5_to_volumes_wrapper():
     )  # absolute path for output dir
 
     if op.exists(volume_output_dir):
-        print("WARNING: Output directory exists")
+        print('WARNING: Output directory exists')
     os.makedirs(volume_output_dir, exist_ok=True)
 
     # any files to copy?
@@ -238,17 +238,17 @@ def h5_to_volumes_wrapper():
 def write_storage(
     group_mask_file,
     cohort_file,
-    backend="hdf5",
-    output_h5="voxeldb.h5",
-    output_tdb="arraydb.tdb",
-    relative_root="/",
-    storage_dtype="float32",
-    compression="gzip",
+    backend='hdf5',
+    output_h5='voxeldb.h5',
+    output_tdb='arraydb.tdb',
+    relative_root='/',
+    storage_dtype='float32',
+    compression='gzip',
     compression_level=4,
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
-    tdb_compression="zstd",
+    tdb_compression='zstd',
     tdb_compression_level=5,
     tdb_shuffle=True,
     tdb_tile_voxels=0,
@@ -303,28 +303,28 @@ def write_storage(
     )
 
     # upload each cohort's data
-    print("Extracting NIfTI data...")
+    print('Extracting NIfTI data...')
     scalars, sources_lists = _load_cohort_voxels(
         cohort_df, group_mask_matrix, relative_root, s3_workers
     )
 
     # Write the output:
-    if backend == "hdf5":
+    if backend == 'hdf5':
         output_file = op.join(relative_root, output_h5)
         output_dir = op.dirname(output_file)
         if not op.exists(output_dir):
             os.makedirs(output_dir, exist_ok=True)
-        f = h5py.File(output_file, "w")
+        f = h5py.File(output_file, 'w')
 
-        voxelsh5 = f.create_dataset(name="voxels", data=voxel_table.to_numpy().T)
-        voxelsh5.attrs["column_names"] = list(voxel_table.columns)
+        voxelsh5 = f.create_dataset(name='voxels', data=voxel_table.to_numpy().T)
+        voxelsh5.attrs['column_names'] = list(voxel_table.columns)
 
         for scalar_name in scalars.keys():
             num_subjects = len(scalars[scalar_name])
             num_voxels = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
             dset = create_empty_scalar_matrix_dataset(
                 f,
-                "scalars/{}/values".format(scalar_name),
+                f'scalars/{scalar_name}/values',
                 num_subjects,
                 num_voxels,
                 storage_dtype=storage_dtype,
@@ -350,7 +350,7 @@ def write_storage(
         for scalar_name in scalars.keys():
             num_subjects = len(scalars[scalar_name])
             num_voxels = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
-            dataset_path = f"scalars/{scalar_name}/values"
+            dataset_path = f'scalars/{scalar_name}/values'
             tdb_create_empty(
                 base_uri,
                 dataset_path,
@@ -372,52 +372,52 @@ def write_storage(
 
 def get_h5_to_volume_parser():
     parser = argparse.ArgumentParser(
-        description="Convert statistical results from an hdf5 file to a volume data (NIfTI file)"
+        description='Convert statistical results from an hdf5 file to a volume data (NIfTI file)'
     )
     parser.add_argument(
-        "--group-mask-file", "--group_mask_file", help="Path to a group mask file", required=True
+        '--group-mask-file', '--group_mask_file', help='Path to a group mask file', required=True
     )
     parser.add_argument(
-        "--cohort-file",
-        "--cohort_file",
-        help="Path to a csv with demographic info and paths to data.",
+        '--cohort-file',
+        '--cohort_file',
+        help='Path to a csv with demographic info and paths to data.',
         required=True,
     )
     add_relative_root_arg(parser)
     parser.add_argument(
-        "--analysis-name",
-        "--analysis_name",
-        help="Name of the statistical analysis results to be saved.",
+        '--analysis-name',
+        '--analysis_name',
+        help='Name of the statistical analysis results to be saved.',
     )
     parser.add_argument(
-        "--input-hdf5",
-        "--input_hdf5",
-        help="Name of HDF5 (.h5) file where results outputs are saved.",
+        '--input-hdf5',
+        '--input_hdf5',
+        help='Name of HDF5 (.h5) file where results outputs are saved.',
     )
     parser.add_argument(
-        "--output-dir",
-        "--output_dir",
-        help="A directory where output volume files will be saved. If the directory does not exist, it will be automatically created.",
+        '--output-dir',
+        '--output_dir',
+        help='A directory where output volume files will be saved. If the directory does not exist, it will be automatically created.',
     )
     parser.add_argument(
-        "--output-ext",
-        "--output_ext",
-        help="The extension for output volume data. Options are .nii.gz (default) and .nii. Please provide the prefix dot.",
-        default=".nii.gz",
+        '--output-ext',
+        '--output_ext',
+        help='The extension for output volume data. Options are .nii.gz (default) and .nii. Please provide the prefix dot.',
+        default='.nii.gz',
     )
     return parser
 
 
 def get_parser():
 
-    parser = argparse.ArgumentParser(description="Create a hdf5 file of volume data")
+    parser = argparse.ArgumentParser(description='Create a hdf5 file of volume data')
     parser.add_argument(
-        "--group-mask-file", "--group_mask_file", help="Path to a group mask file", required=True
+        '--group-mask-file', '--group_mask_file', help='Path to a group mask file', required=True
     )
     add_cohort_arg(parser)
     add_relative_root_arg(parser)
-    add_output_hdf5_arg(parser, default_name="fixelarray.h5")
-    add_output_tiledb_arg(parser, default_name="arraydb.tdb")
+    add_output_hdf5_arg(parser, default_name='fixelarray.h5')
+    add_output_tiledb_arg(parser, default_name='arraydb.tdb')
     add_backend_arg(parser)
     add_storage_args(parser)
     add_tiledb_storage_args(parser)
@@ -432,7 +432,7 @@ def main():
 
     logging.basicConfig(
         level=getattr(logging, str(args.log_level).upper(), logging.INFO),
-        format="[%(levelname)s] %(name)s: %(message)s",
+        format='[%(levelname)s] %(name)s: %(message)s',
     )
     status = write_storage(
         group_mask_file=args.group_mask_file,
@@ -457,5 +457,5 @@ def main():
     return status
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

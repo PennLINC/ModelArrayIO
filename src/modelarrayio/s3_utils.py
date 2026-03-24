@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 def is_s3_path(path: str) -> bool:
     """Return True if path is an S3 URI (s3://)."""
-    return str(path).startswith("s3://")
+    return str(path).startswith('s3://')
 
 
 def _make_s3_client():
@@ -26,15 +26,15 @@ def _make_s3_client():
         import boto3
     except ImportError:
         raise ImportError(
-            "boto3 is required for s3:// paths. " "Install with: pip install modelarrayio[s3]"
+            'boto3 is required for s3:// paths. Install with: pip install modelarrayio[s3]'
         )
-    anon = os.environ.get("MODELARRAYIO_S3_ANON", "").lower() in ("1", "true", "yes")
+    anon = os.environ.get('MODELARRAYIO_S3_ANON', '').lower() in ('1', 'true', 'yes')
     if anon:
         from botocore import UNSIGNED
         from botocore.config import Config
 
-        return boto3.client("s3", config=Config(signature_version=UNSIGNED))
-    return boto3.client("s3")
+        return boto3.client('s3', config=Config(signature_version=UNSIGNED))
+    return boto3.client('s3')
 
 
 def load_nibabel(path: str, *, cifti: bool = False):
@@ -65,18 +65,18 @@ def load_nibabel(path: str, *, cifti: bool = False):
 
     parsed = urlparse(path)
     bucket = parsed.netloc
-    key = parsed.path.lstrip("/")
+    key = parsed.path.lstrip('/')
 
-    logger.debug("Loading s3://%s/%s into memory", bucket, key)
-    data = _make_s3_client().get_object(Bucket=bucket, Key=key)["Body"].read()
+    logger.debug('Loading s3://%s/%s into memory', bucket, key)
+    data = _make_s3_client().get_object(Bucket=bucket, Key=key)['Body'].read()
 
-    if os.path.basename(key).endswith(".gz"):
+    if os.path.basename(key).endswith('.gz'):
         data = gzip.decompress(data)
 
     from nibabel.filebasedimages import FileHolder
 
     fh = FileHolder(fileobj=BytesIO(data))
-    file_map = {"header": fh, "image": fh}
+    file_map = {'header': fh, 'image': fh}
 
     if cifti:
         return nb.Cifti2Image.from_file_map(file_map)

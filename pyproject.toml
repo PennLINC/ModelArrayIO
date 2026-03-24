@@ -47,7 +47,7 @@ doc = [
   "sphinxcontrib-bibtex",
 ]
 test = [
-  "ruff ~= 0.15.0",
+  "ruff",
   "pre-commit",
   "coverage[toml]",
   "pytest",
