@@ -9,6 +9,7 @@ author = 'PennLINC developers'
 
 extensions = [
     'myst_parser',
+    'sphinxarg.ext',
     'sphinx_copybutton',
     'sphinx_rtd_theme',
 ]
