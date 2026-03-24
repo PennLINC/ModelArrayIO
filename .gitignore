@@ -133,4 +133,4 @@ dmypy.json
 
 # vscode:
 .vscode/**/*
-modelarrayio/__about__.py
+src/modelarrayio/__about__.py

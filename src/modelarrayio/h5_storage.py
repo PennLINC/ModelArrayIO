@@ -1,7 +1,8 @@
-import numpy as np
-import h5py
-import pandas as pd
 import logging
+
+import h5py
+import numpy as np
+import pandas as pd
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -10,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 def resolve_dtype(storage_dtype):
     dtype_map = {
-        "float32": np.float32,
-        "float64": np.float64,
+        'float32': np.float32,
+        'float64': np.float64,
     }
     return dtype_map.get(str(storage_dtype).lower(), np.float32)
 
@@ -19,12 +20,12 @@ def resolve_dtype(storage_dtype):
 def resolve_compression(compression, compression_level, shuffle):
     comp = (
         None
-        if compression is None or str(compression).lower() == "none"
+        if compression is None or str(compression).lower() == 'none'
         else str(compression).lower()
     )
     use_shuffle = bool(shuffle) if comp is not None else False
     gzip_level = None
-    if comp == "gzip":
+    if comp == 'gzip':
         try:
             gzip_level = int(compression_level)
         except Exception:
@@ -41,7 +42,7 @@ def compute_chunk_shape_full_subjects(
     num_items = int(num_items)
     if num_subjects <= 0 or num_items <= 0:
         raise ValueError(
-            f"Cannot compute chunk shape with zero-length dimension: num_subjects={num_subjects}, num_items={num_items}"
+            f'Cannot compute chunk shape with zero-length dimension: num_subjects={num_subjects}, num_items={num_items}'
         )
 
     subjects_per_chunk = num_subjects
@@ -50,13 +51,11 @@ def compute_chunk_shape_full_subjects(
     else:
         bytes_per_value = np.dtype(storage_np_dtype).itemsize
         target_bytes = float(target_chunk_mb) * 1024.0 * 1024.0
-        items_per_chunk = max(
-            1, int(target_bytes / (bytes_per_value * subjects_per_chunk))
-        )
+        items_per_chunk = max(1, int(target_bytes / (bytes_per_value * subjects_per_chunk)))
         items_per_chunk = min(items_per_chunk, num_items)
     chunk = (subjects_per_chunk, items_per_chunk)
     logger.debug(
-        "Computed chunk shape: %s (subjects=%d, items=%d, item_chunk=%s, target_chunk_mb=%.2f)",
+        'Computed chunk shape: %s (subjects=%d, items=%d, item_chunk=%s, target_chunk_mb=%.2f)',
         chunk,
         num_subjects,
         num_items,
@@ -71,17 +70,15 @@ def create_scalar_matrix_dataset(
     dataset_path,
     stacked_values,
     sources_list,
-    storage_dtype="float32",
-    compression="gzip",
+    storage_dtype='float32',
+    compression='gzip',
     compression_level=4,
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
 ):
     storage_np_dtype = resolve_dtype(storage_dtype)
-    comp, comp_opts, use_shuffle = resolve_compression(
-        compression, compression_level, shuffle
-    )
+    comp, comp_opts, use_shuffle = resolve_compression(compression, compression_level, shuffle)
 
     if stacked_values.dtype != storage_np_dtype:
         stacked_values = stacked_values.astype(storage_np_dtype)
@@ -91,7 +88,7 @@ def create_scalar_matrix_dataset(
         num_subjects, num_items, chunk_voxels, target_chunk_mb, storage_np_dtype
     )
     logger.info(
-        "Creating dataset %s with shape (%d, %d), dtype=%s, chunks=%s, compression=%s",
+        'Creating dataset %s with shape (%d, %d), dtype=%s, chunks=%s, compression=%s',
         dataset_path,
         num_subjects,
         num_items,
@@ -105,16 +102,14 @@ def create_scalar_matrix_dataset(
         dtype=storage_np_dtype,
         chunks=chunk_shape,
         compression=comp,
-        compression_opts=comp_opts if comp == "gzip" else None,
+        compression_opts=comp_opts if comp == 'gzip' else None,
         shuffle=use_shuffle,
     )
-    logger.info(
-        "Writing full dataset %s to HDF5 (this may take a while)...", dataset_path
-    )
+    logger.info('Writing full dataset %s to HDF5 (this may take a while)...', dataset_path)
     dset[...] = stacked_values
-    logger.info("Finished writing dataset %s", dataset_path)
+    logger.info('Finished writing dataset %s', dataset_path)
     if sources_list is not None:
-        dset.attrs["column_names"] = list(sources_list)
+        dset.attrs['column_names'] = list(sources_list)
     return dset
 
 
@@ -123,8 +118,8 @@ def create_empty_scalar_matrix_dataset(
     dataset_path,
     num_subjects,
     num_items,
-    storage_dtype="float32",
-    compression="gzip",
+    storage_dtype='float32',
+    compression='gzip',
     compression_level=4,
     shuffle=True,
     chunk_voxels=0,
@@ -132,15 +127,13 @@ def create_empty_scalar_matrix_dataset(
     sources_list=None | pd.Series | list,
 ):
     storage_np_dtype = resolve_dtype(storage_dtype)
-    comp, comp_opts, use_shuffle = resolve_compression(
-        compression, compression_level, shuffle
-    )
+    comp, comp_opts, use_shuffle = resolve_compression(compression, compression_level, shuffle)
 
     chunk_shape = compute_chunk_shape_full_subjects(
         num_subjects, num_items, chunk_voxels, target_chunk_mb, storage_np_dtype
     )
     logger.info(
-        "Creating empty dataset %s with shape (%d, %d), dtype=%s, chunks=%s, compression=%s",
+        'Creating empty dataset %s with shape (%d, %d), dtype=%s, chunks=%s, compression=%s',
         dataset_path,
         num_subjects,
         num_items,
@@ -154,7 +147,7 @@ def create_empty_scalar_matrix_dataset(
         dtype=storage_np_dtype,
         chunks=chunk_shape,
         compression=comp,
-        compression_opts=comp_opts if comp == "gzip" else None,
+        compression_opts=comp_opts if comp == 'gzip' else None,
         shuffle=use_shuffle,
     )
     if sources_list is not None:
@@ -170,14 +163,14 @@ def write_column_names(h5_file: h5py.File, scalar: str, sources: pd.Series | lis
         values = np.array(list(map(str, sources)), dtype=object)
     else:
         values = sources.astype(str).to_numpy().astype(object)
-    grp = h5_file.require_group(f"scalars/{scalar}")
+    grp = h5_file.require_group(f'scalars/{scalar}')
 
     # Variable-length UTF-8 string dtype
-    vlen_str = h5py.string_dtype(encoding="utf-8")
+    vlen_str = h5py.string_dtype(encoding='utf-8')
 
     # Create 1-D dataset of strings
     grp.create_dataset(
-        "column_names",
+        'column_names',
         data=values,
         dtype=vlen_str,
         shape=(len(values),),
@@ -199,12 +192,10 @@ def write_rows_in_column_stripes(dset, rows):
     """
     num_subjects, num_elements = dset.shape
     if len(rows) != num_subjects:
-        raise ValueError("rows length does not match dataset subjects dimension")
-    stripe_width = (
-        dset.chunks[1] if dset.chunks is not None else max(1, num_elements // 8)
-    )
+        raise ValueError('rows length does not match dataset subjects dimension')
+    stripe_width = dset.chunks[1] if dset.chunks is not None else max(1, num_elements // 8)
     logger.info(
-        "Stripe-writing dataset %s with stripe width=%d (chunks=%s)",
+        'Stripe-writing dataset %s with stripe width=%d (chunks=%s)',
         dset.name,
         stripe_width,
         str(dset.chunks),
@@ -214,7 +205,7 @@ def write_rows_in_column_stripes(dset, rows):
     with logging_redirect_tqdm():
         for start in tqdm(
             range(0, num_elements, stripe_width),
-            bar_format="{percentage:3.0f}% {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]",
+            bar_format='{percentage:3.0f}% {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]',
             ascii=True,
             mininterval=max(1, (num_elements / stripe_width) // 200),
         ):
@@ -228,6 +219,6 @@ def write_rows_in_column_stripes(dset, rows):
             for i, row in enumerate(rows):
                 # slice is contiguous; cast on assignment if needed
                 buf_view[i, :] = row[start:end]
-            logger.debug("Writing stripe [%d:%d] to %s", start, end, dset.name)
+            logger.debug('Writing stripe [%d:%d] to %s', start, end, dset.name)
             dset[:, start:end] = buf_view
-    logger.info("Finished stripe-writing dataset %s", dset.name)
+    logger.info('Finished stripe-writing dataset %s', dset.name)
