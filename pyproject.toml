@@ -185,3 +185,7 @@ markers = [
   "s3: tests that require network access to public S3 (deselect with '-m not s3')",
 ]
 log_cli = true
+
+[tool.codespell]
+skip = '.git,*.pdf,*.svg,*.html,*.bib,uv.lock'
+ignore-words-list = ''
