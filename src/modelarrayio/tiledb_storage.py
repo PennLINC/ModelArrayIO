@@ -48,7 +48,8 @@ def compute_tile_shape_full_subjects(
     num_items = int(num_items)
     if num_subjects <= 0 or num_items <= 0:
         raise ValueError(
-            f'Cannot compute tile shape with zero-length dimension: num_subjects={num_subjects}, num_items={num_items}'
+            'Cannot compute tile shape with zero-length dimension: '
+            f'num_subjects={num_subjects}, num_items={num_items}'
         )
 
     subjects_per_tile = num_subjects

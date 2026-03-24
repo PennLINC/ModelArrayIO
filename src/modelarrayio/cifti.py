@@ -76,28 +76,22 @@ def _build_scalar_sources(long_df):
 
 
 def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
-    """
-    Load a scalar cifti file and get its data and mapping
+    """Load a scalar cifti file and get its data and mapping
 
-    Parameters:
-    -----------
-
-      cifti_file: pathlike
+    Parameters
+    ----------
+    cifti_file : :obj:`str`
         CIFTI2 file on disk
-
-      reference_brain_names: np.ndarray
+    reference_brain_names : :obj:`numpy.ndarray`
         Array of vertex names
-    Returns:
-    --------
 
-      cifti_scalar_data: np.ndarray
+    Returns
+    -------
+    cifti_scalar_data: :obj:`numpy.ndarray`
         The scalar data from the cifti file
-
-      brain_structures: np.ndarray
+    brain_structures: :obj:`numpy.ndarray`
         The per-greyordinate brain structures as strings
-
     """
-
     cifti = cifti_file if hasattr(cifti_file, 'get_fdata') else nb.load(cifti_file)
     cifti_hdr = cifti.header
     axes = [cifti_hdr.get_axis(i) for i in range(cifti.ndim)]
@@ -128,13 +122,22 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
 
     return cifti_data, brain_names
 
-    # vertex_table = pd.DataFrame(
-    #     dict(
-    #         vertex_id=np.arange(cifti_data.shape[0]),
-    #         structure_name=brain_names)
-
 
 def brain_names_to_dataframe(brain_names):
+    """Convert brain names to a dataframe.
+
+    Parameters
+    ----------
+    brain_names : :obj:`numpy.ndarray`
+        Array of brain names
+
+    Returns
+    -------
+    greyordinate_df : :obj:`pandas.DataFrame`
+        DataFrame with vertex_id and structure_id
+    structure_name_strings : :obj:`list`
+        List of structure names
+    """
     # Make a lookup table for greyordinates
     structure_ids, structure_names = pd.factorize(brain_names)
     # Make them a list of strings
@@ -156,11 +159,20 @@ def _load_cohort_cifti(cohort_long, relative_root, s3_workers):
     Threads share memory so reference_brain_names is accessed directly with
     no copying overhead.
 
+    Parameters
+    ----------
+    cohort_long : :obj:`pandas.DataFrame`
+        Long-format cohort dataframe
+    relative_root : :obj:`str`
+        Root to which all paths are relative
+    s3_workers : :obj:`int`
+        Number of workers to use for parallel loading
+
     Returns
     -------
-    scalars : dict[str, list[np.ndarray]]
+    scalars : :obj:`dict`
         Per-scalar ordered list of 1-D subject arrays, ready for stripe-write.
-    reference_brain_names : np.ndarray
+    reference_brain_names : :obj:`numpy.ndarray`
         Brain structure names from the first file, for building greyordinate table.
     """
     # Assign stable per-scalar subject indices in cohort order
@@ -238,22 +250,54 @@ def write_storage(
     scalar_columns=None,
     s3_workers=1,
 ):
-    """
-    Load all fixeldb data.
-    Parameters
-    -----------
-    index_file: str
-        path to a Nifti2 index file
-    directions_file: str
-        path to a Nifti2 directions file
-    cohort_file: str
-        path to a csv with demographic info and paths to data
-    output_h5: str
-        path to a new .h5 file to be written
-    relative_root: str
-        path to which index_file, directions_file and cohort_file (and its contents) are relative
-    """
+    """Load all CIFTI data and write to an HDF5 file with configurable storage.
 
+    Parameters
+    ----------
+    cohort_file : :obj:`str`
+        Path to a csv with demographic info and paths to data
+    backend : :obj:`str`
+        Backend to use for storage
+    output_h5 : :obj:`str`
+        Path to a new .h5 file to be written
+    output_tdb : :obj:`str`
+        Path to a new .tdb file to be written
+    relative_root : :obj:`str`
+        Root to which all paths are relative
+    storage_dtype : :obj:`str`
+        Floating type to store values
+    compression : :obj:`str`
+        HDF5 compression filter
+    compression_level : :obj:`int`
+        Gzip compression level (0-9)
+    shuffle : :obj:`bool`
+        Enable HDF5 shuffle filter
+    chunk_voxels : :obj:`int`
+        Chunk size along the voxel axis
+    target_chunk_mb : :obj:`float`
+        Target chunk size in MiB when auto-computing chunk_voxels
+    tdb_compression : :obj:`str`
+        TileDB compression filter
+    tdb_compression_level : :obj:`int`
+        TileDB compression level
+    tdb_shuffle : :obj:`bool`
+        Enable TileDB shuffle filter
+    tdb_tile_voxels : :obj:`int`
+        Tile size along the voxel axis
+    tdb_target_tile_mb : :obj:`float`
+        Target tile size in MiB when auto-computing tdb_tile_voxels
+    tdb_workers : :obj:`int`
+        Number of workers to use for parallel loading
+    scalar_columns : :obj:`list`
+        List of scalar columns to use
+    s3_workers : :obj:`int`
+        Number of workers to use for parallel loading
+
+    Returns
+    -------
+    status : :obj:`int`
+        Status of the operation. 0 if successful, 1 if failed.
+    """
     cohort_path = op.join(relative_root, cohort_file)
     cohort_df = pd.read_csv(cohort_path)
     cohort_long = _cohort_to_long_dataframe(cohort_df, scalar_columns=scalar_columns)
@@ -413,7 +457,8 @@ def main():
 
 
 def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
-    """Writes the contents of an hdf5 file to a fixels directory.
+    """Write the contents of an hdf5 file to a fixels directory.
+
     The ``h5_file`` parameter should point to an HDF5 file that contains at least two
     datasets. There must be one called ``results/results_matrix``, that contains a
     matrix of fixel results. Each column contains a single result and each row is a
@@ -425,6 +470,7 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
     Then each column in ``results/results_matrix`` is extracted to fill the data of a
     new Nifti2 file that gets converted to mif and named according to the corresponding
     item in ``results/has_names``.
+
     Parameters
     ==========
     example_cifti: pathlike
@@ -435,6 +481,7 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
         the name for the analysis results to be saved
     fixel_output_dir: str
         abspath to where the output cifti files will go.
+
     Outputs
     =======
     None
@@ -488,6 +535,7 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
 
 
 def h5_to_ciftis():
+    """Write the contents of an hdf5 file to a cifti directory."""
     parser = get_h5_to_ciftis_parser()
     args = parser.parse_args()
 

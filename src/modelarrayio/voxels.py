@@ -103,7 +103,7 @@ def flattened_image(scalar_image, scalar_mask, group_mask_matrix):
 
 
 def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, volume_output_dir):
-    """Convert stat results in .h5 file to a list of volume (.nii or .nii.gz) files"""
+    """Convert stat results in .h5 file to a list of volume (.nii or .nii.gz) files."""
 
     data_type_tosave = np.float32
 
@@ -195,9 +195,8 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
         output_img.to_filename(out_file)
 
         # if this result is p.value, also write out 1-p.value (1m.p.value)
-        if (
-            'p.value' in valid_result_name
-        ):  # the result name contains "p.value" (from R package broom)
+        # the result name contains "p.value" (from R package broom)
+        if 'p.value' in valid_result_name:
             valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
             out_file_1mpvalue = op.join(
                 volume_output_dir,
@@ -259,10 +258,10 @@ def write_storage(
     tdb_target_tile_mb=2.0,
     s3_workers=1,
 ):
-    """
-    Load all volume data and write to an HDF5 file with configurable storage.
+    """Load all volume data and write to an HDF5 file with configurable storage.
+
     Parameters
-    -----------
+    ----------
     group_mask_file: str
         Path to a NIfTI-1 binary group mask file.
     cohort_file: str
@@ -278,7 +277,8 @@ def write_storage(
     compression_level: int
         Gzip compression level (0-9). Only used when compression == 'gzip'. Default 4.
     shuffle: bool
-        Enable HDF5 shuffle filter to improve compression. Default True (effective when compression != 'none').
+        Enable HDF5 shuffle filter to improve compression.
+        Default True (effective when compression != 'none').
     chunk_voxels: int
         Chunk size along the voxel axis. If 0, auto-compute using target_chunk_mb. Default 0.
     target_chunk_mb: float
@@ -289,14 +289,14 @@ def write_storage(
 
     # Load the group mask image to define the rows of the matrix
     group_mask_img = nb.load(op.join(relative_root, group_mask_file))
-    group_mask_matrix = (
-        group_mask_img.get_fdata() > 0
-    )  # get_fdata(): get matrix data in float format
-    voxel_coords = np.column_stack(
-        np.nonzero(group_mask_img.get_fdata())
-    )  # np.nonzero() returns the coords of nonzero elements; then np.column_stack() stack them together as an (#voxels, 3) array
+    # get_fdata(): get matrix data in float format
+    group_mask_matrix = group_mask_img.get_fdata() > 0
+    # np.nonzero() returns the coords of nonzero elements;
+    # then np.column_stack() stack them together as an (#voxels, 3) array
+    voxel_coords = np.column_stack(np.nonzero(group_mask_img.get_fdata()))
 
-    # voxel_table: records the coordinations of the nonzero voxels; coord starts from 0 (because using python)
+    # voxel_table: records the coordinations of the nonzero voxels;
+    # coord starts from 0 (because using python)
     voxel_table = pd.DataFrame(
         {
             'voxel_id': np.arange(voxel_coords.shape[0]),
@@ -348,8 +348,10 @@ def write_storage(
         base_uri = op.join(relative_root, output_tdb)
         os.makedirs(base_uri, exist_ok=True)
 
-        # Store voxel coordinates as a small TileDB array (optional): we store as metadata on base group
-        # Here we serialize as a dense 2D array for parity with HDF5 tables if desired, but keep it simple: metadata JSON
+        # Store voxel coordinates as a small TileDB array (optional):
+        # we store as metadata on base group
+        # Here we serialize as a dense 2D array for parity with HDF5 tables if desired,
+        # but keep it simple: metadata JSON
         # Create arrays for each scalar
         for scalar_name in scalars.keys():
             num_subjects = len(scalars[scalar_name])
@@ -401,12 +403,18 @@ def get_h5_to_volume_parser():
     parser.add_argument(
         '--output-dir',
         '--output_dir',
-        help='A directory where output volume files will be saved. If the directory does not exist, it will be automatically created.',
+        help=(
+            'A directory where output volume files will be saved. '
+            'If the directory does not exist, it will be automatically created.'
+        ),
     )
     parser.add_argument(
         '--output-ext',
         '--output_ext',
-        help='The extension for output volume data. Options are .nii.gz (default) and .nii. Please provide the prefix dot.',
+        help=(
+            'The extension for output volume data. '
+            'Options are .nii.gz (default) and .nii. Please provide the prefix dot.'
+        ),
         default='.nii.gz',
     )
     return parser

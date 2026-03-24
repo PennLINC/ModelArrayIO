@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import os.path as op
 import shutil
@@ -32,7 +33,20 @@ def find_mrconvert():
 
 
 def mif_to_nifti2(mif_file):
+    """Convert a .mif file to a .nii file.
 
+    Parameters
+    ----------
+    mif_file : :obj:`str`
+        Path to a .mif file
+
+    Returns
+    -------
+    nifti2_img : :obj:`nibabel.Nifti2Image`
+        Nifti2 image
+    data : :obj:`numpy.ndarray`
+        Data from the nifti2 image
+    """
     if not mif_file.endswith('.nii'):
         dirpath = tempfile.mkdtemp()
         mrconvert = find_mrconvert()
@@ -46,8 +60,10 @@ def mif_to_nifti2(mif_file):
     else:
         nii_file = mif_file
         dirpath = None
+
     if not op.exists(nii_file):
         raise Exception(err)
+
     nifti2_img = nb.load(nii_file)
     data = nifti2_img.get_fdata(dtype=np.float32).squeeze()
     # ... do stuff with dirpath
@@ -57,8 +73,16 @@ def mif_to_nifti2(mif_file):
 
 
 def nifti2_to_mif(nifti2_image, mif_file):
-    # Note: because -force is not turned on in "mrconvert", the output files won't be overwritten!
+    """Convert a .nii file to a .mif file.
 
+    Parameters
+    ----------
+    nifti2_image : :obj:`nibabel.Nifti2Image`
+        Nifti2 image
+    mif_file : :obj:`str`
+        Path to a .mif file
+    """
+    # Note: because -force is not turned on in "mrconvert", the output files won't be overwritten!
     mrconvert = find_mrconvert()
     if mrconvert is None:
         raise Exception('The mrconvert executable could not be found on $PATH')
@@ -79,16 +103,22 @@ def nifti2_to_mif(nifti2_image, mif_file):
 
 
 def gather_fixels(index_file, directions_file):
-    """
-    Load the index and directions files to get lookup tables.
-    Parameters
-    -----------
-    index_file: str
-        path to a Nifti2 index file
-    directions_file: str
-        path to a Nifti2 directions file
-    """
+    """Load the index and directions files to get lookup tables.
 
+    Parameters
+    ----------
+    index_file : :obj:`str`
+        Path to a Nifti2 index file
+    directions_file : :obj:`str`
+        Path to a Nifti2 directions file
+
+    Returns
+    -------
+    fixel_table : :obj:`pandas.DataFrame`
+        DataFrame with fixel_id, voxel_id, x, y, z
+    voxel_table : :obj:`pandas.DataFrame`
+        DataFrame with voxel_id, i, j, k
+    """
     _index_img, index_data = mif_to_nifti2(index_file)
     count_vol = index_data[..., 0].astype(
         np.uint32
@@ -165,20 +195,59 @@ def write_storage(
     tdb_tile_voxels=0,
     tdb_target_tile_mb=2.0,
 ):
-    """
-    Load all fixeldb data.
+    """Load all fixeldb data and write to an HDF5 file with configurable storage.
+
     Parameters
-    -----------
-    index_file: str
-        path to a Nifti2 index file
-    directions_file: str
-        path to a Nifti2 directions file
-    cohort_file: str
-        path to a csv with demographic info and paths to data
-    output_h5: str
-        path to a new .h5 file to be written
-    relative_root: str
-        path to which index_file, directions_file and cohort_file (and its contents) are relative
+    ----------
+    index_file : :obj:`str`
+        Path to a Nifti2 index file
+    directions_file : :obj:`str`
+        Path to a Nifti2 directions file
+    cohort_file : :obj:`str`
+        Path to a csv with demographic info and paths to data
+    backend : :obj:`str`
+        Backend to use for storage
+    output_h5 : :obj:`str`
+        Path to a new .h5 file to be written
+    output_tdb : :obj:`str`
+        Path to a new .tdb file to be written
+    relative_root : :obj:`str`
+        Root to which all paths are relative
+    backend : :obj:`str`
+        Backend to use for storage
+    output_h5 : :obj:`str`
+        Path to a new .h5 file to be written
+    output_tdb : :obj:`str`
+        Path to a new .tdb file to be written
+    relative_root : :obj:`str`
+        Root to which all paths are relative
+    storage_dtype : :obj:`str`
+        Floating type to store values
+    compression : :obj:`str`
+        HDF5 compression filter
+    compression_level : :obj:`int`
+        Gzip compression level (0-9)
+    shuffle : :obj:`bool`
+        Enable HDF5 shuffle filter
+    chunk_voxels : :obj:`int`
+        Chunk size along the voxel axis
+    target_chunk_mb : :obj:`float`
+        Target chunk size in MiB when auto-computing chunk_voxels
+    tdb_compression : :obj:`str`
+        TileDB compression filter
+    tdb_compression_level : :obj:`int`
+        TileDB compression level
+    tdb_shuffle : :obj:`bool`
+        Enable TileDB shuffle filter
+    tdb_tile_voxels : :obj:`int`
+        Tile size along the voxel axis
+    tdb_target_tile_mb : :obj:`float`
+        Target tile size in MiB when auto-computing tdb_tile_voxels
+
+    Returns
+    -------
+    status : :obj:`int`
+        Status of the operation. 0 if successful, 1 if failed.
     """
     # gather fixel data
     fixel_table, voxel_table = gather_fixels(
@@ -192,15 +261,13 @@ def write_storage(
     scalars = defaultdict(list)
     sources_lists = defaultdict(list)
     print('Extracting .mif data...')
-    for _ix, row in tqdm(
-        cohort_df.iterrows(), total=cohort_df.shape[0]
-    ):  # ix: index of row (start from 0); row: one row of data
+    # ix: index of row (start from 0); row: one row of data
+    for _ix, row in tqdm(cohort_df.iterrows(), total=cohort_df.shape[0]):
         scalar_file = op.join(relative_root, row['source_file'])
         _scalar_img, scalar_data = mif_to_nifti2(scalar_file)
         scalars[row['scalar_name']].append(scalar_data)  # append to specific scalar_name
-        sources_lists[row['scalar_name']].append(
-            row['source_file']
-        )  # append source mif filename to specific scalar_name
+        # append source mif filename to specific scalar_name
+        sources_lists[row['scalar_name']].append(row['source_file'])
 
     # Write the output
     if backend == 'hdf5':
@@ -233,6 +300,7 @@ def write_storage(
             write_rows_in_column_stripes(dset, scalars[scalar_name])
         f.close()
         return int(not op.exists(output_file))
+
     else:
         base_uri = op.join(relative_root, output_tdb)
         os.makedirs(base_uri, exist_ok=True)
@@ -255,6 +323,7 @@ def write_storage(
             )
             uri = op.join(base_uri, dataset_path)
             tdb_write_stripes(uri, scalars[scalar_name])
+
         return 0
 
 
@@ -274,7 +343,10 @@ def get_parser():
     parser.add_argument(
         '--relative-root',
         '--relative_root',
-        help='Root to which all paths are relative, i.e. defining the (absolute) path to root directory of index_file, directions_file, cohort_file, and output_hdf5.',
+        help=(
+            'Root to which all paths are relative, i.e. defining the (absolute) '
+            'path to root directory of index_file, directions_file, cohort_file, and output_hdf5.'
+        ),
         type=op.abspath,
         default='/inputs/',
     )
@@ -348,14 +420,20 @@ def get_parser():
         '--chunk-voxels',
         '--chunk_voxels',
         type=int,
-        help='Chunk size along fixel/voxel axis. If 0, auto-compute based on --target-chunk-mb and number of subjects',
+        help=(
+            'Chunk size along fixel/voxel axis. '
+            'If 0, auto-compute based on --target-chunk-mb and number of subjects'
+        ),
         default=0,
     )
     parser.add_argument(
         '--tdb-tile-voxels',
         '--tdb_tile_voxels',
         type=int,
-        help='Tile length along item axis for TileDB. If 0, auto-compute based on --tdb-target-tile-mb',
+        help=(
+            'Tile length along item axis for TileDB. '
+            'If 0, auto-compute based on --tdb-target-tile-mb'
+        ),
         default=0,
     )
     parser.add_argument(
@@ -384,10 +462,9 @@ def get_parser():
 
 
 def main():
-
+    """Main function to write fixel data to an HDF5 or TileDB file."""
     parser = get_parser()
     args = parser.parse_args()
-    import logging
 
     logging.basicConfig(
         level=getattr(logging, str(args.log_level).upper(), logging.INFO),
@@ -418,6 +495,7 @@ def main():
 
 def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
     """Writes the contents of an hdf5 file to a fixels directory.
+
     The ``h5_file`` parameter should point to an HDF5 file that contains at least two
     datasets. There must be one called ``results/results_matrix``, that contains a
     matrix of fixel results. Each column contains a single result and each row is a
@@ -429,6 +507,7 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
     Then each column in ``results/results_matrix`` is extracted to fill the data of a
     new Nifti2 file that gets converted to mif and named according to the corresponding
     item in ``results/has_names``.
+
     Parameters
     ==========
     example_mif: str
@@ -440,6 +519,7 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
     fixel_output_dir: str
         abspath to where the output fixel data will go. the index and directions mif files
         should already be copied here.
+
     Outputs
     =======
     None
@@ -533,7 +613,10 @@ def get_h5_to_fixels_parser():
     parser.add_argument(
         '--relative-root',
         '--relative_root',
-        help='Root to which all paths are relative, i.e. defining the (absolute) path to root directory of index_file, directions_file, cohort_file, input_hdf5, and output_dir.',
+        help=(
+            'Root to which all paths are relative, i.e. defining the (absolute) path to root '
+            'directory of index_file, directions_file, cohort_file, input_hdf5, and output_dir.'
+        ),
         type=os.path.abspath,
     )
     parser.add_argument(
@@ -549,7 +632,10 @@ def get_h5_to_fixels_parser():
     parser.add_argument(
         '--output-dir',
         '--output_dir',
-        help='Fixel directory where outputs will be saved. If the directory does not exist, it will be automatically created.',
+        help=(
+            'Fixel directory where outputs will be saved. '
+            'If the directory does not exist, it will be automatically created.'
+        ),
     )
     return parser
 
