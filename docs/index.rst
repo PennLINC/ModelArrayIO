@@ -1,8 +1,7 @@
-```{include} ../README.md
-```
+.. include:: ../README.md
 
-. toctree::
+.. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Usage
 
    usage
