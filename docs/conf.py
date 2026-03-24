@@ -14,9 +14,7 @@ extensions = [
 ]
 
 templates_path = ['_templates']
-source_suffix = {
-    '.md': 'markdown',
-}
+source_suffix = '.rst'
 
 master_doc = 'index'
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
