@@ -1,6 +1,8 @@
 # Configuration file for the Sphinx documentation builder.
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import os
+import sys
 from datetime import UTC, datetime
 
 project = 'ModelArrayIO'
@@ -26,3 +28,17 @@ html_title = 'ModelArrayIO'
 
 myst_heading_slugs = True
 suppress_warnings = ['image.not_readable']
+
+# If extensions (or modules to document with autodoc) are in another directory,
+# add these directories to sys.path here. If the directory is relative to the
+# documentation root, use os.path.abspath to make it absolute, like shown here.
+sys.path.append(os.path.abspath('sphinxext'))
+sys.path.insert(0, os.path.abspath('../modelarrayio'))
+
+from github_link import make_linkcode_resolve
+
+# The following is used by sphinx.ext.linkcode to provide links to github
+linkcode_resolve = make_linkcode_resolve(
+    'modelarrayio',
+    'https://github.com/pennlinc/ModelArrayIO/blob/{revision}/{package}/{path}#L{lineno}',
+)
