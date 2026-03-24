@@ -188,4 +188,3 @@ log_cli = true
 
 [tool.codespell]
 skip = '.git,*.pdf,*.svg,*.html,*.bib,uv.lock'
-ignore-words-list = ''
