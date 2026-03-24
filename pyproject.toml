@@ -47,13 +47,15 @@ doc = [
   "sphinxcontrib-bibtex",
 ]
 test = [
-  "ruff",
-  "pre-commit",
-  "coverage[toml]",
-  "pytest",
-  "pytest-cov",
-  "pytest-xdist",
-  "pytest-env",
+  # Lower bounds matter for tox `uv_resolution = lowest-direct` (py311-min CI):
+  # unpinned deps can resolve to ancient releases (e.g. coverage 3.x) that do not build on Python 3.
+  "ruff>=0.4",
+  "pre-commit>=3.5",
+  "coverage[toml]>=7.0",
+  "pytest>=8",
+  "pytest-cov>=4",
+  "pytest-xdist>=3",
+  "pytest-env>=1.0",
 ]
 all = ["modelarrayio[doc,test,s3]"]
 
