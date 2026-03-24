@@ -1,7 +1,7 @@
 """Integration test for s3:// path support in convoxel.
 
 Requires network access and boto3. Run with:
-    pytest tests/test_voxels_s3.py -v
+    pytest test/test_voxels_s3.py -v
 
 Skip in offline CI by excluding the 's3' mark:
     pytest -m "not s3"
