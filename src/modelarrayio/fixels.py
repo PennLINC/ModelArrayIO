@@ -328,7 +328,6 @@ def write_storage(
 
 
 def get_parser():
-
     parser = argparse.ArgumentParser(description='Create a hdf5 file of fixel data')
     parser.add_argument('--index-file', '--index_file', help='Index File', required=True)
     parser.add_argument(
