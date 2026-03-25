@@ -103,11 +103,15 @@ def test_write_rows_in_column_stripes_matches_dense_write(tmp_path) -> None:
     """Stripe writer should match assigning the full matrix."""
     path = tmp_path / 'stripe.h5'
     num_subjects, num_elements = 3, 17
-    full = np.arange(num_subjects * num_elements, dtype=np.float64).reshape(num_subjects, num_elements)
+    full = np.arange(num_subjects * num_elements, dtype=np.float64).reshape(
+        num_subjects, num_elements
+    )
     rows = [full[i].copy() for i in range(num_subjects)]
 
     with h5py.File(path, 'w') as h5:
-        dset = h5.create_dataset('m', shape=(num_subjects, num_elements), dtype='f8', chunks=(3, 5))
+        dset = h5.create_dataset(
+            'm', shape=(num_subjects, num_elements), dtype='f8', chunks=(3, 5)
+        )
         write_rows_in_column_stripes(dset, rows)
 
     with h5py.File(path, 'r') as h5:
