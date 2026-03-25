@@ -90,7 +90,8 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    out_fixel_dir = os.path.join(args.relative_root, args.output_dir)  # absolute path for output dir
+    # absolute path for output dir
+    out_fixel_dir = os.path.join(args.relative_root, args.output_dir)
 
     if os.path.exists(out_fixel_dir):
         print('WARNING: Output directory exists')
