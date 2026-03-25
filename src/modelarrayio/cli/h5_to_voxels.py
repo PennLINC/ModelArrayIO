@@ -7,7 +7,7 @@ import h5py
 import nibabel as nb
 import numpy as np
 
-from modelarrayio.cli.parser_utils import _is_file, add_relative_root_arg
+from modelarrayio.cli.parser_utils import _is_file
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +155,6 @@ def get_parser():
         required=True,
         type=IsFile,
     )
-    add_relative_root_arg(parser)
     parser.add_argument(
         '--analysis-name',
         '--analysis_name',

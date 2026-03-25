@@ -12,7 +12,6 @@ from modelarrayio.cli.parser_utils import (
     add_cohort_arg,
     add_output_hdf5_arg,
     add_output_tiledb_arg,
-    add_relative_root_arg,
     add_s3_workers_arg,
     add_scalar_columns_arg,
     add_storage_args,
@@ -217,7 +216,6 @@ def get_parser():
     )
     add_cohort_arg(parser)
     add_scalar_columns_arg(parser)
-    add_relative_root_arg(parser)
     add_output_hdf5_arg(parser, default_name='fixelarray.h5')
     add_output_tiledb_arg(parser, default_name='arraydb.tdb')
     add_backend_arg(parser)

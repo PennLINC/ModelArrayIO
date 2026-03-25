@@ -9,7 +9,6 @@ from modelarrayio.cli import parser_utils
 
 def _parser_with_cohort() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser()
-    parser_utils.add_relative_root_arg(p)
     parser_utils.add_output_hdf5_arg(p)
     parser_utils.add_cohort_arg(p)
     parser_utils.add_storage_args(p)

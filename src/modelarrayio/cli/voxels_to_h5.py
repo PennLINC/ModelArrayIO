@@ -91,9 +91,7 @@ def write_storage(
 
     # upload each cohort's data
     print('Extracting NIfTI data...')
-    scalars, sources_lists = _load_cohort_voxels(
-        cohort_df, group_mask_matrix, s3_workers
-    )
+    scalars, sources_lists = _load_cohort_voxels(cohort_df, group_mask_matrix, s3_workers)
 
     # Write the output:
     if backend == 'hdf5':
