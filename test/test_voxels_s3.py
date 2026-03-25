@@ -82,7 +82,7 @@ def test_convoxel_s3_parallel(tmp_path, group_mask_path):
     cmd = [
         sys.executable,
         '-m',
-        'modelarrayio.voxels',
+        'modelarrayio.cli.voxels_to_h5',
         '--group-mask-file',
         'group_mask.nii.gz',
         '--cohort-file',
@@ -149,7 +149,7 @@ def test_convoxel_s3_serial_matches_parallel(tmp_path, group_mask_path):
     base_cmd = [
         sys.executable,
         '-m',
-        'modelarrayio.voxels',
+        'modelarrayio.cli.voxels_to_h5',
         '--group-mask-file',
         'group_mask.nii.gz',
         '--cohort-file',

@@ -55,7 +55,7 @@ def test_concifti_cli_creates_expected_hdf5(tmp_path):
     cmd = [
         sys.executable,
         '-m',
-        'modelarrayio.cifti',
+        'modelarrayio.cli.cifti_to_h5',
         '--cohort-file',
         str(cohort_csv.name),
         '--relative-root',

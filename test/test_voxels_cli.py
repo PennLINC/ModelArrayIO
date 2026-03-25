@@ -75,7 +75,7 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
     cmd = [
         sys.executable,
         '-m',
-        'modelarrayio.voxels',
+        'modelarrayio.cli.voxels_to_h5',
         '--group-mask-file',
         str(group_mask_file.name),
         '--cohort-file',
