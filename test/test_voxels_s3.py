@@ -64,7 +64,7 @@ def test_convoxel_s3_parallel(tmp_path, group_mask_path, monkeypatch):
     # Copy the group mask into tmp_path so --relative-root resolves it
     shutil.copy(group_mask_path, tmp_path / 'group_mask.nii.gz')
 
-    # Cohort CSV with s3:// paths — relative_root is not prepended to s3:// URIs
+    # Cohort CSV with s3:// paths
     cohort_csv = tmp_path / 'cohort.csv'
     with cohort_csv.open('w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=['scalar_name', 'source_file', 'source_mask_file'])

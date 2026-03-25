@@ -57,8 +57,6 @@ Notes:
     * File names in column `source_file` in CSV file v.s. the actual file names on disk;
     * Scalar name e.g., "FD" in column `scalar_name` in CSV file v.s. what you will specify when using functions in `ModelArray`;
 
-For this case, when running `confixel` to create HDF5 fixel-wise data, argument **--relative-root** should be "/home/username/myProject/data"
-
 
 ## Run `confixel` and `fixelstats_write`
 ### Convert .mif files to an HDF5 (.h5) file
@@ -66,11 +64,10 @@ Using above described scenario as an example, for FD dataset:
 ``` console
 # first, activate conda environment with `conda activate <env_name>`
 confixel \
-    --index-file FD/index.mif \
-    --directions-file FD/directions.mif \
-    --cohort-file cohort_FD.csv \
-    --relative-root /home/username/myProject/data \
-    --output-hdf5 FD.h5
+    --index-file /home/username/myProject/data/FD/index.mif \
+    --directions-file /home/username/myProject/data/FD/directions.mif \
+    --cohort-file /home/username/myProject/data/cohort_FD.csv \
+    --output-hdf5 /home/username/myProject/data/FD.h5
 ```
 
 Now you should get the HDF5 file "FD.h5" in folder "/home/username/myProject/data". You may use [ModelArray](https://pennlinc.github.io/ModelArray/) to perform statistical analysis.

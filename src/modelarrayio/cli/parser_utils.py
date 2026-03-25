@@ -1,20 +1,5 @@
-import os.path as op
 from functools import partial
 from pathlib import Path
-
-
-def add_relative_root_arg(parser):
-    parser.add_argument(
-        '--relative-root',
-        '--relative_root',
-        help=(
-            'Root to which all paths are relative, i.e. defining the (absolute) path to '
-            'root directory of inputs and outputs.'
-        ),
-        type=partial(_path_exists, parser=parser),
-        default='/inputs/',
-    )
-    return parser
 
 
 def add_output_hdf5_arg(parser, default_name='fixelarray.h5'):

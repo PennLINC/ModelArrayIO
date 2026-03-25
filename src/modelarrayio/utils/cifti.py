@@ -1,6 +1,5 @@
 """Utility functions for CIFTI data."""
 
-import os.path as op
 from collections import OrderedDict, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -9,7 +8,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from modelarrayio.utils.s3_utils import is_s3_path, load_nibabel
+from modelarrayio.utils.s3_utils import load_nibabel
 
 
 def _cohort_to_long_dataframe(cohort_df, scalar_columns=None):
@@ -131,7 +130,7 @@ def brain_names_to_dataframe(brain_names):
     return greyordinate_df, structure_name_strings
 
 
-def _load_cohort_cifti(cohort_long, relative_root, s3_workers):
+def _load_cohort_cifti(cohort_long, s3_workers):
     """Load all CIFTI scalar rows from the cohort, optionally in parallel.
 
     The first file is always loaded serially to obtain the reference brain
@@ -144,8 +143,6 @@ def _load_cohort_cifti(cohort_long, relative_root, s3_workers):
     ----------
     cohort_long : :obj:`pandas.DataFrame`
         Long-format cohort dataframe
-    relative_root : :obj:`str`
-        Root to which all paths are relative
     s3_workers : :obj:`int`
         Number of workers to use for parallel loading
 
@@ -166,9 +163,8 @@ def _load_cohort_cifti(cohort_long, relative_root, s3_workers):
 
     # Load the first file serially to get the reference brain axis
     first_sn, _, first_src = rows_with_idx[0]
-    first_path = first_src if is_s3_path(first_src) else op.join(relative_root, first_src)
     first_data, reference_brain_names = extract_cifti_scalar_data(
-        load_nibabel(first_path, cifti=True)
+        load_nibabel(first_src, cifti=True)
     )
 
     def _worker(job):
@@ -180,10 +176,7 @@ def _load_cohort_cifti(cohort_long, relative_root, s3_workers):
 
     if s3_workers > 1 and len(rows_with_idx) > 1:
         results = {first_sn: {0: first_data}}
-        jobs = [
-            (sn, subj_idx, src if is_s3_path(src) else op.join(relative_root, src))
-            for sn, subj_idx, src in rows_with_idx[1:]
-        ]
+        jobs = [(sn, subj_idx, src) for sn, subj_idx, src in rows_with_idx[1:]]
         with ThreadPoolExecutor(max_workers=s3_workers) as pool:
             futures = {pool.submit(_worker, job): job for job in jobs}
             for future in tqdm(
@@ -199,10 +192,7 @@ def _load_cohort_cifti(cohort_long, relative_root, s3_workers):
     else:
         scalars = defaultdict(list)
         scalars[first_sn].append(first_data)
-        remaining = [
-            (sn, subj_idx, src if is_s3_path(src) else op.join(relative_root, src))
-            for sn, subj_idx, src in rows_with_idx[1:]
-        ]
+        remaining = [(sn, subj_idx, src) for sn, subj_idx, src in rows_with_idx[1:]]
         for job in tqdm(remaining, desc='Loading CIFTI data'):
             sn, subj_idx, arr = _worker(job)
             scalars[sn].append(arr)

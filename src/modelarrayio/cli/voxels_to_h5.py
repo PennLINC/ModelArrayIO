@@ -14,7 +14,6 @@ from modelarrayio.cli.parser_utils import (
     add_cohort_arg,
     add_output_hdf5_arg,
     add_output_tiledb_arg,
-    add_relative_root_arg,
     add_s3_workers_arg,
     add_storage_args,
     add_tiledb_storage_args,
@@ -31,7 +30,6 @@ def write_storage(
     backend='hdf5',
     output_hdf5='voxeldb.h5',
     output_tiledb='arraydb.tdb',
-    relative_root='/',
     storage_dtype='float32',
     compression='gzip',
     compression_level=4,
@@ -55,8 +53,6 @@ def write_storage(
         Path to a CSV with demographic info and paths to data.
     output_hdf5: str
         Path to a new .h5 file to be written.
-    relative_root: str
-        Path to which group_mask_file and cohort_file (and its contents) are relative.
     storage_dtype: str
         Floating type to store values. Options: 'float32' (default), 'float64'.
     compression: str
@@ -72,10 +68,10 @@ def write_storage(
         Target chunk size in MiB when auto-computing chunk_voxels. Default 2.0.
     """
     # gather cohort data
-    cohort_df = pd.read_csv(os.path.join(relative_root, cohort_file))
+    cohort_df = pd.read_csv(cohort_file)
 
     # Load the group mask image to define the rows of the matrix
-    group_mask_img = nb.load(os.path.join(relative_root, group_mask_file))
+    group_mask_img = nb.load(group_mask_file)
     # get_fdata(): get matrix data in float format
     group_mask_matrix = group_mask_img.get_fdata() > 0
     # np.nonzero() returns the coords of nonzero elements;
@@ -96,16 +92,15 @@ def write_storage(
     # upload each cohort's data
     print('Extracting NIfTI data...')
     scalars, sources_lists = _load_cohort_voxels(
-        cohort_df, group_mask_matrix, relative_root, s3_workers
+        cohort_df, group_mask_matrix, s3_workers
     )
 
     # Write the output:
     if backend == 'hdf5':
-        output_file = os.path.join(relative_root, output_hdf5)
-        output_dir = os.path.dirname(output_file)
+        output_dir = os.path.dirname(output_hdf5)
         if not os.path.exists(output_dir):
             os.makedirs(output_dir, exist_ok=True)
-        f = h5py.File(output_file, 'w')
+        f = h5py.File(output_hdf5, 'w')
 
         voxelsh5 = f.create_dataset(name='voxels', data=voxel_table.to_numpy().T)
         voxelsh5.attrs['column_names'] = list(voxel_table.columns)
@@ -129,11 +124,10 @@ def write_storage(
 
             h5_storage.write_rows_in_column_stripes(dset, scalars[scalar_name])
         f.close()
-        return int(not os.path.exists(output_file))
+        return int(not os.path.exists(output_hdf5))
     else:
         # TileDB backend
-        base_uri = os.path.join(relative_root, output_tiledb)
-        os.makedirs(base_uri, exist_ok=True)
+        os.makedirs(output_tiledb, exist_ok=True)
 
         # Store voxel coordinates as a small TileDB array (optional):
         # we store as metadata on base group
@@ -145,7 +139,7 @@ def write_storage(
             num_voxels = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
             dataset_path = f'scalars/{scalar_name}/values'
             tiledb_storage.create_empty_scalar_matrix_array(
-                base_uri,
+                output_tiledb,
                 dataset_path,
                 num_subjects,
                 num_voxels,
@@ -158,7 +152,7 @@ def write_storage(
                 sources_list=sources_lists[scalar_name],
             )
             # Stripe-write
-            uri = os.path.join(base_uri, dataset_path)
+            uri = os.path.join(output_tiledb, dataset_path)
             tiledb_storage.write_rows_in_column_stripes(uri, scalars[scalar_name])
         return 0
 
@@ -177,7 +171,6 @@ def get_parser():
         type=IsFile,
     )
     add_cohort_arg(parser)
-    add_relative_root_arg(parser)
     add_output_hdf5_arg(parser, default_name='fixelarray.h5')
     add_output_tiledb_arg(parser, default_name='arraydb.tdb')
     add_backend_arg(parser)

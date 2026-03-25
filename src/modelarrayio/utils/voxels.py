@@ -1,6 +1,5 @@
 """Utility functions for voxel-wise data."""
 
-import os.path as op
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -8,10 +7,10 @@ import nibabel as nb
 import numpy as np
 from tqdm import tqdm
 
-from modelarrayio.utils.s3_utils import is_s3_path, load_nibabel
+from modelarrayio.utils.s3_utils import load_nibabel
 
 
-def _load_cohort_voxels(cohort_df, group_mask_matrix, relative_root, s3_workers):
+def _load_cohort_voxels(cohort_df, group_mask_matrix, s3_workers):
     """Load all voxel rows from the cohort, optionally in parallel.
 
     When s3_workers > 1, a ThreadPoolExecutor is used. Threads share memory so
@@ -36,9 +35,7 @@ def _load_cohort_voxels(cohort_df, group_mask_matrix, relative_root, s3_workers)
         scalar_subj_counter[sn] += 1
         src = row['source_file']
         msk = row['source_mask_file']
-        scalar_path = src if is_s3_path(src) else op.join(relative_root, src)
-        mask_path = msk if is_s3_path(msk) else op.join(relative_root, msk)
-        jobs.append((sn, subj_idx, scalar_path, mask_path))
+        jobs.append((sn, subj_idx, src, msk))
         sources_lists[sn].append(src)
 
     def _worker(job):

@@ -7,14 +7,14 @@ import h5py
 import nibabel as nb
 import pandas as pd
 
-from modelarrayio.cli.parser_utils import _is_file, _path_exists
+from modelarrayio.cli.parser_utils import _is_file
 from modelarrayio.utils.fixels import mif_to_nifti2, nifti2_to_mif
 
 
-def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
+def h5_to_mifs(example_mif, in_file, analysis_name, output_dir):
     """Writes the contents of an hdf5 file to a fixels directory.
 
-    The ``h5_file`` parameter should point to an HDF5 file that contains at least two
+    The ``in_file`` parameter should point to an HDF5 file that contains at least two
     datasets. There must be one called ``results/results_matrix``, that contains a
     matrix of fixel results. Each column contains a single result and each row is a
     fixel. This matrix should be of type float. The second required dataset must be
@@ -30,11 +30,11 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
     ==========
     example_mif: str
         abspath to a scalar mif file. Its header is used as a template
-    h5_file: str
+    in_file: str
         abspath to an h5 file that contains statistical results and their metadata.
     analysis_name: str
         the name for the analysis results to be saved
-    fixel_output_dir: str
+    output_dir: str
         abspath to where the output fixel data will go. the index and directions mif files
         should already be copied here.
 
@@ -44,7 +44,7 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
     """
     # Get a template nifti image.
     nifti2_img, _ = mif_to_nifti2(example_mif)
-    h5_data = h5py.File(h5_file, 'r')
+    h5_data = h5py.File(in_file, 'r')
     results_matrix = h5_data['results/' + analysis_name + '/results_matrix']
     names_data = results_matrix.attrs['colnames']  # NOTE: results_matrix: need to be transposed...
     # print(results_matrix.shape)
@@ -58,12 +58,12 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
         results_names = [f'component{n + 1:03d}' for n in range(results_matrix.shape[0])]
 
     # Make output directory if it does not exist
-    if not os.path.isdir(fixel_output_dir):
-        os.mkdir(fixel_output_dir)
+    if not os.path.isdir(output_dir):
+        os.mkdir(output_dir)
 
     for result_col, result_name in enumerate(results_names):
         valid_result_name = result_name.replace(' ', '_').replace('/', '_')
-        out_mif = os.path.join(fixel_output_dir, analysis_name + '_' + valid_result_name + '.mif')
+        out_mif = os.path.join(output_dir, f'{analysis_name}_{valid_result_name}.mif')
         temp_nifti2 = nb.Nifti2Image(
             results_matrix[result_col, :].reshape(-1, 1, 1),
             nifti2_img.affine,
@@ -72,12 +72,11 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
         nifti2_to_mif(temp_nifti2, out_mif)
 
         # if this result is p.value, also write out 1-p.value (1m.p.value)
-        if (
-            'p.value' in valid_result_name
-        ):  # the result name contains "p.value" (from R package broom)
+        # the result name contains "p.value" (from R package broom)
+        if 'p.value' in valid_result_name:
             valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
             out_mif_1mpvalue = os.path.join(
-                fixel_output_dir, analysis_name + '_' + valid_result_name_1mpvalue + '.mif'
+                output_dir, f'{analysis_name}_{valid_result_name_1mpvalue}.mif'
             )
             output_mifvalues_1mpvalue = 1 - results_matrix[result_col, :]  # 1 minus
             temp_nifti2_1mpvalue = nb.Nifti2Image(
@@ -92,29 +91,29 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    # absolute path for output dir
-    out_fixel_dir = os.path.join(args.relative_root, args.output_dir)
-
-    if os.path.exists(out_fixel_dir):
+    if os.path.exists(args.output_dir):
         print('WARNING: Output directory exists')
-    os.makedirs(out_fixel_dir, exist_ok=True)
+    os.makedirs(args.output_dir, exist_ok=True)
 
     # Copy in the index and directions
     shutil.copyfile(
-        os.path.join(args.relative_root, args.directions_file),
-        os.path.join(out_fixel_dir, os.path.split(args.directions_file)[1]),
+        args.directions_file,
+        os.path.join(args.output_dir, os.path.basename(args.directions_file)),
     )
     shutil.copyfile(
-        os.path.join(args.relative_root, args.index_file),
-        os.path.join(out_fixel_dir, os.path.split(args.index_file)[1]),
+        args.index_file,
+        os.path.join(args.output_dir, os.path.basename(args.index_file)),
     )
 
     # Get an example mif file
-    cohort_df = pd.read_csv(os.path.join(args.relative_root, args.cohort_file))
-    example_mif = os.path.join(args.relative_root, cohort_df['source_file'][0])
-    h5_input = os.path.join(args.relative_root, args.input_hdf5)
-    analysis_name = args.analysis_name
-    h5_to_mifs(example_mif, h5_input, analysis_name, out_fixel_dir)
+    cohort_df = pd.read_csv(args.cohort_file)
+    example_mif = cohort_df['source_file'][0]
+    h5_to_mifs(
+        example_mif=example_mif,
+        in_file=args.in_file,
+        analysis_name=args.analysis_name,
+        output_dir=args.output_dir,
+    )
 
 
 def get_parser():
@@ -123,7 +122,6 @@ def get_parser():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     IsFile = partial(_is_file, parser=parser)
-    PathExists = partial(_path_exists, parser=parser)
 
     parser.add_argument(
         '--index-file',
@@ -147,15 +145,6 @@ def get_parser():
         type=IsFile,
     )
     parser.add_argument(
-        '--relative-root',
-        '--relative_root',
-        help=(
-            'Root to which all paths are relative, i.e. defining the (absolute) path to root '
-            'directory of index_file, directions_file, cohort_file, input_hdf5, and output_dir.'
-        ),
-        type=PathExists,
-    )
-    parser.add_argument(
         '--analysis-name',
         '--analysis_name',
         help='Name for the statistical analysis results to be saved.',
@@ -165,6 +154,7 @@ def get_parser():
         '--input_hdf5',
         help='Name of HDF5 (.h5) file where results outputs are saved.',
         type=IsFile,
+        dest='in_file',
     )
     parser.add_argument(
         '--output-dir',

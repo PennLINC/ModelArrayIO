@@ -69,11 +69,10 @@ jobs:
               -v /tmp/data:/inputs \
               -v /tmp:/tmp \
               pennbbl/fixeldb:latest \
-              --relative-root /inputs \
-              --directions-file fixeldata/directions.mif \
-              --index-file fixeldata/index.mif \
-              --cohort-file test_cohort.csv \
-              --output-hdf5 fixels.h5
+              --directions-file /inputs/fixeldata/directions.mif \
+              --index-file /inputs/fixeldata/index.mif \
+              --cohort-file /inputs/test_cohort.csv \
+              --output-hdf5 /inputs/fixels.h5
 
       - store_artifacts:
           path: /tmp/data/fixels.h5
