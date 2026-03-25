@@ -27,7 +27,7 @@ def _make_s3_client():
     except ImportError:
         raise ImportError(
             'boto3 is required for s3:// paths. Install with: pip install modelarrayio[s3]'
-        )
+        ) from None
     anon = os.environ.get('MODELARRAYIO_S3_ANON', '').lower() in ('1', 'true', 'yes')
     if anon:
         from botocore import UNSIGNED

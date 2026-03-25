@@ -43,6 +43,7 @@ def group_mask_path(tmp_path_factory):
     boto3 = pytest.importorskip('boto3')
     from botocore import UNSIGNED
     from botocore.config import Config
+    from botocore.exceptions import BotoCoreError
 
     tmp = tmp_path_factory.mktemp('s3_group_mask')
     dest = tmp / 'group_mask.nii.gz'
@@ -50,7 +51,7 @@ def group_mask_path(tmp_path_factory):
     key = f'{_PREFIX}/func_mask/{OHSU_SUBJECTS[0]}_func_mask.nii.gz'
     try:
         s3.download_file(_BUCKET, key, str(dest))
-    except Exception as exc:
+    except (OSError, BotoCoreError) as exc:
         pytest.skip(f'S3 download unavailable: {exc}')
     return dest
 
@@ -102,7 +103,9 @@ def test_convoxel_s3_parallel(tmp_path, group_mask_path):
         '4',
     ]
     env = {**os.environ, 'MODELARRAYIO_S3_ANON': '1'}
-    proc = subprocess.run(cmd, cwd=str(tmp_path), capture_output=True, text=True, env=env)
+    proc = subprocess.run(
+        cmd, cwd=str(tmp_path), capture_output=True, text=True, env=env, check=False
+    )
     assert proc.returncode == 0, f'convoxel failed:\n{proc.stdout}\n{proc.stderr}'
     assert out_h5.exists()
 
@@ -169,6 +172,7 @@ def test_convoxel_s3_serial_matches_parallel(tmp_path, group_mask_path):
             capture_output=True,
             text=True,
             env=env,
+            check=False,
         )
         assert proc.returncode == 0, f'convoxel failed (workers={workers}):\n{proc.stderr}'
 
