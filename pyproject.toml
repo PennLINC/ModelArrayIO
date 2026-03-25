@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "modelarrayio"
-description = "ConFixel (python) is companion converter software for ModelArray for converting data back and forth from the HDF5 file format"
+description = "ModelArrayIO: convert fixel, voxel, and greyordinate neuroimaging data to/from HDF5 for the ModelArray R package"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
@@ -42,6 +42,7 @@ doc = [
   "sphinx>=6.2.1",
   "myst-parser>=2",
   "sphinx-argparse",
+  "sphinx-copybutton",
   "sphinx_rtd_theme",
   "sphinxcontrib-apidoc",
   "sphinxcontrib-bibtex",
