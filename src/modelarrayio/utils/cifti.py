@@ -1,4 +1,5 @@
 """Utility functions for CIFTI data."""
+
 import os.path as op
 from collections import OrderedDict, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed

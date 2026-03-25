@@ -1,4 +1,5 @@
 """Utility functions for fixel-wise data."""
+
 import os
 import os.path as op
 import shutil
@@ -51,8 +52,6 @@ def nifti2_to_mif(nifti2_image, mif_file):
         raise Exception(err)
 
     os.remove(nii_file)  # remove temporary .nii file
-
-
 
 
 def mif_to_nifti2(mif_file):
