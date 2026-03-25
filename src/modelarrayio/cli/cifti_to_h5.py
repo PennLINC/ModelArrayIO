@@ -227,31 +227,10 @@ def get_parser():
 def main():
     parser = get_parser()
     args = parser.parse_args()
-    import logging
 
     logging.basicConfig(
         level=getattr(logging, str(args.log_level).upper(), logging.INFO),
         format='[%(levelname)s] %(name)s: %(message)s',
     )
-    status = write_storage(
-        cohort_file=args.cohort_file,
-        backend=args.backend,
-        output_h5=args.output_hdf5,
-        output_tdb=args.output_tiledb,
-        relative_root=args.relative_root,
-        storage_dtype=args.dtype,
-        compression=args.compression,
-        compression_level=args.compression_level,
-        shuffle=args.shuffle,
-        chunk_voxels=args.chunk_voxels,
-        target_chunk_mb=args.target_chunk_mb,
-        tdb_compression=args.tdb_compression,
-        tdb_compression_level=args.tdb_compression_level,
-        tdb_shuffle=args.tdb_shuffle,
-        tdb_tile_voxels=args.tdb_tile_voxels,
-        tdb_target_tile_mb=args.tdb_target_tile_mb,
-        tdb_workers=args.tdb_workers,
-        scalar_columns=args.scalar_columns,
-        s3_workers=args.s3_workers,
-    )
+    status = write_storage(**vars(args))
     return status

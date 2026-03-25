@@ -162,7 +162,6 @@ def write_storage(
 
 
 def get_parser():
-
     parser = argparse.ArgumentParser(description='Create a hdf5 file of volume data')
     parser.add_argument(
         '--group-mask-file',
@@ -190,24 +189,5 @@ def main():
         level=getattr(logging, str(args.log_level).upper(), logging.INFO),
         format='[%(levelname)s] %(name)s: %(message)s',
     )
-    status = write_storage(
-        group_mask_file=args.group_mask_file,
-        cohort_file=args.cohort_file,
-        backend=args.backend,
-        output_h5=args.output_hdf5,
-        output_tdb=args.output_tiledb,
-        relative_root=args.relative_root,
-        storage_dtype=args.dtype,
-        compression=args.compression,
-        compression_level=args.compression_level,
-        shuffle=args.shuffle,
-        chunk_voxels=args.chunk_voxels,
-        target_chunk_mb=args.target_chunk_mb,
-        tdb_compression=args.tdb_compression,
-        tdb_compression_level=args.tdb_compression_level,
-        tdb_shuffle=args.tdb_shuffle,
-        tdb_tile_voxels=args.tdb_tile_voxels,
-        tdb_target_tile_mb=args.tdb_target_tile_mb,
-        s3_workers=args.s3_workers,
-    )
+    status = write_storage(**vars(args))
     return status
