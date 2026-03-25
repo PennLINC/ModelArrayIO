@@ -103,7 +103,7 @@ exclude = ".*"
 
 [tool.ruff]
 line-length = 99
-src = ["src/modelarrayio"]
+src = ["src"]
 
 [tool.ruff.lint]
 extend-select = [
