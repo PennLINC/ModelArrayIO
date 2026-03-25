@@ -2,8 +2,10 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 import os
+import shutil
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 project = 'ModelArrayIO'
 copyright = f'2017-{datetime.now(tz=UTC).strftime("%Y")}, PennLINC developers'
@@ -50,3 +52,22 @@ linkcode_resolve = make_linkcode_resolve(
     'modelarrayio',
     'https://github.com/pennlinc/ModelArrayIO/blob/{revision}/{package}/{path}#L{lineno}',
 )
+
+
+def _sync_overview_figure(app) -> None:
+    """Ensure docs/_static/overview_structure.png exists for the figure in index.rst.
+
+    README.rst references the same path for GitHub/PyPI. The canonical file may live
+    at the repository root (historical layout); copy it into _static before the build
+    when needed so Sphinx can embed it.
+    """
+    docs_dir = Path(app.srcdir).resolve()
+    root_png = docs_dir.parent / 'overview_structure.png'
+    static_png = docs_dir / '_static' / 'overview_structure.png'
+    if root_png.is_file():
+        static_png.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(root_png, static_png)
+
+
+def setup(app):
+    app.connect('builder-inited', _sync_overview_figure)
