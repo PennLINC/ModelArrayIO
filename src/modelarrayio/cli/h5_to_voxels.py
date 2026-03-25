@@ -124,8 +124,8 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
             output_img_1mpvalue.to_filename(out_file_1mpvalue)
 
 
-def h5_to_volumes_wrapper():
-    parser = get_h5_to_volume_parser()
+def main():
+    parser = get_parser()
     args = parser.parse_args()
 
     volume_output_dir = op.join(
@@ -148,12 +148,15 @@ def h5_to_volumes_wrapper():
     h5_to_volumes(h5_input, analysis_name, group_mask_file, output_extension, volume_output_dir)
 
 
-def get_h5_to_volume_parser():
+def get_parser():
     parser = argparse.ArgumentParser(
         description='Convert statistical results from an hdf5 file to a volume data (NIfTI file)'
     )
     parser.add_argument(
-        '--group-mask-file', '--group_mask_file', help='Path to a group mask file', required=True
+        '--group-mask-file',
+        '--group_mask_file',
+        help='Path to a group mask file',
+        required=True,
     )
     parser.add_argument(
         '--cohort-file',

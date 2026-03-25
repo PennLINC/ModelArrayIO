@@ -88,9 +88,9 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
             temp_nifti2_1mpvalue.to_filename(out_cifti_1mpvalue)
 
 
-def h5_to_ciftis():
+def main():
     """Write the contents of an hdf5 file to a cifti directory."""
-    parser = get_h5_to_ciftis_parser()
+    parser = get_parser()
     args = parser.parse_args()
 
     out_cifti_dir = op.abspath(args.output_dir)  # absolute path for output dir
@@ -116,7 +116,7 @@ def h5_to_ciftis():
     _h5_to_ciftis(example_cifti, h5_input, analysis_name, out_cifti_dir)
 
 
-def get_h5_to_ciftis_parser():
+def get_parser():
     parser = argparse.ArgumentParser(
         description='Create a directory with cifti results from an hdf5 file'
     )
@@ -128,7 +128,10 @@ def get_h5_to_ciftis_parser():
     parser.add_argument(
         '--relative-root',
         '--relative_root',
-        help='Root to which all paths are relative, i.e. defining the (absolute) path to root directory of index_file, directions_file, cohort_file, input_hdf5, and output_dir.',
+        help=(
+            'Root to which all paths are relative, i.e. defining the (absolute) path to root '
+            'directory of index_file, directions_file, cohort_file, input_hdf5, and output_dir.'
+        ),
         type=os.path.abspath,
     )
     parser.add_argument(
@@ -144,9 +147,15 @@ def get_h5_to_ciftis_parser():
     parser.add_argument(
         '--output-dir',
         '--output_dir',
-        help='Fixel directory where outputs will be saved. If the directory does not exist, it will be automatically created.',
+        help=(
+            'Fixel directory where outputs will be saved. '
+            'If the directory does not exist, it will be automatically created.'
+        ),
     )
     parser.add_argument(
-        '--example-cifti', '--example_cifti', help='Path to an example cifti file.', required=False
+        '--example-cifti',
+        '--example_cifti',
+        help='Path to an example cifti file.',
+        required=False,
     )
     return parser

@@ -19,10 +19,6 @@ API
    :template: module.rst
    :toctree: generated/
 
-   cifti
-   fixels
-   voxels
-   h5_storage
-   parser
-   s3_utils
-   tiledb_storage
+   cli
+   storage
+   utils

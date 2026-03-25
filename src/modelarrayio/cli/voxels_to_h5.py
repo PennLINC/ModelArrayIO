@@ -18,12 +18,7 @@ from modelarrayio.cli.parser_utils import (
     add_storage_args,
     add_tiledb_storage_args,
 )
-from modelarrayio.h5_storage import (
-    create_empty_scalar_matrix_dataset,
-    write_rows_in_column_stripes,
-)
-from modelarrayio.tiledb_storage import create_empty_scalar_matrix_array as tdb_create_empty
-from modelarrayio.tiledb_storage import write_rows_in_column_stripes as tdb_write_stripes
+from modelarrayio.storage import h5_storage, tiledb_storage
 from modelarrayio.utils.voxels import _load_cohort_voxels
 
 logger = logging.getLogger(__name__)
@@ -117,7 +112,7 @@ def write_storage(
         for scalar_name in scalars.keys():
             num_subjects = len(scalars[scalar_name])
             num_voxels = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
-            dset = create_empty_scalar_matrix_dataset(
+            dset = h5_storage.create_empty_scalar_matrix_dataset(
                 f,
                 f'scalars/{scalar_name}/values',
                 num_subjects,
@@ -131,7 +126,7 @@ def write_storage(
                 sources_list=sources_lists[scalar_name],
             )
 
-            write_rows_in_column_stripes(dset, scalars[scalar_name])
+            h5_storage.write_rows_in_column_stripes(dset, scalars[scalar_name])
         f.close()
         return int(not op.exists(output_file))
     else:
@@ -148,7 +143,7 @@ def write_storage(
             num_subjects = len(scalars[scalar_name])
             num_voxels = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
             dataset_path = f'scalars/{scalar_name}/values'
-            tdb_create_empty(
+            tiledb_storage.create_empty_scalar_matrix_array(
                 base_uri,
                 dataset_path,
                 num_subjects,
@@ -163,7 +158,7 @@ def write_storage(
             )
             # Stripe-write
             uri = op.join(base_uri, dataset_path)
-            tdb_write_stripes(uri, scalars[scalar_name])
+            tiledb_storage.write_rows_in_column_stripes(uri, scalars[scalar_name])
         return 0
 
 
@@ -171,7 +166,10 @@ def get_parser():
 
     parser = argparse.ArgumentParser(description='Create a hdf5 file of volume data')
     parser.add_argument(
-        '--group-mask-file', '--group_mask_file', help='Path to a group mask file', required=True
+        '--group-mask-file',
+        '--group_mask_file',
+        help='Path to a group mask file',
+        required=True,
     )
     add_cohort_arg(parser)
     add_relative_root_arg(parser)

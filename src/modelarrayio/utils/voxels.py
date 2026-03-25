@@ -7,7 +7,7 @@ import nibabel as nb
 import numpy as np
 from tqdm import tqdm
 
-from modelarrayio.s3_utils import is_s3_path, load_nibabel
+from modelarrayio.utils.s3_utils import is_s3_path, load_nibabel
 
 
 def _load_cohort_voxels(cohort_df, group_mask_matrix, relative_root, s3_workers):

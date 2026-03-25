@@ -87,8 +87,8 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
             nifti2_to_mif(temp_nifti2_1mpvalue, out_mif_1mpvalue)
 
 
-def h5_to_fixels():
-    parser = get_h5_to_fixels_parser()
+def main():
+    parser = get_parser()
     args = parser.parse_args()
 
     out_fixel_dir = op.join(args.relative_root, args.output_dir)  # absolute path for output dir
@@ -115,11 +115,19 @@ def h5_to_fixels():
     h5_to_mifs(example_mif, h5_input, analysis_name, out_fixel_dir)
 
 
-def get_h5_to_fixels_parser():
+def get_parser():
     parser = argparse.ArgumentParser(description='Create a fixel directory from an hdf5 file')
-    parser.add_argument('--index-file', '--index_file', help='Index File', required=True)
     parser.add_argument(
-        '--directions-file', '--directions_file', help='Directions File', required=True
+        '--index-file',
+        '--index_file',
+        help='Index File',
+        required=True,
+    )
+    parser.add_argument(
+        '--directions-file',
+        '--directions_file',
+        help='Directions File',
+        required=True,
     )
     parser.add_argument(
         '--cohort-file',

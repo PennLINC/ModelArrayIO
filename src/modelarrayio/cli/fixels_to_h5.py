@@ -9,10 +9,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from modelarrayio.h5_storage import create_empty_scalar_matrix_dataset as h5_create_empty
-from modelarrayio.h5_storage import write_rows_in_column_stripes as h5_write_stripes
-from modelarrayio.tiledb_storage import create_empty_scalar_matrix_array as tdb_create_empty
-from modelarrayio.tiledb_storage import write_rows_in_column_stripes as tdb_write_stripes
+from modelarrayio.storage import h5_storage, tiledb_storage
 from modelarrayio.utils.fixels import mif_to_nifti2
 
 
@@ -197,7 +194,7 @@ def write_storage(
         for scalar_name in scalars.keys():
             num_subjects = len(scalars[scalar_name])
             num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
-            dset = h5_create_empty(
+            dset = h5_storage.create_empty_scalar_matrix_dataset(
                 f,
                 f'scalars/{scalar_name}/values',
                 num_subjects,
@@ -211,7 +208,7 @@ def write_storage(
                 sources_list=sources_lists[scalar_name],
             )
 
-            h5_write_stripes(dset, scalars[scalar_name])
+            h5_storage.write_rows_in_column_stripes(dset, scalars[scalar_name])
         f.close()
         return int(not op.exists(output_file))
 
@@ -222,7 +219,7 @@ def write_storage(
             num_subjects = len(scalars[scalar_name])
             num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
             dataset_path = f'scalars/{scalar_name}/values'
-            tdb_create_empty(
+            tiledb_storage.create_empty_scalar_matrix_array(
                 base_uri,
                 dataset_path,
                 num_subjects,
@@ -236,16 +233,24 @@ def write_storage(
                 sources_list=sources_lists[scalar_name],
             )
             uri = op.join(base_uri, dataset_path)
-            tdb_write_stripes(uri, scalars[scalar_name])
+            tiledb_storage.write_rows_in_column_stripes(uri, scalars[scalar_name])
 
         return 0
 
 
 def get_parser():
     parser = argparse.ArgumentParser(description='Create a hdf5 file of fixel data')
-    parser.add_argument('--index-file', '--index_file', help='Index File', required=True)
     parser.add_argument(
-        '--directions-file', '--directions_file', help='Directions File', required=True
+        '--index-file',
+        '--index_file',
+        help='Index File',
+        required=True,
+    )
+    parser.add_argument(
+        '--directions-file',
+        '--directions_file',
+        help='Directions File',
+        required=True,
     )
     parser.add_argument(
         '--cohort-file',

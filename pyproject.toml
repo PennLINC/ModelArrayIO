@@ -66,12 +66,12 @@ Repository = "https://github.com/PennLINC/ModelArrayIO"
 Documentation = "https://modelarrayio.readthedocs.io"
 
 [project.scripts]
-confixel = "modelarrayio.fixels:main"
-convoxel = "modelarrayio.voxels:main"
-concifti = "modelarrayio.cifti:main"
-fixelstats_write = "modelarrayio.fixels:h5_to_fixels"
-volumestats_write = "modelarrayio.voxels:h5_to_volumes_wrapper"
-ciftistats_write = "modelarrayio.cifti:h5_to_ciftis"
+confixel = "modelarrayio.cli.fixels_to_h5:main"
+convoxel = "modelarrayio.cli.voxels_to_h5:main"
+concifti = "modelarrayio.cli.cifti_to_h5:main"
+fixelstats_write = "modelarrayio.cli.h5_to_fixels:main"
+volumestats_write = "modelarrayio.cli.h5_to_voxels:main"
+ciftistats_write = "modelarrayio.cli.h5_to_cifti:main"
 
 #
 # Hatch
