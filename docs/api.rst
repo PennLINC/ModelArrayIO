@@ -18,6 +18,7 @@ API
 .. autosummary::
    :template: module.rst
    :toctree: generated/
+   :recursive:
 
    cli
    storage
