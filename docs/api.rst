@@ -18,11 +18,8 @@ API
 .. autosummary::
    :template: module.rst
    :toctree: generated/
+   :recursive:
 
-   cifti
-   fixels
-   voxels
-   h5_storage
-   parser
-   s3_utils
-   tiledb_storage
+   cli
+   storage
+   utils

@@ -8,7 +8,7 @@ confixel
 ********
 
 .. argparse::
-   :ref: modelarrayio.fixels.get_parser
+   :ref: modelarrayio.cli.fixels_to_h5.get_parser
    :prog: confixel
    :func: get_parser
 
@@ -18,7 +18,7 @@ convoxel
 ********
 
 .. argparse::
-   :ref: modelarrayio.voxels.get_parser
+   :ref: modelarrayio.cli.voxels_to_h5.get_parser
    :prog: convoxel
    :func: get_parser
 
@@ -28,7 +28,7 @@ concifti
 ********
 
 .. argparse::
-   :ref: modelarrayio.cifti.get_parser
+   :ref: modelarrayio.cli.cifti_to_h5.get_parser
    :prog: concifti
    :func: get_parser
 
@@ -38,18 +38,18 @@ fixelstats_write
 ****************
 
 .. argparse::
-   :ref: modelarrayio.fixels.get_h5_to_fixels_parser
+   :ref: modelarrayio.cli.h5_to_fixels.get_parser
    :prog: fixelstats_write
-   :func: get_h5_to_fixels_parser
+   :func: get_parser
 
 *****************
 volumestats_write
 *****************
 
 .. argparse::
-   :ref: modelarrayio.voxels.get_h5_to_volume_parser
+   :ref: modelarrayio.cli.h5_to_voxels.get_parser
    :prog: volumestats_write
-   :func: get_h5_to_volume_parser
+   :func: get_parser
 
 
 ****************
@@ -57,6 +57,6 @@ ciftistats_write
 ****************
 
 .. argparse::
-   :ref: modelarrayio.cifti.get_h5_to_ciftis_parser
+   :ref: modelarrayio.cli.h5_to_cifti.get_parser
    :prog: ciftistats_write
-   :func: get_h5_to_ciftis_parser
+   :func: get_parser

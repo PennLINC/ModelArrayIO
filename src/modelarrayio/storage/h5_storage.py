@@ -1,3 +1,5 @@
+"""HDF5 storage utilities."""
+
 import logging
 
 import h5py

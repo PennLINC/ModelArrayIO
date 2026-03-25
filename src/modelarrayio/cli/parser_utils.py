@@ -41,6 +41,7 @@ def add_storage_args(parser):
         help='Floating dtype for storing values: float32 (default) or float64',
         choices=['float32', 'float64'],
         default='float32',
+        dest='storage_dtype',
     )
     parser.add_argument(
         '--compression',
@@ -60,8 +61,8 @@ def add_storage_args(parser):
         dest='shuffle',
         action='store_false',
         help='Disable HDF5 shuffle filter (enabled by default if compression is used).',
+        default=True,
     )
-    parser.set_defaults(shuffle=True)
     parser.add_argument(
         '--chunk-voxels',
         '--chunk_voxels',
@@ -133,8 +134,8 @@ def add_tiledb_storage_args(parser):
         dest='tdb_shuffle',
         action='store_false',
         help='Disable TileDB shuffle filter (enabled by default).',
+        default=True,
     )
-    parser.set_defaults(tdb_shuffle=True)
     parser.add_argument(
         '--tdb-tile-voxels',
         '--tdb_tile_voxels',
@@ -151,16 +152,6 @@ def add_tiledb_storage_args(parser):
         type=float,
         help='Target tile size in MiB when auto-computing item tile length. Default 2.0',
         default=2.0,
-    )
-    parser.add_argument(
-        '--tdb-workers',
-        '--tdb_workers',
-        type=int,
-        help=(
-            'Maximum number of TileDB write workers. Default 0 (auto, uses CPU count). '
-            'Set to 1 to disable parallel writes.'
-        ),
-        default=0,
     )
     return parser
 
