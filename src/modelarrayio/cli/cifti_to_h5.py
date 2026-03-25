@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 def write_storage(
     cohort_file,
     backend='hdf5',
-    output_h5='fixeldb.h5',
+    output_hdf5='fixeldb.h5',
     output_tdb='arraydb.tdb',
     relative_root='/',
     storage_dtype='float32',
@@ -59,7 +59,7 @@ def write_storage(
         Path to a csv with demographic info and paths to data
     backend : :obj:`str`
         Backend to use for storage
-    output_h5 : :obj:`str`
+    output_hdf5 : :obj:`str`
         Path to a new .h5 file to be written
     output_tdb : :obj:`str`
         Path to a new .tdb file to be written
@@ -111,7 +111,7 @@ def write_storage(
     if backend == 'hdf5':
         scalars, last_brain_names = _load_cohort_cifti(cohort_long, relative_root, s3_workers)
 
-        output_file = os.path.join(relative_root, output_h5)
+        output_file = os.path.join(relative_root, output_hdf5)
         f = h5py.File(output_file, 'w')
 
         greyordinate_table, structure_names = brain_names_to_dataframe(last_brain_names)

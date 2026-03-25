@@ -27,7 +27,7 @@ def write_storage(
     group_mask_file,
     cohort_file,
     backend='hdf5',
-    output_h5='voxeldb.h5',
+    output_hdf5='voxeldb.h5',
     output_tdb='arraydb.tdb',
     relative_root='/',
     storage_dtype='float32',
@@ -51,7 +51,7 @@ def write_storage(
         Path to a NIfTI-1 binary group mask file.
     cohort_file: str
         Path to a CSV with demographic info and paths to data.
-    output_h5: str
+    output_hdf5: str
         Path to a new .h5 file to be written.
     relative_root: str
         Path to which group_mask_file and cohort_file (and its contents) are relative.
@@ -99,7 +99,7 @@ def write_storage(
 
     # Write the output:
     if backend == 'hdf5':
-        output_file = os.path.join(relative_root, output_h5)
+        output_file = os.path.join(relative_root, output_hdf5)
         output_dir = os.path.dirname(output_file)
         if not os.path.exists(output_dir):
             os.makedirs(output_dir, exist_ok=True)
