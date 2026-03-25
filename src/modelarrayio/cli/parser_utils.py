@@ -1,4 +1,6 @@
 import os.path as op
+from functools import partial
+from pathlib import Path
 
 
 def add_relative_root_arg(parser):
@@ -9,7 +11,7 @@ def add_relative_root_arg(parser):
             'Root to which all paths are relative, i.e. defining the (absolute) path to '
             'root directory of inputs and outputs.'
         ),
-        type=op.abspath,
+        type=partial(_path_exists, parser=parser),
         default='/inputs/',
     )
     return parser
@@ -31,6 +33,7 @@ def add_cohort_arg(parser):
         '--cohort_file',
         help='Path to a csv with demographic info and paths to data.',
         required=True,
+        type=partial(_is_file, parser=parser),
     )
     return parser
 
@@ -63,7 +66,9 @@ def add_storage_args(parser):
         help='Disable HDF5 shuffle filter (enabled by default if compression is used).',
         default=True,
     )
-    parser.add_argument(
+
+    chunk_allocation_group = parser.add_mutually_exclusive_group()
+    chunk_allocation_group.add_argument(
         '--chunk-voxels',
         '--chunk_voxels',
         type=int,
@@ -73,13 +78,14 @@ def add_storage_args(parser):
         ),
         default=0,
     )
-    parser.add_argument(
+    chunk_allocation_group.add_argument(
         '--target-chunk-mb',
         '--target_chunk_mb',
         type=float,
         help='Target chunk size in MiB when auto-computing item chunk length. Default 2.0',
         default=2.0,
     )
+
     parser.add_argument(
         '--log-level',
         '--log_level',
@@ -136,7 +142,9 @@ def add_tiledb_storage_args(parser):
         help='Disable TileDB shuffle filter (enabled by default).',
         default=True,
     )
-    parser.add_argument(
+
+    tile_allocation_group = parser.add_mutually_exclusive_group()
+    tile_allocation_group.add_argument(
         '--tdb-tile-voxels',
         '--tdb_tile_voxels',
         type=int,
@@ -146,7 +154,7 @@ def add_tiledb_storage_args(parser):
         ),
         default=0,
     )
-    parser.add_argument(
+    tile_allocation_group.add_argument(
         '--tdb-target-tile-mb',
         '--tdb_target_tile_mb',
         type=float,
@@ -182,3 +190,18 @@ def add_scalar_columns_arg(parser):
         ),
     )
     return parser
+
+
+def _path_exists(path, parser):
+    """Ensure a given path exists."""
+    if path is None or not Path(path).exists():
+        raise parser.error(f'Path does not exist: <{path}>.')
+    return Path(path).absolute()
+
+
+def _is_file(path, parser):
+    """Ensure a given path exists and it is a file."""
+    path = _path_exists(path, parser)
+    if not path.is_file():
+        raise parser.error(f'Path should point to a file (or symlink of file): <{path}>.')
+    return path

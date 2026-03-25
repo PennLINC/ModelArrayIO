@@ -1,10 +1,13 @@
 import argparse
 import logging
 import os
+from functools import partial
 
 import h5py
 import nibabel as nb
 import pandas as pd
+
+from modelarrayio.cli.parser_utils import _is_file, _path_exists
 
 logger = logging.getLogger(__name__)
 
@@ -117,12 +120,17 @@ def main():
 
 def get_parser():
     parser = argparse.ArgumentParser(
-        description='Create a directory with cifti results from an hdf5 file'
+        description='Create a directory with cifti results from an hdf5 file',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    IsFile = partial(_is_file, parser=parser)
+    PathExists = partial(_path_exists, parser=parser)
+
     parser.add_argument(
         '--cohort-file',
         '--cohort_file',
         help='Path to a csv with demographic info and paths to data.',
+        type=IsFile,
     )
     parser.add_argument(
         '--relative-root',
@@ -131,7 +139,7 @@ def get_parser():
             'Root to which all paths are relative, i.e. defining the (absolute) path to root '
             'directory of index_file, directions_file, cohort_file, input_hdf5, and output_dir.'
         ),
-        type=os.path.abspath,
+        type=PathExists,
     )
     parser.add_argument(
         '--analysis-name',
@@ -142,6 +150,7 @@ def get_parser():
         '--input-hdf5',
         '--input_hdf5',
         help='Name of HDF5 (.h5) file where results outputs are saved.',
+        type=IsFile,
     )
     parser.add_argument(
         '--output-dir',
@@ -156,5 +165,6 @@ def get_parser():
         '--example_cifti',
         help='Path to an example cifti file.',
         required=False,
+        type=IsFile,
     )
     return parser

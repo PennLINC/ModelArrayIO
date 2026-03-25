@@ -2,11 +2,13 @@ import argparse
 import logging
 import os
 from collections import defaultdict
+from functools import partial
 
 import h5py
 import pandas as pd
 from tqdm import tqdm
 
+from modelarrayio.cli.parser_utils import _is_file, _path_exists
 from modelarrayio.storage import h5_storage, tiledb_storage
 from modelarrayio.utils.fixels import gather_fixels, mif_to_nifti2
 
@@ -156,24 +158,33 @@ def write_storage(
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(description='Create a hdf5 file of fixel data')
+    parser = argparse.ArgumentParser(
+        description='Create a hdf5 file of fixel data',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    IsFile = partial(_is_file, parser=parser)
+    PathExists = partial(_path_exists, parser=parser)
+
     parser.add_argument(
         '--index-file',
         '--index_file',
         help='Index File',
         required=True,
+        type=IsFile,
     )
     parser.add_argument(
         '--directions-file',
         '--directions_file',
         help='Directions File',
         required=True,
+        type=IsFile,
     )
     parser.add_argument(
         '--cohort-file',
         '--cohort_file',
         help='Path to a csv with demographic info and paths to data.',
         required=True,
+        type=IsFile,
     )
     parser.add_argument(
         '--relative-root',
@@ -182,7 +193,7 @@ def get_parser():
             'Root to which all paths are relative, i.e. defining the (absolute) '
             'path to root directory of index_file, directions_file, cohort_file, and output_hdf5.'
         ),
-        type=os.path.abspath,
+        type=PathExists,
         default='/inputs/',
     )
     parser.add_argument(

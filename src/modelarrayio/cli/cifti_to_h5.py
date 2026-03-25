@@ -211,7 +211,10 @@ def write_storage(
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(description='Create a hdf5 file of CIDTI2 dscalar data')
+    parser = argparse.ArgumentParser(
+        description='Create a hdf5 file of CIDTI2 dscalar data',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     add_cohort_arg(parser)
     add_scalar_columns_arg(parser)
     add_relative_root_arg(parser)

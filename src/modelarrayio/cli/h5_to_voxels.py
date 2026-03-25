@@ -1,12 +1,13 @@
 import argparse
 import logging
 import os
+from functools import partial
 
 import h5py
 import nibabel as nb
 import numpy as np
 
-from modelarrayio.cli.parser_utils import add_relative_root_arg
+from modelarrayio.cli.parser_utils import _is_file, add_relative_root_arg
 
 logger = logging.getLogger(__name__)
 
@@ -149,19 +150,23 @@ def main():
 
 def get_parser():
     parser = argparse.ArgumentParser(
-        description='Convert statistical results from an hdf5 file to a volume data (NIfTI file)'
+        description='Convert statistical results from an hdf5 file to a volume data (NIfTI file)',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    IsFile = partial(_is_file, parser=parser)
     parser.add_argument(
         '--group-mask-file',
         '--group_mask_file',
         help='Path to a group mask file',
         required=True,
+        type=IsFile,
     )
     parser.add_argument(
         '--cohort-file',
         '--cohort_file',
         help='Path to a csv with demographic info and paths to data.',
         required=True,
+        type=IsFile,
     )
     add_relative_root_arg(parser)
     parser.add_argument(
@@ -173,6 +178,7 @@ def get_parser():
         '--input-hdf5',
         '--input_hdf5',
         help='Name of HDF5 (.h5) file where results outputs are saved.',
+        type=IsFile,
     )
     parser.add_argument(
         '--output-dir',
@@ -189,6 +195,7 @@ def get_parser():
             'The extension for output volume data. '
             'Options are .nii.gz (default) and .nii. Please provide the prefix dot.'
         ),
+        choices=['.nii.gz', '.nii'],
         default='.nii.gz',
     )
     return parser

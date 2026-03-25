@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+from functools import partial
 
 import h5py
 import nibabel as nb
@@ -8,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from modelarrayio.cli.parser_utils import (
+    _is_file,
     add_backend_arg,
     add_cohort_arg,
     add_output_hdf5_arg,
@@ -162,12 +164,17 @@ def write_storage(
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(description='Create a hdf5 file of volume data')
+    parser = argparse.ArgumentParser(
+        description='Create a hdf5 file of volume data',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    IsFile = partial(_is_file, parser=parser)
     parser.add_argument(
         '--group-mask-file',
         '--group_mask_file',
         help='Path to a group mask file',
         required=True,
+        type=IsFile,
     )
     add_cohort_arg(parser)
     add_relative_root_arg(parser)
