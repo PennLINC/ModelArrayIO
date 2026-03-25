@@ -28,7 +28,7 @@ def write_storage(
     cohort_file,
     backend='hdf5',
     output_hdf5='voxeldb.h5',
-    output_tdb='arraydb.tdb',
+    output_tiledb='arraydb.tdb',
     relative_root='/',
     storage_dtype='float32',
     compression='gzip',
@@ -130,7 +130,7 @@ def write_storage(
         return int(not os.path.exists(output_file))
     else:
         # TileDB backend
-        base_uri = os.path.join(relative_root, output_tdb)
+        base_uri = os.path.join(relative_root, output_tiledb)
         os.makedirs(base_uri, exist_ok=True)
 
         # Store voxel coordinates as a small TileDB array (optional):

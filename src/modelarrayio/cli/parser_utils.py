@@ -41,6 +41,7 @@ def add_storage_args(parser):
         help='Floating dtype for storing values: float32 (default) or float64',
         choices=['float32', 'float64'],
         default='float32',
+        dest='storage_dtype',
     )
     parser.add_argument(
         '--compression',

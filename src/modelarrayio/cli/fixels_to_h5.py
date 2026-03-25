@@ -17,7 +17,7 @@ def write_storage(
     cohort_file,
     backend='hdf5',
     output_hdf5='fixeldb.h5',
-    output_tdb='arraydb.tdb',
+    output_tiledb='arraydb.tdb',
     relative_root='/',
     storage_dtype='float32',
     compression='gzip',
@@ -45,15 +45,7 @@ def write_storage(
         Backend to use for storage
     output_hdf5 : :obj:`str`
         Path to a new .h5 file to be written
-    output_tdb : :obj:`str`
-        Path to a new .tdb file to be written
-    relative_root : :obj:`str`
-        Root to which all paths are relative
-    backend : :obj:`str`
-        Backend to use for storage
-    output_hdf5 : :obj:`str`
-        Path to a new .h5 file to be written
-    output_tdb : :obj:`str`
+    output_tiledb : :obj:`str`
         Path to a new .tdb file to be written
     relative_root : :obj:`str`
         Root to which all paths are relative
@@ -138,7 +130,7 @@ def write_storage(
         return int(not os.path.exists(output_file))
 
     else:
-        base_uri = os.path.join(relative_root, output_tdb)
+        base_uri = os.path.join(relative_root, output_tiledb)
         os.makedirs(base_uri, exist_ok=True)
         for scalar_name in scalars.keys():
             num_subjects = len(scalars[scalar_name])
@@ -217,6 +209,7 @@ def get_parser():
         help='Floating dtype for storing values: float32 (default) or float64',
         choices=['float32', 'float64'],
         default='float32',
+        dest='storage_dtype',
     )
     parser.add_argument(
         '--compression',
