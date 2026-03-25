@@ -2,6 +2,30 @@
 ModelArrayIO
 ============
 
+.. image:: https://img.shields.io/pypi/v/modelarrayio.svg
+   :target: https://pypi.python.org/pypi/modelarrayio/
+   :alt: Latest Version
+
+.. image:: https://img.shields.io/pypi/pyversions/modelarrayio.svg
+   :target: https://pypi.python.org/pypi/modelarrayio/
+   :alt: PyPI - Python Version
+
+.. image:: https://img.shields.io/badge/License-BSD%203--Clause-blue.svg
+   :target: https://opensource.org/licenses/BSD-3-Clause
+   :alt: License
+
+.. image:: https://readthedocs.org/projects/modelarrayio/badge/?version=latest
+   :target: http://modelarrayio.readthedocs.io/en/latest/?badge=latest
+   :alt: Documentation Status
+
+.. image:: https://codecov.io/gh/pennlinc/modelarrayio/branch/main/graph/badge.svg
+   :target: https://codecov.io/gh/pennlinc/modelarrayio
+   :alt: Codecov
+
+.. image:: https://img.shields.io/badge/code%20style-ruff-000000.svg
+   :target: https://github.com/astral-sh/ruff
+   :alt: Code style: ruff
+
 **ModelArrayIO** is a Python package that converts between neuroimaging formats (fixel ``.mif``, voxel NIfTI, CIFTI-2 dscalar) and the HDF5 (``.h5``) layout used by the R package `ModelArray <https://pennlinc.github.io/ModelArray/>`_. It can also write ModelArray statistical results back to imaging formats.
 
 **Relationship to ConFixel:** The earlier project `ConFixel <https://github.com/PennLINC/ConFixel>`_ is superseded by ModelArrayIO. The ConFixel repository is retained for history (including links from publications) and will be archived; new work should use this repository.
