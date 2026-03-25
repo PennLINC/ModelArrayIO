@@ -1,6 +1,6 @@
-This is a toy voxel-wise dataset for testing ConVoxel.
+This is a toy voxel-wise dataset for testing ModelArrayIO’s voxel pipeline (`convoxel` / `volumestats_write`).
 * It was generated using scripts in [ModelArray_tests](https://github.com/PennLINC/ModelArray_tests) GitHub repository.
-  * Using scripts in folder `testdata_ConFixel` there.
+  * Using scripts in folder `testdata_ConFixel` there (historical folder name from the ConFixel era).
 * It includes n=20 voxel-wise data with individual masks and a group mask.
   * Each voxel-wise image has random values in a center ball, and may or may not have values around this ball, making individual masks different among all subjects.
   * The values are between 0-1.

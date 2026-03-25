@@ -1,12 +1,10 @@
 # ModelArrayIO
 
-ConFixel has moved beyond fixels and handles a lot of other modalities.
-It also got optimized!
-[Going forward, ConFixel is now ModelArrayIO.](https://pennlinc.github.io/ModelArrayIO/).
-This repository will be left here because the URL is in the publication.
+**ModelArrayIO** is a Python package that converts between neuroimaging formats (fixel `.mif`, voxel NIfTI, CIFTI-2 dscalar) and the HDF5 (`.h5`) layout used by the R package [ModelArray](https://pennlinc.github.io/ModelArray/). It can also write ModelArray statistical results back to imaging formats.
 
+**Relationship to ConFixel:** The earlier project [**ConFixel**](https://github.com/PennLINC/ConFixel) is superseded by ModelArrayIO. The ConFixel repository is retained for history (including links from publications) and will be archived; new work should use this repository.
 
-`ConFixel` is companion converter software for [ModelArray](https://pennlinc.github.io/ModelArray/) for converting data back and forth from the HDF5 file format.
+Documentation for installation and usage: [ModelArrayIO on GitHub](https://github.com/PennLINC/ModelArrayIO#installation) (this README). For conda, HDF5 libraries, and installing the ModelArray R package, see the ModelArray vignette [Installation](https://pennlinc.github.io/ModelArray/articles/installations.html).
 
 <p align="center">
 
@@ -14,30 +12,30 @@ This repository will be left here because the URL is in the publication.
 
 </p>
 
-`ConFixel` software includes three converters: `ConFixel` for fixel-wise data (`.mif`), `ConVoxel` for voxel-wise data (NIfTI) and `ConCIFTI` for CIFTI-2 dscalar files. Each converter converts between the original image format and the HDF5 file format (`.h5`) that ModelArray uses.
+ModelArrayIO provides three converter areas, each with import and export commands:
 
-Below lists the commands in each converter. After [installation](#installation), these commands can be directly called in a terminal console.
+After [installation](#installation), these commands are available in your terminal:
 
-* `ConFixel` converter for fixel-wise data (MRtrix image format `.mif`):
-    * `.mif` --> `.h5`: command `confixel`
-    * `.h5` --> `.mif`: command `fixelstats_write`
-* `ConVoxel` converter for voxel-wise data (NIfTI):
-    * NIfTI --> `.h5`: command `convoxel`
-    * `.h5` --> NIfTI: command `volumestats_write`
-* `ConCIFTI` converter for greyordinate-wise data (CIFTI-2):
-    * CIFTI-2 --> `.h5`: command `concifti`
-    * `.h5` --> CIFTI-2: command `ciftistats_write`
+* **Fixel-wise** data (MRtrix `.mif`):
+    * `.mif` → `.h5`: `confixel` (CLI name kept for compatibility with earlier ConFixel workflows)
+    * `.h5` → `.mif`: `fixelstats_write`
+* **Voxel-wise** data (NIfTI):
+    * NIfTI → `.h5`: `convoxel`
+    * `.h5` → NIfTI: `volumestats_write`
+* **Greyordinate-wise** data (CIFTI-2):
+    * CIFTI-2 → `.h5`: `concifti`
+    * `.h5` → CIFTI-2: `ciftistats_write`
 
 ## Installation
 ### Install dependent software MRtrix (only required for fixel-wise data `.mif`)
-When converting fixel-wise data's format (`.mif`), converter `ConFixel` uses function `mrconvert` from MRtrix, so please make sure MRtrix has been installed. If it's not installed yet, please refer to [MRtrix's webpage](https://www.mrtrix.org/download/) for how to install it. Type `mrview` in the terminal to check whether MRtrix installation is successful.
+For fixel-wise `.mif` conversion, the `confixel` / `fixelstats_write` tools use MRtrix `mrconvert`. Install MRtrix from [MRtrix’s webpage](https://www.mrtrix.org/download/) if needed. Run `mrview` in the terminal to verify the installation.
 
-If your input data is voxel-wise data or CIFTI (greyordinate-wise) data, you can skip this step.
+If your data are voxel-wise or CIFTI only, you can skip this step.
 
-### Install `ModelArrayIO` software
-Before installing ModelArrayIO software, you may want to create a conda environment  - see [here](https://pennlinc.github.io/ModelArray/articles/installations.html) for more. If you installed MRtrix in a conda environment, you can directly install ConFixel software in that environment.
+### Install ModelArrayIO
+You may want a conda environment first—see [ModelArray: Installation](https://pennlinc.github.io/ModelArray/articles/installations.html). If MRtrix is installed in that environment, install ModelArrayIO in the same environment.
 
-You can install `ModelArrayIO` software from `GitHub`:
+Install from GitHub:
 
 ``` console
 git clone https://github.com/PennLINC/ModelArrayIO.git
@@ -45,14 +43,14 @@ cd ModelArrayIO
 pip install .   # build via pyproject.toml
 ```
 
-If you are a developer, and if there is any update in the source code locally, you may update the installation with an editable install:
+Editable install for development:
 
 ``` console
 # From the repository root
 pip install -e .
 ```
 
-Alternatively, if you have `hatch` installed, you can build wheels/sdist locally:
+With `hatch` installed, you can build wheels/sdist locally:
 
 ``` console
 hatch build
@@ -60,15 +58,17 @@ pip install dist/*.whl
 ```
 
 ## How to use
-We provide [walkthrough for how to use `ConFixel` for fixel-wise data](notebooks/walkthrough_fixel-wise_data.md), and [walkthrough for `ConVoxel` for voxel-wise data](notebooks/walkthrough_voxel-wise_data.md).
+We provide a [walkthrough for fixel-wise data](notebooks/walkthrough_fixel-wise_data.md) (`confixel` / `fixelstats_write`) and a [walkthrough for voxel-wise data](notebooks/walkthrough_voxel-wise_data.md) (`convoxel` / `volumestats_write`).
 
-As `ConFixel` software is usually used together with [ModelArray](https://pennlinc.github.io/ModelArray/), we also provide [a combined walkthrough](https://pennlinc.github.io/ModelArray/articles/walkthrough.html) of ConFixel + ModelArray with example fixel-wise data.
+Together with [ModelArray](https://pennlinc.github.io/ModelArray/), see the [combined walkthrough](https://pennlinc.github.io/ModelArray/articles/walkthrough.html) with example fixel-wise data (ModelArray + ModelArrayIO).
 
-You can also refer to `--help` for additional information:
+CLI help:
+
 ``` console
 confixel --help
 ```
-You can replace `confixel` with other commands in ConFixel.
+
+Use the same pattern for `convoxel`, `concifti`, `fixelstats_write`, `volumestats_write`, and `ciftistats_write`.
 
 ## Storage backends: HDF5 and TileDB
 
