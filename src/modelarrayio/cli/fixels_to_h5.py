@@ -243,15 +243,15 @@ def get_parser():
         dest='shuffle',
         action='store_false',
         help='Disable HDF5 shuffle filter (enabled by default if compression is used).',
+        default=True,
     )
     parser.add_argument(
         '--tdb-no-shuffle',
         dest='tdb_shuffle',
         action='store_false',
         help='Disable TileDB shuffle filter (enabled by default).',
+        default=True,
     )
-    parser.set_defaults(shuffle=True)
-    parser.set_defaults(tdb_shuffle=True)
     parser.add_argument(
         '--chunk-voxels',
         '--chunk_voxels',

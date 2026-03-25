@@ -220,6 +220,16 @@ def get_parser():
     add_backend_arg(parser)
     add_storage_args(parser)
     add_tiledb_storage_args(parser)
+    parser.add_argument(
+        '--tdb-workers',
+        '--tdb_workers',
+        type=int,
+        help=(
+            'Maximum number of TileDB write workers. Default 0 (auto, uses CPU count). '
+            'Set to 1 to disable parallel writes.'
+        ),
+        default=0,
+    )
     add_s3_workers_arg(parser)
     return parser
 
