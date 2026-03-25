@@ -18,6 +18,10 @@ ModelArrayIO
    :target: http://modelarrayio.readthedocs.io/en/latest/?badge=latest
    :alt: Documentation Status
 
+.. image:: https://github.com/PennLINC/ModelArrayIO/actions/workflows/tox.yml/badge.svg
+   :target: https://github.com/PennLINC/ModelArrayIO/actions/workflows/tox.yml
+   :alt: GitHub Actions: Tox
+
 .. image:: https://codecov.io/gh/pennlinc/modelarrayio/branch/main/graph/badge.svg
    :target: https://codecov.io/gh/pennlinc/modelarrayio
    :alt: Codecov
