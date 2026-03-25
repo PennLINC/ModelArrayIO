@@ -1,6 +1,6 @@
 # Walkthrough for fixel-wise data conversion
 
-For fixel-wise data, use the **`confixel`** command (from the **ModelArrayIO** Python package) to convert between MRtrix `.mif` files and the HDF5 file format (`.h5`) that ModelArray uses. This guide assumes you followed the [installation guide](../README.md#installation), installed **ModelArrayIO**, and installed **MRtrix** for fixel-wise workflows.
+For fixel-wise data, use the **`confixel`** command (from the **ModelArrayIO** Python package) to convert between MRtrix `.mif` files and the HDF5 file format (`.h5`) that ModelArray uses. This guide assumes you followed the [installation guide](../README.rst#installation), installed **ModelArrayIO**, and installed **MRtrix** for fixel-wise workflows.
 
 ## Prepare data
 
