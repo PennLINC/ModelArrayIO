@@ -96,10 +96,7 @@ def add_output_tiledb_arg(parser, default_name='arraydb.tdb'):
     parser.add_argument(
         '--output-tiledb',
         '--output_tiledb',
-        help=(
-            'Base URI (directory) where TileDB arrays will be created. '
-            'If relative, it is joined to --relative-root.'
-        ),
+        help='Directory where TileDB arrays will be created.',
         default=default_name,
     )
     return parser

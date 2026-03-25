@@ -56,18 +56,15 @@ Notes:
     * File names in columns `source_file` and `source_mask_file` in CSV file v.s. the actual file names on disk;
     * Scalar name e.g., "FA" in column `scalar_name` in CSV file v.s. what you will specify when using functions in `ModelArray`;
 
-For this case, when running `convoxel`, argument `--relative-root` should be `/home/username/myProject/data`
-
 ## Run `convoxel` and `volumestats_write`
 ### Convert NIfTI files to an HDF5 (.h5) file
 Using above described scenario as an example, for FA dataset:
 ``` console
 # first, activate conda environment where ModelArrayIO is installed: `conda activate <env_name>`
 convoxel \
-    --group-mask-file group_mask.nii.gz \
-    --cohort-file cohort_FA.csv \
-    --relative-root /home/username/myProject/data \
-    --output-hdf5 FA.h5
+    --group-mask-file /home/username/myProject/data/group_mask.nii.gz \
+    --cohort-file /home/username/myProject/data/cohort_FA.csv \
+    --output-hdf5 /home/username/myProject/data/FA.h5
 ```
 
 Now you should get the HDF5 file "FA.h5" in folder "/home/username/myProject/data". You may use [`ModelArray`](https://pennlinc.github.io/ModelArray/) to perform statistical analysis.
@@ -78,12 +75,11 @@ After running `ModelArray` and getting statistical results in FA.h5 file (say, t
 ``` console
 # first, activate conda environment where ModelArrayIO is installed: `conda activate <env_name>`
 volumestats_write \
-    --group-mask-file group_mask.nii.gz \
-    --cohort-file cohort_FA.csv \
-    --relative-root /home/username/myProject/data \
+    --group-mask-file /home/username/myProject/data/group_mask.nii.gz \
+    --cohort-file /home/username/myProject/data/cohort_FA.csv \
     --analysis-name mylm \
-    --input-hdf5 FA.h5 \
-    --output-dir FA_stats \
+    --input-hdf5 /home/username/myProject/data/FA.h5 \
+    --output-dir /home/username/myProject/data/FA_stats \
     --output-ext .nii.gz    # or ".nii"
 ```
 

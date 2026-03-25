@@ -77,13 +77,12 @@ After running `ModelArray` and getting statistical results in FD.h5 file (say, t
 ``` console
 # first, activate conda environment with `conda activate <env_name>`
 fixelstats_write \
-    --index-file FD/index.mif \
-    --directions-file FD/directions.mif \
-    --cohort-file cohort_FD.csv \
-    --relative-root /home/username/myProject/data \
+    --index-file /home/username/myProject/data/FD/index.mif \
+    --directions-file /home/username/myProject/data/FD/directions.mif \
+    --cohort-file /home/username/myProject/data/cohort_FD.csv \
     --analysis-name mylm \
-    --input-hdf5 FD.h5 \
-    --output-dir FD_stats
+    --input-hdf5 /home/username/myProject/data/FD.h5 \
+    --output-dir /home/username/myProject/data/FD_stats
 ```
 Now you can view the results in folder "FD_stats" in `mrview`.
 

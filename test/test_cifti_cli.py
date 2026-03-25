@@ -59,11 +59,9 @@ def test_concifti_cli_creates_expected_hdf5(tmp_path, monkeypatch):
         [
             'concifti',
             '--cohort-file',
-            str(cohort_csv.name),
-            '--relative-root',
-            str(tmp_path),
+            str(cohort_csv),
             '--output-hdf5',
-            str(out_h5.name),
+            str(out_h5),
             '--backend',
             'hdf5',
             '--dtype',
