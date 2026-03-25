@@ -8,9 +8,13 @@ ModelArrayIO
 
 Documentation for installation and usage: `ModelArrayIO on GitHub <https://github.com/PennLINC/ModelArrayIO#installation>`_ (this README). For conda, HDF5 libraries, and installing the ModelArray R package, see the ModelArray vignette `Installation <https://pennlinc.github.io/ModelArray/articles/installations.html>`_.
 
+.. readme-overview-figure-placeholder
+
 .. image:: docs/_static/overview_structure.png
    :align: center
    :alt: Overview
+
+.. readme-overview-figure-end
 
 ModelArrayIO provides three converter areas, each with import and export commands:
 
