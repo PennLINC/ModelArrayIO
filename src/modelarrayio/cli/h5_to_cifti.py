@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os
-import os.path as op
 
 import h5py
 import nibabel as nb
@@ -56,12 +55,12 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
         results_names = [f'component{n + 1:03d}' for n in range(results_matrix.shape[0])]
 
     # Make output directory if it does not exist
-    if not op.isdir(cifti_output_dir):
+    if not os.path.isdir(cifti_output_dir):
         os.mkdir(cifti_output_dir)
 
     for result_col, result_name in enumerate(results_names):
         valid_result_name = result_name.replace(' ', '_').replace('/', '_')
-        out_cifti = op.join(
+        out_cifti = os.path.join(
             cifti_output_dir, analysis_name + '_' + valid_result_name + '.dscalar.nii'
         )
         temp_cifti2 = nb.Cifti2Image(
@@ -76,7 +75,7 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
             'p.value' in valid_result_name
         ):  # the result name contains "p.value" (from R package broom)
             valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
-            out_cifti_1mpvalue = op.join(
+            out_cifti_1mpvalue = os.path.join(
                 cifti_output_dir, analysis_name + '_' + valid_result_name_1mpvalue + '.dscalar.nii'
             )
             output_mifvalues_1mpvalue = 1 - results_matrix[result_col, :]  # 1 minus
@@ -93,9 +92,9 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    out_cifti_dir = op.abspath(args.output_dir)  # absolute path for output dir
+    out_cifti_dir = os.path.abspath(args.output_dir)  # absolute path for output dir
 
-    if op.exists(out_cifti_dir):
+    if os.path.exists(out_cifti_dir):
         print('WARNING: Output directory exists')
     os.makedirs(out_cifti_dir, exist_ok=True)
 
@@ -105,10 +104,10 @@ def main():
             'No example cifti file provided, using the first cifti file from the cohort file'
         )
         cohort_df = pd.read_csv(args.cohort_file)
-        example_cifti = op.join(args.relative_root, cohort_df['source_file'][0])
+        example_cifti = os.path.join(args.relative_root, cohort_df['source_file'][0])
     else:
         example_cifti = args.example_cifti
-        if not op.exists(example_cifti):
+        if not os.path.exists(example_cifti):
             raise ValueError(f'Example cifti file {example_cifti} does not exist')
 
     h5_input = args.input_hdf5

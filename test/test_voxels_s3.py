@@ -8,14 +8,14 @@ Skip in offline CI by excluding the 's3' mark:
 """
 
 import csv
-import os
 import shutil
-import subprocess
 import sys
 
 import h5py
 import numpy as np
 import pytest
+
+from modelarrayio.cli.voxels_to_h5 import main as convoxel_main
 
 # Four confirmed ABIDE OHSU subjects used as test data
 OHSU_SUBJECTS = [
@@ -57,7 +57,7 @@ def group_mask_path(tmp_path_factory):
 
 
 @pytest.mark.s3
-def test_convoxel_s3_parallel(tmp_path, group_mask_path):
+def test_convoxel_s3_parallel(tmp_path, group_mask_path, monkeypatch):
     """convoxel downloads s3:// paths in parallel and produces a valid HDF5."""
     pytest.importorskip('boto3')
 
@@ -79,34 +79,34 @@ def test_convoxel_s3_parallel(tmp_path, group_mask_path):
             )
 
     out_h5 = tmp_path / 'out.h5'
-    cmd = [
-        sys.executable,
-        '-m',
-        'modelarrayio.cli.voxels_to_h5',
-        '--group-mask-file',
-        'group_mask.nii.gz',
-        '--cohort-file',
-        str(cohort_csv),
-        '--relative-root',
-        str(tmp_path),
-        '--output-hdf5',
-        str(out_h5.name),
-        '--backend',
-        'hdf5',
-        '--dtype',
-        'float32',
-        '--compression',
-        'gzip',
-        '--compression-level',
-        '1',
-        '--s3-workers',
-        '4',
-    ]
-    env = {**os.environ, 'MODELARRAYIO_S3_ANON': '1'}
-    proc = subprocess.run(
-        cmd, cwd=str(tmp_path), capture_output=True, text=True, env=env, check=False
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('MODELARRAYIO_S3_ANON', '1')
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        [
+            'convoxel',
+            '--group-mask-file',
+            'group_mask.nii.gz',
+            '--cohort-file',
+            str(cohort_csv),
+            '--relative-root',
+            str(tmp_path),
+            '--output-hdf5',
+            str(out_h5.name),
+            '--backend',
+            'hdf5',
+            '--dtype',
+            'float32',
+            '--compression',
+            'gzip',
+            '--compression-level',
+            '1',
+            '--s3-workers',
+            '4',
+        ],
     )
-    assert proc.returncode == 0, f'convoxel failed:\n{proc.stdout}\n{proc.stderr}'
+    assert convoxel_main() == 0
     assert out_h5.exists()
 
     with h5py.File(out_h5, 'r') as h5:
@@ -127,7 +127,7 @@ def test_convoxel_s3_parallel(tmp_path, group_mask_path):
 
 
 @pytest.mark.s3
-def test_convoxel_s3_serial_matches_parallel(tmp_path, group_mask_path):
+def test_convoxel_s3_serial_matches_parallel(tmp_path, group_mask_path, monkeypatch):
     """Serial (s3-workers=1) and parallel (s3-workers=4) produce identical data."""
     pytest.importorskip('boto3')
 
@@ -146,10 +146,8 @@ def test_convoxel_s3_serial_matches_parallel(tmp_path, group_mask_path):
                 }
             )
 
-    base_cmd = [
-        sys.executable,
-        '-m',
-        'modelarrayio.cli.voxels_to_h5',
+    base_argv = [
+        'convoxel',
         '--group-mask-file',
         'group_mask.nii.gz',
         '--cohort-file',
@@ -164,17 +162,15 @@ def test_convoxel_s3_serial_matches_parallel(tmp_path, group_mask_path):
         'none',
     ]
 
-    env = {**os.environ, 'MODELARRAYIO_S3_ANON': '1'}
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('MODELARRAYIO_S3_ANON', '1')
     for workers, name in [('1', 'serial.h5'), ('4', 'parallel.h5')]:
-        proc = subprocess.run(
-            base_cmd + ['--output-hdf5', name, '--s3-workers', workers],
-            cwd=str(tmp_path),
-            capture_output=True,
-            text=True,
-            env=env,
-            check=False,
+        monkeypatch.setattr(
+            sys,
+            'argv',
+            base_argv + ['--output-hdf5', name, '--s3-workers', workers],
         )
-        assert proc.returncode == 0, f'convoxel failed (workers={workers}):\n{proc.stderr}'
+        assert convoxel_main() == 0, f'convoxel failed (workers={workers})'
 
     with (
         h5py.File(tmp_path / 'serial.h5', 'r') as s,

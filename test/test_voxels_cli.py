@@ -1,12 +1,12 @@
 import csv
-import os
 import os.path as op
-import subprocess
 import sys
 
 import h5py
 import nibabel as nb
 import numpy as np
+
+from modelarrayio.cli.voxels_to_h5 import main as convoxel_main
 
 
 def _make_nifti(data, affine=None):
@@ -19,7 +19,7 @@ def _ijk_value(i, j, k):
     return i * 100.0 + j * 10.0 + k * 1.0
 
 
-def test_convoxel_cli_creates_expected_hdf5(tmp_path):
+def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
     # Small synthetic volume
     shape = (5, 6, 7)
     group_mask = np.zeros(shape, dtype=bool)
@@ -70,38 +70,36 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path):
                 }
             )
 
-    # Run CLI using module to avoid PATH issues
     out_h5 = tmp_path / 'out.h5'
-    cmd = [
-        sys.executable,
-        '-m',
-        'modelarrayio.cli.voxels_to_h5',
-        '--group-mask-file',
-        str(group_mask_file.name),
-        '--cohort-file',
-        str(cohort_csv.name),
-        '--relative-root',
-        str(tmp_path),
-        '--output-hdf5',
-        str(out_h5.name),
-        '--backend',
-        'hdf5',
-        '--dtype',
-        'float32',
-        '--compression',
-        'gzip',
-        '--compression-level',
-        '1',
-        '--chunk-voxels',
-        '0',
-        '--target-chunk-mb',
-        '1.0',
-    ]
-    env = os.environ.copy()
-    proc = subprocess.run(
-        cmd, cwd=str(tmp_path), env=env, capture_output=True, text=True, check=False
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        [
+            'convoxel',
+            '--group-mask-file',
+            str(group_mask_file.name),
+            '--cohort-file',
+            str(cohort_csv.name),
+            '--relative-root',
+            str(tmp_path),
+            '--output-hdf5',
+            str(out_h5.name),
+            '--backend',
+            'hdf5',
+            '--dtype',
+            'float32',
+            '--compression',
+            'gzip',
+            '--compression-level',
+            '1',
+            '--chunk-voxels',
+            '0',
+            '--target-chunk-mb',
+            '1.0',
+        ],
     )
-    assert proc.returncode == 0, f'convoxel failed: {proc.stdout}\n{proc.stderr}'
+    assert convoxel_main() == 0
     assert op.exists(out_h5)
 
     # Validate HDF5 contents

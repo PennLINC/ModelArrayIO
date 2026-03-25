@@ -1,6 +1,5 @@
 import argparse
 import os
-import os.path as op
 import shutil
 
 import h5py
@@ -57,12 +56,12 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
         results_names = [f'component{n + 1:03d}' for n in range(results_matrix.shape[0])]
 
     # Make output directory if it does not exist
-    if not op.isdir(fixel_output_dir):
+    if not os.path.isdir(fixel_output_dir):
         os.mkdir(fixel_output_dir)
 
     for result_col, result_name in enumerate(results_names):
         valid_result_name = result_name.replace(' ', '_').replace('/', '_')
-        out_mif = op.join(fixel_output_dir, analysis_name + '_' + valid_result_name + '.mif')
+        out_mif = os.path.join(fixel_output_dir, analysis_name + '_' + valid_result_name + '.mif')
         temp_nifti2 = nb.Nifti2Image(
             results_matrix[result_col, :].reshape(-1, 1, 1),
             nifti2_img.affine,
@@ -75,7 +74,7 @@ def h5_to_mifs(example_mif, h5_file, analysis_name, fixel_output_dir):
             'p.value' in valid_result_name
         ):  # the result name contains "p.value" (from R package broom)
             valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
-            out_mif_1mpvalue = op.join(
+            out_mif_1mpvalue = os.path.join(
                 fixel_output_dir, analysis_name + '_' + valid_result_name_1mpvalue + '.mif'
             )
             output_mifvalues_1mpvalue = 1 - results_matrix[result_col, :]  # 1 minus
@@ -91,26 +90,26 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    out_fixel_dir = op.join(args.relative_root, args.output_dir)  # absolute path for output dir
+    out_fixel_dir = os.path.join(args.relative_root, args.output_dir)  # absolute path for output dir
 
-    if op.exists(out_fixel_dir):
+    if os.path.exists(out_fixel_dir):
         print('WARNING: Output directory exists')
     os.makedirs(out_fixel_dir, exist_ok=True)
 
     # Copy in the index and directions
     shutil.copyfile(
-        op.join(args.relative_root, args.directions_file),
-        op.join(out_fixel_dir, op.split(args.directions_file)[1]),
+        os.path.join(args.relative_root, args.directions_file),
+        os.path.join(out_fixel_dir, os.path.split(args.directions_file)[1]),
     )
     shutil.copyfile(
-        op.join(args.relative_root, args.index_file),
-        op.join(out_fixel_dir, op.split(args.index_file)[1]),
+        os.path.join(args.relative_root, args.index_file),
+        os.path.join(out_fixel_dir, os.path.split(args.index_file)[1]),
     )
 
     # Get an example mif file
-    cohort_df = pd.read_csv(op.join(args.relative_root, args.cohort_file))
-    example_mif = op.join(args.relative_root, cohort_df['source_file'][0])
-    h5_input = op.join(args.relative_root, args.input_hdf5)
+    cohort_df = pd.read_csv(os.path.join(args.relative_root, args.cohort_file))
+    example_mif = os.path.join(args.relative_root, cohort_df['source_file'][0])
+    h5_input = os.path.join(args.relative_root, args.input_hdf5)
     analysis_name = args.analysis_name
     h5_to_mifs(example_mif, h5_input, analysis_name, out_fixel_dir)
 

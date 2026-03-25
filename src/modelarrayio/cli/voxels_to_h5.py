@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os
-import os.path as op
 
 import h5py
 import nibabel as nb
@@ -71,10 +70,10 @@ def write_storage(
         Target chunk size in MiB when auto-computing chunk_voxels. Default 2.0.
     """
     # gather cohort data
-    cohort_df = pd.read_csv(op.join(relative_root, cohort_file))
+    cohort_df = pd.read_csv(os.path.join(relative_root, cohort_file))
 
     # Load the group mask image to define the rows of the matrix
-    group_mask_img = nb.load(op.join(relative_root, group_mask_file))
+    group_mask_img = nb.load(os.path.join(relative_root, group_mask_file))
     # get_fdata(): get matrix data in float format
     group_mask_matrix = group_mask_img.get_fdata() > 0
     # np.nonzero() returns the coords of nonzero elements;
@@ -100,9 +99,9 @@ def write_storage(
 
     # Write the output:
     if backend == 'hdf5':
-        output_file = op.join(relative_root, output_h5)
-        output_dir = op.dirname(output_file)
-        if not op.exists(output_dir):
+        output_file = os.path.join(relative_root, output_h5)
+        output_dir = os.path.dirname(output_file)
+        if not os.path.exists(output_dir):
             os.makedirs(output_dir, exist_ok=True)
         f = h5py.File(output_file, 'w')
 
@@ -128,10 +127,10 @@ def write_storage(
 
             h5_storage.write_rows_in_column_stripes(dset, scalars[scalar_name])
         f.close()
-        return int(not op.exists(output_file))
+        return int(not os.path.exists(output_file))
     else:
         # TileDB backend
-        base_uri = op.join(relative_root, output_tdb)
+        base_uri = os.path.join(relative_root, output_tdb)
         os.makedirs(base_uri, exist_ok=True)
 
         # Store voxel coordinates as a small TileDB array (optional):
@@ -157,7 +156,7 @@ def write_storage(
                 sources_list=sources_lists[scalar_name],
             )
             # Stripe-write
-            uri = op.join(base_uri, dataset_path)
+            uri = os.path.join(base_uri, dataset_path)
             tiledb_storage.write_rows_in_column_stripes(uri, scalars[scalar_name])
         return 0
 

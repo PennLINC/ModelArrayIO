@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os
-import os.path as op
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import h5py
@@ -100,7 +99,7 @@ def write_storage(
     status : :obj:`int`
         Status of the operation. 0 if successful, 1 if failed.
     """
-    cohort_path = op.join(relative_root, cohort_file)
+    cohort_path = os.path.join(relative_root, cohort_file)
     cohort_df = pd.read_csv(cohort_path)
     cohort_long = _cohort_to_long_dataframe(cohort_df, scalar_columns=scalar_columns)
     if cohort_long.empty:
@@ -112,7 +111,7 @@ def write_storage(
     if backend == 'hdf5':
         scalars, last_brain_names = _load_cohort_cifti(cohort_long, relative_root, s3_workers)
 
-        output_file = op.join(relative_root, output_h5)
+        output_file = os.path.join(relative_root, output_h5)
         f = h5py.File(output_file, 'w')
 
         greyordinate_table, structure_names = brain_names_to_dataframe(last_brain_names)
@@ -141,23 +140,23 @@ def write_storage(
 
             h5_storage.write_rows_in_column_stripes(dset, scalars[scalar_name])
         f.close()
-        return int(not op.exists(output_file))
+        return int(not os.path.exists(output_file))
     else:
-        base_uri = op.join(relative_root, output_tdb)
+        base_uri = os.path.join(relative_root, output_tdb)
         os.makedirs(base_uri, exist_ok=True)
         if not scalar_sources:
             return 0
 
         # Establish a reference brain axis once to ensure consistent ordering across workers.
         _first_scalar, first_sources = next(iter(scalar_sources.items()))
-        first_path = op.join(relative_root, first_sources[0])
+        first_path = os.path.join(relative_root, first_sources[0])
         _, reference_brain_names = extract_cifti_scalar_data(first_path)
 
         def _process_scalar_job(scalar_name, source_files):
             dataset_path = f'scalars/{scalar_name}/values'
             rows = []
             for source_file in source_files:
-                scalar_file = op.join(relative_root, source_file)
+                scalar_file = os.path.join(relative_root, source_file)
                 cifti_data, _ = extract_cifti_scalar_data(
                     scalar_file, reference_brain_names=reference_brain_names
                 )
@@ -182,7 +181,7 @@ def write_storage(
             )
             # write column names array for ModelArray compatibility
             tiledb_storage.write_column_names(base_uri, scalar_name, source_files)
-            uri = op.join(base_uri, dataset_path)
+            uri = os.path.join(base_uri, dataset_path)
             tiledb_storage.write_rows_in_column_stripes(uri, rows)
             return scalar_name
 

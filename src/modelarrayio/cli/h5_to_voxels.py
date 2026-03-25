@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os
-import os.path as op
 
 import h5py
 import nibabel as nb
@@ -85,14 +84,14 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
         results_names = [f'component{n + 1:03d}' for n in range(results_matrix.shape[0])]
 
     # # Make output directory if it does not exist  # has been done in h5_to_volumes_wrapper()
-    # if op.isdir(volume_output_dir) == False:
+    # if os.path.isdir(volume_output_dir) == False:
     #     os.mkdir(volume_output_dir)
 
     # for loop: save stat metric results one by one:
     for result_col, result_name in enumerate(results_names):
         valid_result_name = result_name.replace(' ', '_').replace('/', '_')
 
-        out_file = op.join(
+        out_file = os.path.join(
             volume_output_dir, analysis_name + '_' + valid_result_name + output_extension
         )
         output = np.zeros(group_mask_matrix.shape)
@@ -108,7 +107,7 @@ def h5_to_volumes(h5_file, analysis_name, group_mask_file, output_extension, vol
         # the result name contains "p.value" (from R package broom)
         if 'p.value' in valid_result_name:
             valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
-            out_file_1mpvalue = op.join(
+            out_file_1mpvalue = os.path.join(
                 volume_output_dir,
                 analysis_name + '_' + valid_result_name_1mpvalue + output_extension,
             )
@@ -128,19 +127,19 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    volume_output_dir = op.join(
+    volume_output_dir = os.path.join(
         args.relative_root, args.output_dir
     )  # absolute path for output dir
 
-    if op.exists(volume_output_dir):
+    if os.path.exists(volume_output_dir):
         print('WARNING: Output directory exists')
     os.makedirs(volume_output_dir, exist_ok=True)
 
     # any files to copy?
 
     # other arguments:
-    group_mask_file = op.join(args.relative_root, args.group_mask_file)
-    h5_input = op.join(args.relative_root, args.input_hdf5)
+    group_mask_file = os.path.join(args.relative_root, args.group_mask_file)
+    h5_input = os.path.join(args.relative_root, args.input_hdf5)
     analysis_name = args.analysis_name
     output_extension = args.output_ext
 
