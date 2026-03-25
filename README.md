@@ -1,8 +1,8 @@
-# ConFixel: Moved to ModelArrayIO
+# ModelArrayIO
 
 ConFixel has moved beyond fixels and handles a lot of other modalities.
 It also got optimized!
-[Going forward, ConFixel is now ModelArrayIO.](https://pennlinc.github.io/ModelArrayIO/). 
+[Going forward, ConFixel is now ModelArrayIO.](https://pennlinc.github.io/ModelArrayIO/).
 This repository will be left here because the URL is in the publication.
 
 
