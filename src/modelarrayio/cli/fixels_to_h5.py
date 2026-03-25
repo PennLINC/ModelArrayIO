@@ -301,10 +301,10 @@ def main():
     """Main function to write fixel data to an HDF5 or TileDB file."""
     parser = get_parser()
     args = parser.parse_args()
-
+    kwargs = vars(args)
+    log_level = kwargs.pop('log_level')
     logging.basicConfig(
-        level=getattr(logging, str(args.log_level).upper(), logging.INFO),
+        level=getattr(logging, str(log_level).upper(), logging.INFO),
         format='[%(levelname)s] %(name)s: %(message)s',
     )
-    status = write_storage(**vars(args))
-    return status
+    return write_storage(**kwargs)
