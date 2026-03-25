@@ -28,7 +28,7 @@ def resolve_compression(compression, compression_level, shuffle):
     if comp == 'gzip':
         try:
             gzip_level = int(compression_level)
-        except Exception:
+        except (TypeError, ValueError):
             gzip_level = 4
         gzip_level = max(0, min(9, gzip_level))
     return comp, gzip_level, use_shuffle
@@ -42,7 +42,8 @@ def compute_chunk_shape_full_subjects(
     num_items = int(num_items)
     if num_subjects <= 0 or num_items <= 0:
         raise ValueError(
-            f'Cannot compute chunk shape with zero-length dimension: num_subjects={num_subjects}, num_items={num_items}'
+            'Cannot compute chunk shape with zero-length dimension: '
+            f'num_subjects={num_subjects}, num_items={num_items}'
         )
 
     subjects_per_chunk = num_subjects
@@ -178,8 +179,7 @@ def write_column_names(h5_file: h5py.File, scalar: str, sources: pd.Series | lis
 
 
 def write_rows_in_column_stripes(dset, rows):
-    """
-    Fill a 2D HDF5 dataset by buffering column-aligned stripes to minimize
+    """Fill a 2D HDF5 dataset by buffering column-aligned stripes to minimize
     chunk recompression, using about one chunk's worth of memory.
 
     Parameters

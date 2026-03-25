@@ -29,7 +29,7 @@ def _build_filter_list(compression: str | None, compression_level: int | None, s
         level = None
         try:
             level = int(compression_level) if compression_level is not None else None
-        except Exception:
+        except (TypeError, ValueError):
             level = None
         if comp == 'zstd':
             filters.append(tiledb.ZstdFilter(level=level if level is not None else 5))
@@ -48,7 +48,8 @@ def compute_tile_shape_full_subjects(
     num_items = int(num_items)
     if num_subjects <= 0 or num_items <= 0:
         raise ValueError(
-            f'Cannot compute tile shape with zero-length dimension: num_subjects={num_subjects}, num_items={num_items}'
+            'Cannot compute tile shape with zero-length dimension: '
+            f'num_subjects={num_subjects}, num_items={num_items}'
         )
 
     subjects_per_tile = num_subjects
@@ -129,7 +130,7 @@ def create_scalar_matrix_array(
         if sources_list is not None:
             try:
                 A.meta['column_names'] = json.dumps(list(sources_list))
-            except Exception:
+            except (TypeError, ValueError, tiledb.TileDBError):
                 # Fallback without metadata if serialization fails
                 logger.warning('Failed to write column_names metadata for %s', uri)
     logger.info('Finished writing array %s', uri)
@@ -182,7 +183,7 @@ def create_empty_scalar_matrix_array(
         try:
             with tiledb.open(uri, 'w') as A:
                 A.meta['column_names'] = json.dumps(list(map(str, sources_list)))
-        except Exception:
+        except (TypeError, ValueError, tiledb.TileDBError):
             logger.warning('Failed to write column_names metadata for %s', uri)
     return uri
 
@@ -258,5 +259,5 @@ def write_column_names(base_uri: str, scalar: str, sources: Sequence[str]):
         try:
             with tiledb.Group(group_uri, 'w') as G:
                 G.meta['column_names'] = json.dumps(sources)
-        except Exception:
+        except (TypeError, ValueError, tiledb.TileDBError):
             logger.warning('Failed to write column_names metadata for group %s', group_uri)
