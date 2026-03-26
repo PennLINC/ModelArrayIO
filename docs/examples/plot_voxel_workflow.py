@@ -107,7 +107,7 @@ results back to NIfTI.  The voxel workflow is very similar to the fixel workflow
 #     modelarrayio nifti-to-h5 \
 #         --group-mask-file /home/username/myProject/data/group_mask.nii.gz \
 #         --cohort-file     /home/username/myProject/data/cohort_FA.csv \
-#         --output-hdf5     /home/username/myProject/data/FA.h5
+#         --output          /home/username/myProject/data/FA.h5
 #
 # This produces ``FA.h5`` in ``/home/username/myProject/data``.  You can then use
 # `ModelArray <https://pennlinc.github.io/ModelArray/>`_ to run statistical analyses on it.

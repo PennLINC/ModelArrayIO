@@ -102,7 +102,7 @@ ModelArrayIO and MRtrix are already installed.
 #         --index-file      /home/username/myProject/data/FD/index.mif \
 #         --directions-file /home/username/myProject/data/FD/directions.mif \
 #         --cohort-file     /home/username/myProject/data/cohort_FD.csv \
-#         --output-hdf5     /home/username/myProject/data/FD.h5
+#         --output          /home/username/myProject/data/FD.h5
 #
 # This produces ``FD.h5`` in ``/home/username/myProject/data``.  You can then use
 # `ModelArray <https://pennlinc.github.io/ModelArray/>`_ to run statistical analyses on it.

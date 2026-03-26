@@ -79,7 +79,7 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
                 str(group_mask_file),
                 '--cohort-file',
                 str(cohort_csv),
-                '--output-hdf5',
+                '--output',
                 str(out_h5),
                 '--backend',
                 'hdf5',
