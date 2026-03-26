@@ -1,4 +1,5 @@
 """Convert HDF5 file to MIF data."""
+
 import argparse
 import logging
 import os

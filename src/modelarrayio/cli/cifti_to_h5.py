@@ -1,4 +1,5 @@
 """Convert CIFTI2 dscalar data to an HDF5 file."""
+
 import argparse
 import logging
 import os

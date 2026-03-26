@@ -1,4 +1,5 @@
 """Convert MIF data to an HDF5 file."""
+
 import argparse
 import logging
 from collections import defaultdict
