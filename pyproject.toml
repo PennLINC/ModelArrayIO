@@ -46,6 +46,7 @@ doc = [
   "sphinx_rtd_theme",
   "sphinxcontrib-apidoc",
   "sphinxcontrib-bibtex",
+  "sphinx-gallery",
 ]
 test = [
   # Lower bounds matter for tox `uv_resolution = lowest-direct` (py311-min CI):
