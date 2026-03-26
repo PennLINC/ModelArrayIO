@@ -13,7 +13,7 @@ import nibabel as nb
 import pandas as pd
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import _is_file, add_log_level_arg
+from modelarrayio.cli.parser_utils import _is_file, add_from_modelarray_args, add_log_level_arg
 from modelarrayio.utils.fixels import mif_to_nifti2, nifti2_to_mif
 
 logger = logging.getLogger(__name__)
@@ -143,29 +143,9 @@ def _parse_h5_to_mif():
         required=True,
         type=IsFile,
     )
-    parser.add_argument(
-        '--analysis-name',
-        '--analysis_name',
-        help='Name for the statistical analysis results to be saved.',
-        required=True,
-    )
-    parser.add_argument(
-        '--input-hdf5',
-        '--input_hdf5',
-        help='Name of HDF5 (.h5) file where results outputs are saved.',
-        type=IsFile,
-        dest='in_file',
-        required=True,
-    )
-    parser.add_argument(
-        '--output-dir',
-        '--output_dir',
-        help=(
-            'Fixel directory where outputs will be saved. '
-            'If the directory does not exist, it will be automatically created.'
-        ),
-        required=True,
-    )
+
+    add_from_modelarray_args(parser)
+
     example_mif_group = parser.add_mutually_exclusive_group(required=True)
     example_mif_group.add_argument(
         '--cohort-file',
