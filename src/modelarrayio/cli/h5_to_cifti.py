@@ -1,18 +1,23 @@
+"""Convert HDF5 file to CIFTI2 dscalar data."""
+
 import argparse
 import logging
 import os
+from functools import partial
 
 import h5py
 import nibabel as nb
 import pandas as pd
 
+from modelarrayio.cli.parser_utils import _is_file
+
 logger = logging.getLogger(__name__)
 
 
-def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
+def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
     """Write the contents of an hdf5 file to a fixels directory.
 
-    The ``h5_file`` parameter should point to an HDF5 file that contains at least two
+    The ``in_file`` parameter should point to an HDF5 file that contains at least two
     datasets. There must be one called ``results/results_matrix``, that contains a
     matrix of fixel results. Each column contains a single result and each row is a
     fixel. This matrix should be of type float. The second required dataset must be
@@ -28,7 +33,7 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
     ==========
     example_cifti: pathlike
         abspath to a scalar cifti file. Its header is used as a template
-    h5_file: str
+    in_file: str
         abspath to an h5 file that contains statistical results and their metadata.
     analysis_name: str
         the name for the analysis results to be saved
@@ -41,12 +46,9 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
     """
     # Get a template nifti image.
     cifti = nb.load(example_cifti)
-    h5_data = h5py.File(h5_file, 'r')
+    h5_data = h5py.File(in_file, 'r')
     results_matrix = h5_data['results/' + analysis_name + '/results_matrix']
     names_data = results_matrix.attrs['colnames']  # NOTE: results_matrix: need to be transposed...
-    # print(results_matrix.shape)
-
-    # print(h5_data['results/' + analysis_name + '/results_matrix'].attrs['column_names'])
 
     try:
         results_names = names_data.tolist()
@@ -55,13 +57,14 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
         results_names = [f'component{n + 1:03d}' for n in range(results_matrix.shape[0])]
 
     # Make output directory if it does not exist
-    if not os.path.isdir(cifti_output_dir):
-        os.mkdir(cifti_output_dir)
+    if not os.path.isdir(output_dir):
+        os.mkdir(output_dir)
 
     for result_col, result_name in enumerate(results_names):
         valid_result_name = result_name.replace(' ', '_').replace('/', '_')
         out_cifti = os.path.join(
-            cifti_output_dir, analysis_name + '_' + valid_result_name + '.dscalar.nii'
+            output_dir,
+            f'{analysis_name}_{valid_result_name}.dscalar.nii',
         )
         temp_cifti2 = nb.Cifti2Image(
             results_matrix[result_col, :].reshape(1, -1),
@@ -71,12 +74,12 @@ def _h5_to_ciftis(example_cifti, h5_file, analysis_name, cifti_output_dir):
         temp_cifti2.to_filename(out_cifti)
 
         # if this result is p.value, also write out 1-p.value (1m.p.value)
-        if (
-            'p.value' in valid_result_name
-        ):  # the result name contains "p.value" (from R package broom)
+        # the result name contains "p.value" (from R package broom)
+        if 'p.value' in valid_result_name:
             valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
             out_cifti_1mpvalue = os.path.join(
-                cifti_output_dir, analysis_name + '_' + valid_result_name_1mpvalue + '.dscalar.nii'
+                output_dir,
+                f'{analysis_name}_{valid_result_name_1mpvalue}.dscalar.nii',
             )
             output_mifvalues_1mpvalue = 1 - results_matrix[result_col, :]  # 1 minus
             temp_nifti2_1mpvalue = nb.Cifti2Image(
@@ -92,47 +95,34 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    out_cifti_dir = os.path.abspath(args.output_dir)  # absolute path for output dir
-
-    if os.path.exists(out_cifti_dir):
+    if os.path.exists(args.output_dir):
         print('WARNING: Output directory exists')
-    os.makedirs(out_cifti_dir, exist_ok=True)
+    os.makedirs(args.output_dir, exist_ok=True)
 
     # Get an example cifti
-    if args.example_cifti is None:
+    example_cifti = args.example_cifti
+    if example_cifti is None:
         logger.warning(
             'No example cifti file provided, using the first cifti file from the cohort file'
         )
         cohort_df = pd.read_csv(args.cohort_file)
-        example_cifti = os.path.join(args.relative_root, cohort_df['source_file'][0])
-    else:
-        example_cifti = args.example_cifti
-        if not os.path.exists(example_cifti):
-            raise ValueError(f'Example cifti file {example_cifti} does not exist')
+        example_cifti = cohort_df['source_file'][0]
 
-    h5_input = args.input_hdf5
-    analysis_name = args.analysis_name
-    _h5_to_ciftis(example_cifti, h5_input, analysis_name, out_cifti_dir)
+    h5_to_cifti(
+        example_cifti=example_cifti,
+        in_file=args.in_file,
+        analysis_name=args.analysis_name,
+        output_dir=args.output_dir,
+    )
 
 
 def get_parser():
     parser = argparse.ArgumentParser(
-        description='Create a directory with cifti results from an hdf5 file'
+        description='Create a directory with cifti results from an hdf5 file',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument(
-        '--cohort-file',
-        '--cohort_file',
-        help='Path to a csv with demographic info and paths to data.',
-    )
-    parser.add_argument(
-        '--relative-root',
-        '--relative_root',
-        help=(
-            'Root to which all paths are relative, i.e. defining the (absolute) path to root '
-            'directory of index_file, directions_file, cohort_file, input_hdf5, and output_dir.'
-        ),
-        type=os.path.abspath,
-    )
+    IsFile = partial(_is_file, parser=parser)
+
     parser.add_argument(
         '--analysis-name',
         '--analysis_name',
@@ -142,19 +132,37 @@ def get_parser():
         '--input-hdf5',
         '--input_hdf5',
         help='Name of HDF5 (.h5) file where results outputs are saved.',
+        type=IsFile,
+        dest='in_file',
     )
     parser.add_argument(
         '--output-dir',
         '--output_dir',
         help=(
-            'Fixel directory where outputs will be saved. '
+            'Directory where outputs will be saved. '
             'If the directory does not exist, it will be automatically created.'
         ),
     )
-    parser.add_argument(
+
+    example_cifti_group = parser.add_mutually_exclusive_group()
+    example_cifti_group.add_argument(
+        '--cohort-file',
+        '--cohort_file',
+        help=(
+            'Path to a csv with demographic info and paths to data. '
+            'Used to select an example CIFTI file if no example CIFTI file is provided.'
+        ),
+        type=IsFile,
+        required=False,
+        default=None,
+    )
+    example_cifti_group.add_argument(
         '--example-cifti',
         '--example_cifti',
         help='Path to an example cifti file.',
         required=False,
+        type=IsFile,
+        default=None,
     )
+
     return parser

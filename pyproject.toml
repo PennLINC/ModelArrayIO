@@ -46,6 +46,7 @@ doc = [
   "sphinx_rtd_theme",
   "sphinxcontrib-apidoc",
   "sphinxcontrib-bibtex",
+  "sphinx-gallery",
 ]
 test = [
   # Lower bounds matter for tox `uv_resolution = lowest-direct` (py311-min CI):
@@ -66,11 +67,11 @@ Repository = "https://github.com/PennLINC/ModelArrayIO"
 Documentation = "https://modelarrayio.readthedocs.io"
 
 [project.scripts]
-confixel = "modelarrayio.cli.fixels_to_h5:main"
-convoxel = "modelarrayio.cli.voxels_to_h5:main"
+confixel = "modelarrayio.cli.mif_to_h5:main"
+convoxel = "modelarrayio.cli.nifti_to_h5:main"
 concifti = "modelarrayio.cli.cifti_to_h5:main"
-fixelstats_write = "modelarrayio.cli.h5_to_fixels:main"
-volumestats_write = "modelarrayio.cli.h5_to_voxels:main"
+fixelstats_write = "modelarrayio.cli.h5_to_mif:main"
+volumestats_write = "modelarrayio.cli.h5_to_nifti:main"
 ciftistats_write = "modelarrayio.cli.h5_to_cifti:main"
 
 #

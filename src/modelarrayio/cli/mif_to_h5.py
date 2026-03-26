@@ -1,24 +1,29 @@
+"""Convert MIF data to an HDF5 file."""
+
 import argparse
 import logging
-import os
 from collections import defaultdict
+from functools import partial
+from pathlib import Path
 
 import h5py
 import pandas as pd
 from tqdm import tqdm
 
+from modelarrayio.cli.parser_utils import _is_file
 from modelarrayio.storage import h5_storage, tiledb_storage
 from modelarrayio.utils.fixels import gather_fixels, mif_to_nifti2
 
+logger = logging.getLogger(__name__)
 
-def write_storage(
+
+def mif_to_h5(
     index_file,
     directions_file,
     cohort_file,
     backend='hdf5',
-    output_hdf5='fixeldb.h5',
-    output_tiledb='arraydb.tdb',
-    relative_root='/',
+    output_hdf5=Path('fixeldb.h5'),
+    output_tiledb=Path('arraydb.tdb'),
     storage_dtype='float32',
     compression='gzip',
     compression_level=4,
@@ -35,20 +40,18 @@ def write_storage(
 
     Parameters
     ----------
-    index_file : :obj:`str`
+    index_file : :obj:`pathlib.Path`
         Path to a Nifti2 index file
-    directions_file : :obj:`str`
+    directions_file : :obj:`pathlib.Path`
         Path to a Nifti2 directions file
-    cohort_file : :obj:`str`
+    cohort_file : :obj:`pathlib.Path`
         Path to a csv with demographic info and paths to data
     backend : :obj:`str`
         Backend to use for storage
-    output_hdf5 : :obj:`str`
+    output_hdf5 : :obj:`pathlib.Path`
         Path to a new .h5 file to be written
-    output_tiledb : :obj:`str`
+    output_tiledb : :obj:`pathlib.Path`
         Path to a new .tdb file to be written
-    relative_root : :obj:`str`
-        Root to which all paths are relative
     storage_dtype : :obj:`str`
         Floating type to store values
     compression : :obj:`str`
@@ -78,12 +81,10 @@ def write_storage(
         Status of the operation. 0 if successful, 1 if failed.
     """
     # gather fixel data
-    fixel_table, voxel_table = gather_fixels(
-        os.path.join(relative_root, index_file), os.path.join(relative_root, directions_file)
-    )
+    fixel_table, voxel_table = gather_fixels(index_file, directions_file)
 
     # gather cohort data
-    cohort_df = pd.read_csv(os.path.join(relative_root, cohort_file))
+    cohort_df = pd.read_csv(cohort_file)
 
     # upload each cohort's data
     scalars = defaultdict(list)
@@ -91,7 +92,7 @@ def write_storage(
     print('Extracting .mif data...')
     # ix: index of row (start from 0); row: one row of data
     for _ix, row in tqdm(cohort_df.iterrows(), total=cohort_df.shape[0]):
-        scalar_file = os.path.join(relative_root, row['source_file'])
+        scalar_file = row['source_file']
         _scalar_img, scalar_data = mif_to_nifti2(scalar_file)
         scalars[row['scalar_name']].append(scalar_data)  # append to specific scalar_name
         # append source mif filename to specific scalar_name
@@ -99,8 +100,7 @@ def write_storage(
 
     # Write the output
     if backend == 'hdf5':
-        output_file = os.path.join(relative_root, output_hdf5)
-        f = h5py.File(output_file, 'w')
+        f = h5py.File(output_hdf5, 'w')
 
         fixelsh5 = f.create_dataset(name='fixels', data=fixel_table.to_numpy().T)
         fixelsh5.attrs['column_names'] = list(fixel_table.columns)
@@ -127,17 +127,16 @@ def write_storage(
 
             h5_storage.write_rows_in_column_stripes(dset, scalars[scalar_name])
         f.close()
-        return int(not os.path.exists(output_file))
+        return int(not output_hdf5.exists())
 
     else:
-        base_uri = os.path.join(relative_root, output_tiledb)
-        os.makedirs(base_uri, exist_ok=True)
+        output_tiledb.mkdir(parents=True, exist_ok=True)
         for scalar_name in scalars.keys():
             num_subjects = len(scalars[scalar_name])
             num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
             dataset_path = f'scalars/{scalar_name}/values'
             tiledb_storage.create_empty_scalar_matrix_array(
-                base_uri,
+                output_tiledb,
                 dataset_path,
                 num_subjects,
                 num_items,
@@ -149,41 +148,39 @@ def write_storage(
                 target_tile_mb=tdb_target_tile_mb,
                 sources_list=sources_lists[scalar_name],
             )
-            uri = os.path.join(base_uri, dataset_path)
+            uri = output_tiledb / dataset_path
             tiledb_storage.write_rows_in_column_stripes(uri, scalars[scalar_name])
 
         return 0
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(description='Create a hdf5 file of fixel data')
+    parser = argparse.ArgumentParser(
+        description='Create a hdf5 file of fixel data',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    IsFile = partial(_is_file, parser=parser)
+
     parser.add_argument(
         '--index-file',
         '--index_file',
         help='Index File',
         required=True,
+        type=IsFile,
     )
     parser.add_argument(
         '--directions-file',
         '--directions_file',
         help='Directions File',
         required=True,
+        type=IsFile,
     )
     parser.add_argument(
         '--cohort-file',
         '--cohort_file',
         help='Path to a csv with demographic info and paths to data.',
         required=True,
-    )
-    parser.add_argument(
-        '--relative-root',
-        '--relative_root',
-        help=(
-            'Root to which all paths are relative, i.e. defining the (absolute) '
-            'path to root directory of index_file, directions_file, cohort_file, and output_hdf5.'
-        ),
-        type=os.path.abspath,
-        default='/inputs/',
+        type=IsFile,
     )
     parser.add_argument(
         '--output-hdf5',
@@ -307,4 +304,4 @@ def main():
         level=getattr(logging, str(log_level).upper(), logging.INFO),
         format='[%(levelname)s] %(name)s: %(message)s',
     )
-    return write_storage(**kwargs)
+    return mif_to_h5(**kwargs)

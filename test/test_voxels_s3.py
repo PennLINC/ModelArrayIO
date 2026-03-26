@@ -15,7 +15,7 @@ import h5py
 import numpy as np
 import pytest
 
-from modelarrayio.cli.voxels_to_h5 import main as convoxel_main
+from modelarrayio.cli.nifti_to_h5 import main as convoxel_main
 
 # Four confirmed ABIDE OHSU subjects used as test data
 OHSU_SUBJECTS = [
@@ -61,10 +61,9 @@ def test_convoxel_s3_parallel(tmp_path, group_mask_path, monkeypatch):
     """convoxel downloads s3:// paths in parallel and produces a valid HDF5."""
     pytest.importorskip('boto3')
 
-    # Copy the group mask into tmp_path so --relative-root resolves it
     shutil.copy(group_mask_path, tmp_path / 'group_mask.nii.gz')
 
-    # Cohort CSV with s3:// paths — relative_root is not prepended to s3:// URIs
+    # Cohort CSV with s3:// paths
     cohort_csv = tmp_path / 'cohort.csv'
     with cohort_csv.open('w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=['scalar_name', 'source_file', 'source_mask_file'])
@@ -90,10 +89,8 @@ def test_convoxel_s3_parallel(tmp_path, group_mask_path, monkeypatch):
             'group_mask.nii.gz',
             '--cohort-file',
             str(cohort_csv),
-            '--relative-root',
-            str(tmp_path),
             '--output-hdf5',
-            str(out_h5.name),
+            str(out_h5),
             '--backend',
             'hdf5',
             '--dtype',
@@ -149,11 +146,9 @@ def test_convoxel_s3_serial_matches_parallel(tmp_path, group_mask_path, monkeypa
     base_argv = [
         'convoxel',
         '--group-mask-file',
-        'group_mask.nii.gz',
+        str(group_mask_path),
         '--cohort-file',
         str(cohort_csv),
-        '--relative-root',
-        str(tmp_path),
         '--backend',
         'hdf5',
         '--dtype',

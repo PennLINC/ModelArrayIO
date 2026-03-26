@@ -6,7 +6,7 @@ import h5py
 import nibabel as nb
 import numpy as np
 
-from modelarrayio.cli.voxels_to_h5 import main as convoxel_main
+from modelarrayio.cli.nifti_to_h5 import main as convoxel_main
 
 
 def _make_nifti(data, affine=None):
@@ -78,13 +78,11 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
         [
             'convoxel',
             '--group-mask-file',
-            str(group_mask_file.name),
+            str(group_mask_file),
             '--cohort-file',
-            str(cohort_csv.name),
-            '--relative-root',
-            str(tmp_path),
+            str(cohort_csv),
             '--output-hdf5',
-            str(out_h5.name),
+            str(out_h5),
             '--backend',
             'hdf5',
             '--dtype',
@@ -93,8 +91,6 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
             'gzip',
             '--compression-level',
             '1',
-            '--chunk-voxels',
-            '0',
             '--target-chunk-mb',
             '1.0',
         ],

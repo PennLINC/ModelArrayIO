@@ -24,7 +24,17 @@ extensions = [
     'sphinxarg.ext',
     'sphinx_copybutton',
     'sphinx_rtd_theme',
+    'sphinx_gallery.gen_gallery',
 ]
+
+sphinx_gallery_conf = {
+    'examples_dirs': ['examples'],
+    'gallery_dirs': ['auto_examples'],
+    'filename_pattern': r'/plot_',
+    'abort_on_example_error': False,
+    'download_all_examples': False,
+    'plot_gallery': False,
+}
 
 templates_path = ['_templates']
 source_suffix = {'.rst': 'restructuredtext'}

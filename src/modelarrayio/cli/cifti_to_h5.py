@@ -1,3 +1,5 @@
+"""Convert CIFTI2 dscalar data to an HDF5 file."""
+
 import argparse
 import logging
 import os
@@ -12,7 +14,6 @@ from modelarrayio.cli.parser_utils import (
     add_cohort_arg,
     add_output_hdf5_arg,
     add_output_tiledb_arg,
-    add_relative_root_arg,
     add_s3_workers_arg,
     add_scalar_columns_arg,
     add_storage_args,
@@ -30,12 +31,11 @@ from modelarrayio.utils.cifti import (
 logger = logging.getLogger(__name__)
 
 
-def write_storage(
+def cifti_to_h5(
     cohort_file,
     backend='hdf5',
     output_hdf5='fixeldb.h5',
     output_tiledb='arraydb.tdb',
-    relative_root='/',
     storage_dtype='float32',
     compression='gzip',
     compression_level=4,
@@ -63,8 +63,6 @@ def write_storage(
         Path to a new .h5 file to be written
     output_tiledb : :obj:`str`
         Path to a new .tdb file to be written
-    relative_root : :obj:`str`
-        Root to which all paths are relative
     storage_dtype : :obj:`str`
         Floating type to store values
     compression : :obj:`str`
@@ -99,8 +97,7 @@ def write_storage(
     status : :obj:`int`
         Status of the operation. 0 if successful, 1 if failed.
     """
-    cohort_path = os.path.join(relative_root, cohort_file)
-    cohort_df = pd.read_csv(cohort_path)
+    cohort_df = pd.read_csv(cohort_file)
     cohort_long = _cohort_to_long_dataframe(cohort_df, scalar_columns=scalar_columns)
     if cohort_long.empty:
         raise ValueError('Cohort file does not contain any scalar entries after normalization.')
@@ -109,10 +106,9 @@ def write_storage(
         raise ValueError('Unable to derive scalar sources from cohort file.')
 
     if backend == 'hdf5':
-        scalars, last_brain_names = _load_cohort_cifti(cohort_long, relative_root, s3_workers)
+        scalars, last_brain_names = _load_cohort_cifti(cohort_long, s3_workers)
 
-        output_file = os.path.join(relative_root, output_hdf5)
-        f = h5py.File(output_file, 'w')
+        f = h5py.File(output_hdf5, 'w')
 
         greyordinate_table, structure_names = brain_names_to_dataframe(last_brain_names)
         greyordinatesh5 = f.create_dataset(
@@ -140,25 +136,23 @@ def write_storage(
 
             h5_storage.write_rows_in_column_stripes(dset, scalars[scalar_name])
         f.close()
-        return int(not os.path.exists(output_file))
+        return int(not os.path.exists(output_hdf5))
     else:
-        base_uri = os.path.join(relative_root, output_tiledb)
-        os.makedirs(base_uri, exist_ok=True)
+        os.makedirs(output_tiledb, exist_ok=True)
         if not scalar_sources:
             return 0
 
         # Establish a reference brain axis once to ensure consistent ordering across workers.
         _first_scalar, first_sources = next(iter(scalar_sources.items()))
-        first_path = os.path.join(relative_root, first_sources[0])
+        first_path = first_sources[0]
         _, reference_brain_names = extract_cifti_scalar_data(first_path)
 
         def _process_scalar_job(scalar_name, source_files):
             dataset_path = f'scalars/{scalar_name}/values'
             rows = []
             for source_file in source_files:
-                scalar_file = os.path.join(relative_root, source_file)
                 cifti_data, _ = extract_cifti_scalar_data(
-                    scalar_file, reference_brain_names=reference_brain_names
+                    source_file, reference_brain_names=reference_brain_names
                 )
                 rows.append(cifti_data)
 
@@ -167,7 +161,7 @@ def write_storage(
                 return scalar_name
             num_items = rows[0].shape[0]
             tiledb_storage.create_empty_scalar_matrix_array(
-                base_uri,
+                output_tiledb,
                 dataset_path,
                 num_subjects,
                 num_items,
@@ -180,8 +174,8 @@ def write_storage(
                 sources_list=source_files,
             )
             # write column names array for ModelArray compatibility
-            tiledb_storage.write_column_names(base_uri, scalar_name, source_files)
-            uri = os.path.join(base_uri, dataset_path)
+            tiledb_storage.write_column_names(output_tiledb, scalar_name, source_files)
+            uri = os.path.join(output_tiledb, dataset_path)
             tiledb_storage.write_rows_in_column_stripes(uri, rows)
             return scalar_name
 
@@ -211,10 +205,12 @@ def write_storage(
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(description='Create a hdf5 file of CIDTI2 dscalar data')
+    parser = argparse.ArgumentParser(
+        description='Create a hdf5 file of CIDTI2 dscalar data',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     add_cohort_arg(parser)
     add_scalar_columns_arg(parser)
-    add_relative_root_arg(parser)
     add_output_hdf5_arg(parser, default_name='fixelarray.h5')
     add_output_tiledb_arg(parser, default_name='arraydb.tdb')
     add_backend_arg(parser)
@@ -243,4 +239,4 @@ def main():
         level=getattr(logging, str(log_level).upper(), logging.INFO),
         format='[%(levelname)s] %(name)s: %(message)s',
     )
-    return write_storage(**kwargs)
+    return cifti_to_h5(**kwargs)

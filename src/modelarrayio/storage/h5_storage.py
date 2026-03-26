@@ -207,7 +207,9 @@ def write_rows_in_column_stripes(dset, rows):
     with logging_redirect_tqdm():
         for start in tqdm(
             range(0, num_elements, stripe_width),
-            bar_format='{percentage:3.0f}% {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]',
+            bar_format=(
+                '{percentage:3.0f}% {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
+            ),
             ascii=True,
             mininterval=max(1, (num_elements / stripe_width) // 200),
         ):
