@@ -11,6 +11,7 @@
 .. toctree::
    :maxdepth: 2
 
+   installation
    auto_examples/index
    usage
    api

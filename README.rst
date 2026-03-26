@@ -50,70 +50,19 @@ Once ModelArrayIO is installed, these commands are available in your terminal:
 
 * **Fixel-wise** data (MRtrix ``.mif``):
 
-  * ``.mif`` → ``.h5``: ``confixel`` (CLI name kept for compatibility with earlier ConFixel workflows)
-  * ``.h5`` → ``.mif``: ``fixelstats_write``
+  * ``.mif`` → ``.h5``: ``modelarrayio mif-to-h5``
+  * ``.h5`` → ``.mif``: ``modelarrayio h5-to-mif``
 
 * **Voxel-wise** data (NIfTI):
 
-  * NIfTI → ``.h5``: ``convoxel``
-  * ``.h5`` → NIfTI: ``volumestats_write``
+  * NIfTI → ``.h5``: ``modelarrayio nifti-to-h5``
+  * ``.h5`` → NIfTI: ``modelarrayio h5-to-nifti``
 
 * **Greyordinate-wise** data (CIFTI-2):
 
-  * CIFTI-2 → ``.h5``: ``concifti``
-  * ``.h5`` → CIFTI-2: ``ciftistats_write``
+  * CIFTI-2 → ``.h5``: ``modelarrayio cifti-to-h5``
+  * ``.h5`` → CIFTI-2: ``modelarrayio h5-to-cifti``
 
-Installation
-============
-
-MRtrix (required for fixel ``.mif`` only)
------------------------------------------
-
-For fixel-wise ``.mif`` conversion, the ``confixel`` / ``fixelstats_write`` tools use MRtrix ``mrconvert``. Install MRtrix from `MRtrix’s webpage <https://www.mrtrix.org/download/>`_ if needed. Run ``mrview`` in the terminal to verify the installation.
-
-If your data are voxel-wise or CIFTI only, you can skip this step.
-
-Install ModelArrayIO
---------------------
-
-You may want a conda environment first—see `ModelArray: Installation <https://pennlinc.github.io/ModelArray/articles/installations.html>`_. If MRtrix is installed in that environment, install ModelArrayIO in the same environment.
-
-Install from GitHub:
-
-.. code-block:: console
-
-   git clone https://github.com/PennLINC/ModelArrayIO.git
-   cd ModelArrayIO
-   pip install .   # build via pyproject.toml
-
-Editable install for development:
-
-.. code-block:: console
-
-   # From the repository root
-   pip install -e .
-
-With ``hatch`` installed, you can build wheels/sdist locally:
-
-.. code-block:: console
-
-   hatch build
-   pip install dist/*.whl
-
-How to use
-==========
-
-We provide a `walkthrough for fixel-wise data <notebooks/walkthrough_fixel-wise_data.md>`_ (``confixel`` / ``fixelstats_write``) and a `walkthrough for voxel-wise data <notebooks/walkthrough_voxel-wise_data.md>`_ (``convoxel`` / ``volumestats_write``).
-
-Together with `ModelArray <https://pennlinc.github.io/ModelArray/>`_, see the `combined walkthrough <https://pennlinc.github.io/ModelArray/articles/walkthrough.html>`_ with example fixel-wise data (ModelArray + ModelArrayIO).
-
-CLI help:
-
-.. code-block:: console
-
-   confixel --help
-
-Use the same pattern for ``convoxel``, ``concifti``, ``fixelstats_write``, ``volumestats_write``, and ``ciftistats_write``.
 
 Storage backends: HDF5 and TileDB
 =================================
