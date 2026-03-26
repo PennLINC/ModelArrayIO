@@ -3,6 +3,16 @@ Usage
 #####
 
 
+************
+modelarrayio
+************
+
+.. argparse::
+   :ref: modelarrayio.cli.main._get_parser
+   :prog: modelarrayio
+   :func: _get_parser
+
+
 **********
 mif-to-h5
 **********
