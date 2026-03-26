@@ -90,33 +90,34 @@ def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
             temp_nifti2_1mpvalue.to_filename(out_cifti_1mpvalue)
 
 
-def main():
-    """Write the contents of an hdf5 file to a cifti directory."""
-    parser = get_parser()
-    args = parser.parse_args()
-
-    if os.path.exists(args.output_dir):
+def h5_to_cifti_main(
+    analysis_name,
+    in_file,
+    output_dir,
+    cohort_file=None,
+    example_cifti=None,
+):
+    """Entry point for the ``modelarrayio h5-to-cifti`` command."""
+    if os.path.exists(output_dir):
         print('WARNING: Output directory exists')
-    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
-    # Get an example cifti
-    example_cifti = args.example_cifti
     if example_cifti is None:
         logger.warning(
             'No example cifti file provided, using the first cifti file from the cohort file'
         )
-        cohort_df = pd.read_csv(args.cohort_file)
+        cohort_df = pd.read_csv(cohort_file)
         example_cifti = cohort_df['source_file'][0]
 
     h5_to_cifti(
         example_cifti=example_cifti,
-        in_file=args.in_file,
-        analysis_name=args.analysis_name,
-        output_dir=args.output_dir,
+        in_file=in_file,
+        analysis_name=analysis_name,
+        output_dir=output_dir,
     )
 
 
-def get_parser():
+def _parse_h5_to_cifti():
     parser = argparse.ArgumentParser(
         description='Create a directory with cifti results from an hdf5 file',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,

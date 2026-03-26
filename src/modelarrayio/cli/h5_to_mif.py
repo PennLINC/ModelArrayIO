@@ -92,36 +92,32 @@ def h5_to_mif(example_mif, in_file, analysis_name, output_dir):
             nifti2_to_mif(temp_nifti2_1mpvalue, out_mif_1mpvalue)
 
 
-def main():
-    parser = get_parser()
-    args = parser.parse_args()
-
-    if os.path.exists(args.output_dir):
+def h5_to_mif_main(index_file, directions_file, cohort_file, analysis_name, in_file, output_dir):
+    """Entry point for the ``modelarrayio h5-to-mif`` command."""
+    if os.path.exists(output_dir):
         print('WARNING: Output directory exists')
-    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
-    # Copy in the index and directions
     shutil.copyfile(
-        args.directions_file,
-        os.path.join(args.output_dir, os.path.basename(args.directions_file)),
+        directions_file,
+        os.path.join(output_dir, os.path.basename(directions_file)),
     )
     shutil.copyfile(
-        args.index_file,
-        os.path.join(args.output_dir, os.path.basename(args.index_file)),
+        index_file,
+        os.path.join(output_dir, os.path.basename(index_file)),
     )
 
-    # Get an example mif file
-    cohort_df = pd.read_csv(args.cohort_file)
+    cohort_df = pd.read_csv(cohort_file)
     example_mif = cohort_df['source_file'][0]
     h5_to_mif(
         example_mif=example_mif,
-        in_file=args.in_file,
-        analysis_name=args.analysis_name,
-        output_dir=args.output_dir,
+        in_file=in_file,
+        analysis_name=analysis_name,
+        output_dir=output_dir,
     )
 
 
-def get_parser():
+def _parse_h5_to_mif():
     parser = argparse.ArgumentParser(
         description='Create a fixel directory from an hdf5 file',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,

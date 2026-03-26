@@ -10,7 +10,15 @@ import h5py
 import pandas as pd
 from tqdm import tqdm
 
-from modelarrayio.cli.parser_utils import _is_file
+from modelarrayio.cli.parser_utils import (
+    _is_file,
+    add_backend_arg,
+    add_cohort_arg,
+    add_output_hdf5_arg,
+    add_output_tiledb_arg,
+    add_storage_args,
+    add_tiledb_storage_args,
+)
 from modelarrayio.storage import h5_storage, tiledb_storage
 from modelarrayio.utils.fixels import gather_fixels, mif_to_nifti2
 
@@ -154,7 +162,53 @@ def mif_to_h5(
         return 0
 
 
-def get_parser():
+def mif_to_h5_main(
+    index_file,
+    directions_file,
+    cohort_file,
+    backend='hdf5',
+    output_hdf5='fixelarray.h5',
+    output_tiledb='arraydb.tdb',
+    storage_dtype='float32',
+    compression='gzip',
+    compression_level=4,
+    shuffle=True,
+    chunk_voxels=0,
+    target_chunk_mb=2.0,
+    tdb_compression='zstd',
+    tdb_compression_level=5,
+    tdb_shuffle=True,
+    tdb_tile_voxels=0,
+    tdb_target_tile_mb=2.0,
+    log_level='INFO',
+):
+    """Entry point for the ``modelarrayio mif-to-h5`` command."""
+    logging.basicConfig(
+        level=getattr(logging, str(log_level).upper(), logging.INFO),
+        format='[%(levelname)s] %(name)s: %(message)s',
+    )
+    return mif_to_h5(
+        index_file=index_file,
+        directions_file=directions_file,
+        cohort_file=cohort_file,
+        backend=backend,
+        output_hdf5=Path(output_hdf5),
+        output_tiledb=Path(output_tiledb),
+        storage_dtype=storage_dtype,
+        compression=compression,
+        compression_level=compression_level,
+        shuffle=shuffle,
+        chunk_voxels=chunk_voxels,
+        target_chunk_mb=target_chunk_mb,
+        tdb_compression=tdb_compression,
+        tdb_compression_level=tdb_compression_level,
+        tdb_shuffle=tdb_shuffle,
+        tdb_tile_voxels=tdb_tile_voxels,
+        tdb_target_tile_mb=tdb_target_tile_mb,
+    )
+
+
+def _parse_mif_to_h5():
     parser = argparse.ArgumentParser(
         description='Create a hdf5 file of fixel data',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -175,133 +229,10 @@ def get_parser():
         required=True,
         type=IsFile,
     )
-    parser.add_argument(
-        '--cohort-file',
-        '--cohort_file',
-        help='Path to a csv with demographic info and paths to data.',
-        required=True,
-        type=IsFile,
-    )
-    parser.add_argument(
-        '--output-hdf5',
-        '--output_hdf5',
-        help='Name of HDF5 (.h5) file where outputs will be saved.',
-        default='fixelarray.h5',
-    )
-    parser.add_argument(
-        '--output-tiledb',
-        '--output_tiledb',
-        help='Base URI (directory) where TileDB arrays will be created.',
-        default='arraydb.tdb',
-    )
-    parser.add_argument(
-        '--backend',
-        help='Storage backend for subject-by-element matrix',
-        choices=['hdf5', 'tiledb'],
-        default='hdf5',
-    )
-    # Storage configuration (match voxels.py)
-    parser.add_argument(
-        '--dtype',
-        help='Floating dtype for storing values: float32 (default) or float64',
-        choices=['float32', 'float64'],
-        default='float32',
-        dest='storage_dtype',
-    )
-    parser.add_argument(
-        '--compression',
-        help='HDF5 compression filter: gzip (default), lzf, none',
-        choices=['gzip', 'lzf', 'none'],
-        default='gzip',
-    )
-    parser.add_argument(
-        '--tdb-compression',
-        '--tdb_compression',
-        help='TileDB compression: zstd (default), gzip, none',
-        choices=['zstd', 'gzip', 'none'],
-        default='zstd',
-    )
-    parser.add_argument(
-        '--compression-level',
-        '--compression_level',
-        type=int,
-        help='Gzip compression level 0-9 (only if --compression=gzip). Default 4',
-        default=4,
-    )
-    parser.add_argument(
-        '--tdb-compression-level',
-        '--tdb_compression_level',
-        type=int,
-        help='Compression level for TileDB (codec-dependent).',
-        default=5,
-    )
-    parser.add_argument(
-        '--no-shuffle',
-        dest='shuffle',
-        action='store_false',
-        help='Disable HDF5 shuffle filter (enabled by default if compression is used).',
-        default=True,
-    )
-    parser.add_argument(
-        '--tdb-no-shuffle',
-        dest='tdb_shuffle',
-        action='store_false',
-        help='Disable TileDB shuffle filter (enabled by default).',
-        default=True,
-    )
-    parser.add_argument(
-        '--chunk-voxels',
-        '--chunk_voxels',
-        type=int,
-        help=(
-            'Chunk size along fixel/voxel axis. '
-            'If 0, auto-compute based on --target-chunk-mb and number of subjects'
-        ),
-        default=0,
-    )
-    parser.add_argument(
-        '--tdb-tile-voxels',
-        '--tdb_tile_voxels',
-        type=int,
-        help=(
-            'Tile length along item axis for TileDB. '
-            'If 0, auto-compute based on --tdb-target-tile-mb'
-        ),
-        default=0,
-    )
-    parser.add_argument(
-        '--target-chunk-mb',
-        '--target_chunk_mb',
-        type=float,
-        help='Target chunk size in MiB when auto-computing item chunk length. Default 2.0',
-        default=2.0,
-    )
-    parser.add_argument(
-        '--tdb-target-tile-mb',
-        '--tdb_target_tile_mb',
-        type=float,
-        help='Target tile size in MiB when auto-computing item tile length. Default 2.0',
-        default=2.0,
-    )
-    parser.add_argument(
-        '--log-level',
-        '--log_level',
-        type=str,
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        help='Logging level (default INFO; set to WARNING to reduce verbosity)',
-        default='INFO',
-    )
+    add_cohort_arg(parser)
+    add_output_hdf5_arg(parser, default_name='fixelarray.h5')
+    add_output_tiledb_arg(parser, default_name='arraydb.tdb')
+    add_backend_arg(parser)
+    add_storage_args(parser)
+    add_tiledb_storage_args(parser)
     return parser
-
-
-def main():
-    """Main function to write fixel data to an HDF5 or TileDB file."""
-    parser = get_parser()
-    args = parser.parse_args()
-    kwargs = vars(args)
-    log_level = kwargs.pop('log_level')
-    logging.basicConfig(
-        level=getattr(logging, str(log_level).upper(), logging.INFO),
-        format='[%(levelname)s] %(name)s: %(message)s',
-    )
-    return mif_to_h5(**kwargs)

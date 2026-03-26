@@ -204,7 +204,55 @@ def cifti_to_h5(
         return 0
 
 
-def get_parser():
+def cifti_to_h5_main(
+    cohort_file,
+    backend='hdf5',
+    output_hdf5='fixelarray.h5',
+    output_tiledb='arraydb.tdb',
+    storage_dtype='float32',
+    compression='gzip',
+    compression_level=4,
+    shuffle=True,
+    chunk_voxels=0,
+    target_chunk_mb=2.0,
+    tdb_compression='zstd',
+    tdb_compression_level=5,
+    tdb_shuffle=True,
+    tdb_tile_voxels=0,
+    tdb_target_tile_mb=2.0,
+    tdb_workers=None,
+    scalar_columns=None,
+    s3_workers=1,
+    log_level='INFO',
+):
+    """Entry point for the ``modelarrayio cifti-to-h5`` command."""
+    logging.basicConfig(
+        level=getattr(logging, str(log_level).upper(), logging.INFO),
+        format='[%(levelname)s] %(name)s: %(message)s',
+    )
+    return cifti_to_h5(
+        cohort_file=cohort_file,
+        backend=backend,
+        output_hdf5=output_hdf5,
+        output_tiledb=output_tiledb,
+        storage_dtype=storage_dtype,
+        compression=compression,
+        compression_level=compression_level,
+        shuffle=shuffle,
+        chunk_voxels=chunk_voxels,
+        target_chunk_mb=target_chunk_mb,
+        tdb_compression=tdb_compression,
+        tdb_compression_level=tdb_compression_level,
+        tdb_shuffle=tdb_shuffle,
+        tdb_tile_voxels=tdb_tile_voxels,
+        tdb_target_tile_mb=tdb_target_tile_mb,
+        tdb_workers=tdb_workers,
+        scalar_columns=scalar_columns,
+        s3_workers=s3_workers,
+    )
+
+
+def _parse_cifti_to_h5():
     parser = argparse.ArgumentParser(
         description='Create a hdf5 file of CIDTI2 dscalar data',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -228,15 +276,3 @@ def get_parser():
     )
     add_s3_workers_arg(parser)
     return parser
-
-
-def main():
-    parser = get_parser()
-    args = parser.parse_args()
-    kwargs = vars(args)
-    log_level = kwargs.pop('log_level')
-    logging.basicConfig(
-        level=getattr(logging, str(log_level).upper(), logging.INFO),
-        format='[%(levelname)s] %(name)s: %(message)s',
-    )
-    return cifti_to_h5(**kwargs)

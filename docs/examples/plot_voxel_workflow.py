@@ -104,7 +104,7 @@ results back to NIfTI.  The voxel workflow is very similar to the fixel workflow
 #     # activate your conda environment first
 #     conda activate <env_name>
 #
-#     convoxel \
+#     modelarrayio nifti-to-h5 \
 #         --group-mask-file /home/username/myProject/data/group_mask.nii.gz \
 #         --cohort-file     /home/username/myProject/data/cohort_FA.csv \
 #         --output-hdf5     /home/username/myProject/data/FA.h5
@@ -121,7 +121,7 @@ results back to NIfTI.  The voxel workflow is very similar to the fixel workflow
 #
 # .. code-block:: console
 #
-#     volumestats_write \
+#     modelarrayio h5-to-nifti \
 #         --group-mask-file /home/username/myProject/data/group_mask.nii.gz \
 #         --cohort-file     /home/username/myProject/data/cohort_FA.csv \
 #         --analysis-name   mylm \
@@ -177,7 +177,7 @@ results back to NIfTI.  The voxel workflow is very similar to the fixel workflow
 #
 # .. code-block:: console
 #
-#     convoxel --help
-#     volumestats_write --help
+#     modelarrayio nifti-to-h5 --help
+#     modelarrayio h5-to-nifti --help
 #
 # or in the :doc:`/usage` page of this documentation.
