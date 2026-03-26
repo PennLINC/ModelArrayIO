@@ -9,13 +9,12 @@ Skip in offline CI by excluding the 's3' mark:
 
 import csv
 import shutil
-import sys
 
 import h5py
 import numpy as np
 import pytest
 
-from modelarrayio.cli.nifti_to_h5 import main as convoxel_main
+from modelarrayio.cli.main import main as modelarrayio_main
 
 # Four confirmed ABIDE OHSU subjects used as test data
 OHSU_SUBJECTS = [
@@ -80,30 +79,30 @@ def test_convoxel_s3_parallel(tmp_path, group_mask_path, monkeypatch):
     out_h5 = tmp_path / 'out.h5'
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv('MODELARRAYIO_S3_ANON', '1')
-    monkeypatch.setattr(
-        sys,
-        'argv',
-        [
-            'convoxel',
-            '--group-mask-file',
-            'group_mask.nii.gz',
-            '--cohort-file',
-            str(cohort_csv),
-            '--output-hdf5',
-            str(out_h5),
-            '--backend',
-            'hdf5',
-            '--dtype',
-            'float32',
-            '--compression',
-            'gzip',
-            '--compression-level',
-            '1',
-            '--s3-workers',
-            '4',
-        ],
+    assert (
+        modelarrayio_main(
+            [
+                'nifti-to-h5',
+                '--group-mask-file',
+                'group_mask.nii.gz',
+                '--cohort-file',
+                str(cohort_csv),
+                '--output-hdf5',
+                str(out_h5),
+                '--backend',
+                'hdf5',
+                '--dtype',
+                'float32',
+                '--compression',
+                'gzip',
+                '--compression-level',
+                '1',
+                '--s3-workers',
+                '4',
+            ]
+        )
+        == 0
     )
-    assert convoxel_main() == 0
     assert out_h5.exists()
 
     with h5py.File(out_h5, 'r') as h5:
@@ -144,7 +143,7 @@ def test_convoxel_s3_serial_matches_parallel(tmp_path, group_mask_path, monkeypa
             )
 
     base_argv = [
-        'convoxel',
+        'nifti-to-h5',
         '--group-mask-file',
         str(group_mask_path),
         '--cohort-file',
@@ -160,12 +159,9 @@ def test_convoxel_s3_serial_matches_parallel(tmp_path, group_mask_path, monkeypa
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv('MODELARRAYIO_S3_ANON', '1')
     for workers, name in [('1', 'serial.h5'), ('4', 'parallel.h5')]:
-        monkeypatch.setattr(
-            sys,
-            'argv',
-            base_argv + ['--output-hdf5', name, '--s3-workers', workers],
-        )
-        assert convoxel_main() == 0, f'convoxel failed (workers={workers})'
+        assert (
+            modelarrayio_main(base_argv + ['--output-hdf5', name, '--s3-workers', workers]) == 0
+        ), f'modelarrayio nifti-to-h5 failed (workers={workers})'
 
     with (
         h5py.File(tmp_path / 'serial.h5', 'r') as s,
