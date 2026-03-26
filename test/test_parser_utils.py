@@ -17,10 +17,14 @@ def _parser_with_cohort() -> argparse.ArgumentParser:
     return p
 
 
-def test_minimal_invocation_defaults() -> None:
+def test_minimal_invocation_defaults(tmp_path_factory) -> None:
+    tmp_path = tmp_path_factory.mktemp('test_minimal_invocation_defaults')
+    cohort_file = tmp_path / 'cohort.csv'
+    cohort_file.write_text('subject_id,path\n1,path1\n2,path2')
+
     p = _parser_with_cohort()
-    args = p.parse_args(['--cohort-file', 'cohort.csv'])
-    assert args.cohort_file == 'cohort.csv'
+    args = p.parse_args(['--cohort-file', str(cohort_file)])
+    assert args.cohort_file == str(cohort_file)
     assert args.storage_dtype == 'float32'
     assert args.compression == 'gzip'
     assert args.compression_level == 4
@@ -31,12 +35,16 @@ def test_minimal_invocation_defaults() -> None:
     assert args.log_level == 'INFO'
 
 
-def test_storage_aliases_and_no_shuffle() -> None:
+def test_storage_aliases_and_no_shuffle(tmp_path_factory) -> None:
+    tmp_path = tmp_path_factory.mktemp('test_storage_aliases_and_no_shuffle')
+    cohort_file = tmp_path / 'cohort.csv'
+    cohort_file.write_text('subject_id,path\n1,path1\n2,path2')
+
     p = _parser_with_cohort()
     args = p.parse_args(
         [
             '--cohort-file',
-            'c.csv',
+            str(cohort_file),
             '--dtype',
             'float64',
             '--compression',
@@ -72,9 +80,13 @@ def test_tiledb_args_group() -> None:
     assert args.tdb_tile_voxels == 0
 
 
-def test_scalar_columns_optional() -> None:
+def test_scalar_columns_optional(tmp_path_factory) -> None:
+    tmp_path = tmp_path_factory.mktemp('test_scalar_columns_optional')
+    cohort_file = tmp_path / 'cohort.csv'
+    cohort_file.write_text('subject_id,path\n1,path1\n2,path2')
+
     p = argparse.ArgumentParser()
     parser_utils.add_cohort_arg(p)
     parser_utils.add_scalar_columns_arg(p)
-    args = p.parse_args(['--cohort-file', 'c.csv', '--scalar-columns', 'c1', 'c2'])
+    args = p.parse_args(['--cohort-file', str(cohort_file), '--scalar-columns', 'c1', 'c2'])
     assert args.scalar_columns == ['c1', 'c2']
