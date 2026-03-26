@@ -159,9 +159,9 @@ def test_convoxel_s3_serial_matches_parallel(tmp_path, group_mask_path, monkeypa
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv('MODELARRAYIO_S3_ANON', '1')
     for workers, name in [('1', 'serial.h5'), ('4', 'parallel.h5')]:
-        assert (
-            modelarrayio_main(base_argv + ['--output', name, '--s3-workers', workers]) == 0
-        ), f'modelarrayio nifti-to-h5 failed (workers={workers})'
+        assert modelarrayio_main(base_argv + ['--output', name, '--s3-workers', workers]) == 0, (
+            f'modelarrayio nifti-to-h5 failed (workers={workers})'
+        )
 
     with (
         h5py.File(tmp_path / 'serial.h5', 'r') as s,
