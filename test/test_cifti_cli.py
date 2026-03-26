@@ -70,8 +70,6 @@ def test_concifti_cli_creates_expected_hdf5(tmp_path, monkeypatch):
             'gzip',
             '--compression-level',
             '1',
-            '--chunk-voxels',
-            '0',
             '--target-chunk-mb',
             '1.0',
         ],
