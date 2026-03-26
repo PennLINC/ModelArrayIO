@@ -20,7 +20,7 @@ def test_cohort_long_format_preserves_rows() -> None:
     )
     long_df = cohort_to_long_dataframe(df)
     assert len(long_df) == 2
-    assert set(long_df.columns) == {'scalar_name', 'source_file'}
+    assert set(long_df.columns) == {'extra_col', 'scalar_name', 'source_file'}
     assert long_df.iloc[0]['scalar_name'] == 'THICK'
 
 
