@@ -2,9 +2,10 @@
 Voxel-wise Data Conversion
 ==========================
 
-For voxel-wise data, use the **``convoxel``** command from **ModelArrayIO** to convert NIfTI
-files to the HDF5 format (``.h5``) used by ModelArray, and ``volumestats_write`` to export
-results back to NIfTI.  The voxel workflow is very similar to the fixel workflow
+For imaging data in NIfTI format, use the ``modelarrayio nifti-to-h5`` command to convert
+the NIfTI files to the HDF5 format (``.h5``) used by **ModelArray**,
+and ``modelarrayio h5-to-nifti`` to export results back to NIfTI.
+The voxel workflow is very similar to the fixel workflow
 (:ref:`sphx_glr_auto_examples_plot_fixel_workflow.py`).
 """
 
@@ -12,7 +13,7 @@ results back to NIfTI.  The voxel workflow is very similar to the fixel workflow
 # Prepare data
 # ------------
 #
-# To convert a list of voxel-wise NIfTI files to ``.h5`` format, you need:
+# To convert a list of NIfTI files to ``.h5`` format, you need:
 #
 # 1. **A cohort CSV** describing every NIfTI file to include (one CSV per scalar recommended).
 # 2. **A group mask** — only voxels inside the group mask are kept during conversion.
@@ -22,7 +23,7 @@ results back to NIfTI.  The voxel workflow is very similar to the fixel workflow
 #
 # Cohort CSV columns (names are fixed, not user-defined):
 #
-# * ``scalar_name`` — which metric is being analysed (e.g. ``FA``)
+# * ``scalar_name`` — which metric is being analysed (e.g., ``FA``)
 # * ``source_file`` — path to the subject's NIfTI file
 # * ``source_mask_file`` — path to the subject-specific mask (or the group mask if none exists)
 
@@ -63,20 +64,20 @@ results back to NIfTI.  The voxel workflow is very similar to the fixel workflow
 #      - age
 #      - sex
 #    * - FA
-#      - FA/sub-01_FA.nii.gz
-#      - individual_masks/sub-01_mask.nii.gz
+#      - /home/username/myProject/data/FA/sub-01_FA.nii.gz
+#      - /home/username/myProject/data/individual_masks/sub-01_mask.nii.gz
 #      - sub-01
 #      - 10
 #      - F
 #    * - FA
-#      - FA/sub-02_FA.nii.gz
-#      - individual_masks/sub-02_mask.nii.gz
+#      - /home/username/myProject/data/FA/sub-02_FA.nii.gz
+#      - /home/username/myProject/data/individual_masks/sub-02_mask.nii.gz
 #      - sub-02
 #      - 20
 #      - M
 #    * - FA
-#      - FA/sub-03_FA.nii.gz
-#      - individual_masks/sub-03_mask.nii.gz
+#      - /home/username/myProject/data/FA/sub-03_FA.nii.gz
+#      - /home/username/myProject/data/individual_masks/sub-03_mask.nii.gz
 #      - sub-03
 #      - 15
 #      - F
@@ -116,8 +117,8 @@ results back to NIfTI.  The voxel workflow is very similar to the fixel workflow
 # Convert result .h5 back to NIfTI
 # ---------------------------------
 #
-# After running ModelArray and obtaining statistical results inside ``FA.h5`` (suppose the
-# analysis name is ``"mylm"``), use ``volumestats_write`` to export them as NIfTI files.
+# After running **ModelArray** and obtaining statistical results inside ``FA.h5`` (suppose the
+# analysis name is ``"mylm"``), use ``modelarrayio h5-to-nifti`` to export them as NIfTI files.
 #
 # .. code-block:: console
 #
@@ -134,16 +135,15 @@ results back to NIfTI.  The voxel workflow is very similar to the fixel workflow
 #
 # .. warning::
 #
-#    If ``--output-dir`` already exists, ``volumestats_write`` will not delete it — you will
+#    If ``--output-dir`` already exists, ``modelarrayio h5-to-nifti`` will not delete it — you will
 #    see ``WARNING: Output directory exists``.  Existing files that are **not** part of the
 #    current output list are left unchanged.  Existing files that **are** part of the current
-#    output list will be overwritten (unlike the fixel ``fixelstats_write``, which does not
-#    overwrite via ``mrconvert``).  To avoid confusion, consider manually deleting the output
-#    directory before re-running ``volumestats_write``.
+#    output list will be overwritten.  To avoid confusion, consider manually deleting the output
+#    directory before re-running ``modelarrayio h5-to-nifti``.
 
 # %%
 # Number-of-observations image
-# -----------------------------
+# ----------------------------
 #
 # If you requested ``nobs`` during model fitting in ModelArray, after conversion you will find
 # an image called ``*_model.nobs.nii*``.  With subject-specific masks, this image may be
