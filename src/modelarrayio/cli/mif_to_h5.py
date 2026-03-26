@@ -14,10 +14,8 @@ from modelarrayio.cli.parser_utils import (
     _is_file,
     add_backend_arg,
     add_cohort_arg,
-    add_output_hdf5_arg,
-    add_output_tiledb_arg,
+    add_output_arg,
     add_storage_args,
-    add_tiledb_storage_args,
 )
 from modelarrayio.storage import h5_storage, tiledb_storage
 from modelarrayio.utils.fixels import gather_fixels, mif_to_nifti2
@@ -30,21 +28,15 @@ def mif_to_h5(
     directions_file,
     cohort_file,
     backend='hdf5',
-    output_hdf5=Path('fixeldb.h5'),
-    output_tiledb=Path('arraydb.tdb'),
+    output=Path('fixelarray.h5'),
     storage_dtype='float32',
     compression='gzip',
     compression_level=4,
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
-    tdb_compression='zstd',
-    tdb_compression_level=5,
-    tdb_shuffle=True,
-    tdb_tile_voxels=0,
-    tdb_target_tile_mb=2.0,
 ):
-    """Load all fixeldb data and write to an HDF5 file with configurable storage.
+    """Load all fixeldb data and write to an HDF5 or TileDB file.
 
     Parameters
     ----------
@@ -55,38 +47,28 @@ def mif_to_h5(
     cohort_file : :obj:`pathlib.Path`
         Path to a csv with demographic info and paths to data
     backend : :obj:`str`
-        Backend to use for storage
-    output_hdf5 : :obj:`pathlib.Path`
-        Path to a new .h5 file to be written
-    output_tiledb : :obj:`pathlib.Path`
-        Path to a new .tdb file to be written
+        Backend to use for storage (``'hdf5'`` or ``'tiledb'``)
+    output : :obj:`pathlib.Path`
+        Output path. For the hdf5 backend, path to an .h5 file;
+        for the tiledb backend, path to a .tdb directory.
     storage_dtype : :obj:`str`
         Floating type to store values
     compression : :obj:`str`
-        HDF5 compression filter
+        Compression filter. ``gzip`` works for both backends;
+        ``lzf`` is HDF5-only; ``zstd`` is TileDB-only.
     compression_level : :obj:`int`
-        Gzip compression level (0-9)
+        Compression level (codec-dependent)
     shuffle : :obj:`bool`
-        Enable HDF5 shuffle filter
+        Enable shuffle filter
     chunk_voxels : :obj:`int`
-        Chunk size along the voxel axis
+        Chunk/tile size along the fixel axis (0 = auto)
     target_chunk_mb : :obj:`float`
-        Target chunk size in MiB when auto-computing chunk_voxels
-    tdb_compression : :obj:`str`
-        TileDB compression filter
-    tdb_compression_level : :obj:`int`
-        TileDB compression level
-    tdb_shuffle : :obj:`bool`
-        Enable TileDB shuffle filter
-    tdb_tile_voxels : :obj:`int`
-        Tile size along the voxel axis
-    tdb_target_tile_mb : :obj:`float`
-        Target tile size in MiB when auto-computing tdb_tile_voxels
+        Target chunk/tile size in MiB when auto-computing the spatial axis length
 
     Returns
     -------
     status : :obj:`int`
-        Status of the operation. 0 if successful, 1 if failed.
+        0 if successful, 1 if failed.
     """
     # gather fixel data
     fixel_table, voxel_table = gather_fixels(index_file, directions_file)
@@ -98,17 +80,15 @@ def mif_to_h5(
     scalars = defaultdict(list)
     sources_lists = defaultdict(list)
     print('Extracting .mif data...')
-    # ix: index of row (start from 0); row: one row of data
     for _ix, row in tqdm(cohort_df.iterrows(), total=cohort_df.shape[0]):
         scalar_file = row['source_file']
         _scalar_img, scalar_data = mif_to_nifti2(scalar_file)
-        scalars[row['scalar_name']].append(scalar_data)  # append to specific scalar_name
-        # append source mif filename to specific scalar_name
+        scalars[row['scalar_name']].append(scalar_data)
         sources_lists[row['scalar_name']].append(row['source_file'])
 
     # Write the output
     if backend == 'hdf5':
-        f = h5py.File(output_hdf5, 'w')
+        f = h5py.File(output, 'w')
 
         fixelsh5 = f.create_dataset(name='fixels', data=fixel_table.to_numpy().T)
         fixelsh5.attrs['column_names'] = list(fixel_table.columns)
@@ -135,28 +115,28 @@ def mif_to_h5(
 
             h5_storage.write_rows_in_column_stripes(dset, scalars[scalar_name])
         f.close()
-        return int(not output_hdf5.exists())
+        return int(not output.exists())
 
     else:
-        output_tiledb.mkdir(parents=True, exist_ok=True)
+        output.mkdir(parents=True, exist_ok=True)
         for scalar_name in scalars.keys():
             num_subjects = len(scalars[scalar_name])
             num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
             dataset_path = f'scalars/{scalar_name}/values'
             tiledb_storage.create_empty_scalar_matrix_array(
-                output_tiledb,
+                output,
                 dataset_path,
                 num_subjects,
                 num_items,
                 storage_dtype=storage_dtype,
-                compression=tdb_compression,
-                compression_level=tdb_compression_level,
-                shuffle=tdb_shuffle,
-                tile_voxels=tdb_tile_voxels,
-                target_tile_mb=tdb_target_tile_mb,
+                compression=compression,
+                compression_level=compression_level,
+                shuffle=shuffle,
+                tile_voxels=chunk_voxels,
+                target_tile_mb=target_chunk_mb,
                 sources_list=sources_lists[scalar_name],
             )
-            uri = output_tiledb / dataset_path
+            uri = output / dataset_path
             tiledb_storage.write_rows_in_column_stripes(uri, scalars[scalar_name])
 
         return 0
@@ -167,19 +147,13 @@ def mif_to_h5_main(
     directions_file,
     cohort_file,
     backend='hdf5',
-    output_hdf5='fixelarray.h5',
-    output_tiledb='arraydb.tdb',
+    output='fixelarray.h5',
     storage_dtype='float32',
     compression='gzip',
     compression_level=4,
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
-    tdb_compression='zstd',
-    tdb_compression_level=5,
-    tdb_shuffle=True,
-    tdb_tile_voxels=0,
-    tdb_target_tile_mb=2.0,
     log_level='INFO',
 ):
     """Entry point for the ``modelarrayio mif-to-h5`` command."""
@@ -192,19 +166,13 @@ def mif_to_h5_main(
         directions_file=directions_file,
         cohort_file=cohort_file,
         backend=backend,
-        output_hdf5=Path(output_hdf5),
-        output_tiledb=Path(output_tiledb),
+        output=Path(output),
         storage_dtype=storage_dtype,
         compression=compression,
         compression_level=compression_level,
         shuffle=shuffle,
         chunk_voxels=chunk_voxels,
         target_chunk_mb=target_chunk_mb,
-        tdb_compression=tdb_compression,
-        tdb_compression_level=tdb_compression_level,
-        tdb_shuffle=tdb_shuffle,
-        tdb_tile_voxels=tdb_tile_voxels,
-        tdb_target_tile_mb=tdb_target_tile_mb,
     )
 
 
@@ -230,9 +198,7 @@ def _parse_mif_to_h5():
         type=IsFile,
     )
     add_cohort_arg(parser)
-    add_output_hdf5_arg(parser, default_name='fixelarray.h5')
-    add_output_tiledb_arg(parser, default_name='arraydb.tdb')
+    add_output_arg(parser, default_name='fixelarray.h5')
     add_backend_arg(parser)
     add_storage_args(parser)
-    add_tiledb_storage_args(parser)
     return parser

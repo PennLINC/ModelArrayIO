@@ -58,7 +58,7 @@ def test_concifti_cli_creates_expected_hdf5(tmp_path, monkeypatch):
                 'cifti-to-h5',
                 '--cohort-file',
                 str(cohort_csv),
-                '--output-hdf5',
+                '--output',
                 str(out_h5),
                 '--backend',
                 'hdf5',
