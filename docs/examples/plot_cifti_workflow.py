@@ -1,11 +1,11 @@
 """
-NIfTI (Voxel-wise) Data Conversion
-==================================
+CIFTI (Greyordinate-wise) Data Conversion
+=========================================
 
-For imaging data in NIfTI format, use the ``modelarrayio nifti-to-h5`` command to convert
-the NIfTI files to the HDF5 format (``.h5``) used by **ModelArray**,
-and ``modelarrayio h5-to-nifti`` to export results back to NIfTI.
-The voxel workflow is very similar to the fixel workflow
+For imaging data in CIFTI format, use the ``modelarrayio cifti-to-h5`` command to convert
+the CIFTI files to the HDF5 format (``.h5``) used by **ModelArray**,
+and ``modelarrayio h5-to-cifti`` to export results back to CIFTI.
+The CIFTI workflow is very similar to the MIF workflow
 (:ref:`sphx_glr_auto_examples_plot_mif_workflow.py`).
 """
 
@@ -13,19 +13,14 @@ The voxel workflow is very similar to the fixel workflow
 # Prepare data
 # ------------
 #
-# To convert a list of NIfTI files to ``.h5`` format, you need:
+# To convert a list of CIFTI files to ``.h5`` format, you need:
 #
-# 1. **A cohort CSV** describing every NIfTI file to include (one CSV per scalar recommended).
-# 2. **A group mask** — only voxels inside the group mask are kept during conversion.
-# 3. **Subject-specific masks** *(optional)* — voxels outside each subject's mask are set to
-#    ``NaN`` after conversion.  If you do not have per-subject masks, supply the group mask for
-#    every subject (see the CSV example below).
+# 1. **A cohort CSV** describing every CIFTI file to include (one CSV per scalar recommended).
 #
 # Cohort CSV columns (names are fixed, not user-defined):
 #
 # * ``scalar_name`` — which metric is being analysed (e.g., ``FA``)
-# * ``source_file`` — path to the subject's NIfTI file
-# * ``source_mask_file`` — path to the subject-specific mask (or the group mask if none exists)
+# * ``source_file`` — path to the subject's CIFTI file
 
 # %%
 # Example folder structure
@@ -36,19 +31,13 @@ The voxel workflow is very similar to the fixel workflow
 #     /home/username/myProject/data
 #     |
 #     ├── cohort_FA.csv
-#     ├── group_mask.nii.gz
 #     │
 #     ├── FA
-#     │   ├── sub-01_FA.nii.gz
-#     │   ├── sub-02_FA.nii.gz
-#     │   ├── sub-03_FA.nii.gz
+#     │   ├── sub-01_FA.dscalar.nii
+#     │   ├── sub-02_FA.dscalar.nii
+#     │   ├── sub-03_FA.dscalar.nii
 #     │   └── ...
 #     │
-#     ├── individual_masks
-#     │   ├── sub-01_mask.nii.gz
-#     │   ├── sub-02_mask.nii.gz
-#     │   ├── sub-03_mask.nii.gz
-#     │   └── ...
 #     └── ...
 #
 # Corresponding ``cohort_FA.csv`` for scalar FA:
@@ -59,25 +48,21 @@ The voxel workflow is very similar to the fixel workflow
 #
 #    * - **scalar_name** *(required)*
 #      - **source_file** *(required)*
-#      - **source_mask_file** *(required)*
 #      - subject_id
 #      - age
 #      - sex
 #    * - FA
-#      - /home/username/myProject/data/FA/sub-01_FA.nii.gz
-#      - /home/username/myProject/data/individual_masks/sub-01_mask.nii.gz
+#      - /home/username/myProject/data/FA/sub-01_FA.dscalar.nii
 #      - sub-01
 #      - 10
 #      - F
 #    * - FA
-#      - /home/username/myProject/data/FA/sub-02_FA.nii.gz
-#      - /home/username/myProject/data/individual_masks/sub-02_mask.nii.gz
+#      - /home/username/myProject/data/FA/sub-02_FA.dscalar.nii
 #      - sub-02
 #      - 20
 #      - M
 #    * - FA
-#      - /home/username/myProject/data/FA/sub-03_FA.nii.gz
-#      - /home/username/myProject/data/individual_masks/sub-03_mask.nii.gz
+#      - /home/username/myProject/data/FA/sub-03_FA.dscalar.nii
 #      - sub-03
 #      - 15
 #      - F
@@ -95,7 +80,7 @@ The voxel workflow is very similar to the fixel workflow
 #   between the CSV and disk.
 
 # %%
-# Convert NIfTI files to HDF5
+# Convert CIFTI files to HDF5
 # ---------------------------
 #
 # Using the FA dataset from the example above:
@@ -105,8 +90,7 @@ The voxel workflow is very similar to the fixel workflow
 #     # activate your conda environment first
 #     conda activate <env_name>
 #
-#     modelarrayio nifti-to-h5 \
-#         --group-mask-file /home/username/myProject/data/group_mask.nii.gz \
+#     modelarrayio cifti-to-h5 \
 #         --cohort-file     /home/username/myProject/data/cohort_FA.csv \
 #         --output          /home/username/myProject/data/FA.h5
 #
@@ -114,43 +98,44 @@ The voxel workflow is very similar to the fixel workflow
 # `ModelArray <https://pennlinc.github.io/ModelArray/>`_ to run statistical analyses on it.
 
 # %%
-# Convert result .h5 back to NIfTI
+# Convert result .h5 back to CIFTI
 # --------------------------------
 #
 # After running **ModelArray** and obtaining statistical results inside ``FA.h5`` (suppose the
-# analysis name is ``"mylm"``), use ``modelarrayio h5-to-nifti`` to export them as NIfTI files.
+# analysis name is ``"mylm"``), use ``modelarrayio h5-to-cifti`` to export them as CIFTI files.
+#
+# You must also provide an example CIFTI file to use as a template for the output.
 #
 # .. code-block:: console
 #
-#     modelarrayio h5-to-nifti \
-#         --group-mask-file /home/username/myProject/data/group_mask.nii.gz \
+#     modelarrayio h5-to-cifti \
 #         --cohort-file     /home/username/myProject/data/cohort_FA.csv \
 #         --analysis-name   mylm \
 #         --input-hdf5      /home/username/myProject/data/FA.h5 \
 #         --output-dir      /home/username/myProject/data/FA_stats \
-#         --output-ext      .nii.gz
+#         --example-cifti   /home/username/myProject/data/FA/sub-01_FA.dscalar.nii
 #
 # All converted volume data are saved as ``float32``.  Results in ``FA_stats`` can be viewed
-# with any NIfTI image viewer.
+# with any CIFTI image viewer.
 #
 # .. warning::
 #
-#    If ``--output-dir`` already exists, ``modelarrayio h5-to-nifti`` will not delete it — you will
+#    If ``--output-dir`` already exists, ``modelarrayio h5-to-cifti`` will not delete it — you will
 #    see ``WARNING: Output directory exists``.  Existing files that are **not** part of the
 #    current output list are left unchanged.  Existing files that **are** part of the current
 #    output list will be overwritten.  To avoid confusion, consider manually deleting the output
-#    directory before re-running ``modelarrayio h5-to-nifti``.
+#    directory before re-running ``modelarrayio h5-to-cifti``.
 
 # %%
 # Number-of-observations image
 # ----------------------------
 #
 # If you requested ``nobs`` during model fitting in ModelArray, after conversion you will find
-# an image called ``*_model.nobs.nii*``.  With subject-specific masks, this image may be
+# an image called ``*_model.nobs.dscalar.nii*``.  With subject-specific masks, this image may be
 # inhomogeneous across voxels.
 #
 # Voxels that did not have sufficient subjects (due to subject-specific masking) are stored as
-# ``NaN`` in the HDF5 file.  How different viewers display these voxels:
+# ``NaN`` in the HDF5 file.  How different viewers display these greyordinates:
 #
 # .. list-table::
 #    :header-rows: 1
@@ -177,7 +162,7 @@ The voxel workflow is very similar to the fixel workflow
 #
 # .. code-block:: console
 #
-#     modelarrayio nifti-to-h5 --help
-#     modelarrayio h5-to-nifti --help
+#     modelarrayio cifti-to-h5 --help
+#     modelarrayio h5-to-cifti --help
 #
 # or in the :doc:`/usage` page of this documentation.
