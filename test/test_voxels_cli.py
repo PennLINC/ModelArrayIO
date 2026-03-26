@@ -6,7 +6,7 @@ import h5py
 import nibabel as nb
 import numpy as np
 
-from modelarrayio.cli.voxels_to_h5 import main as convoxel_main
+from modelarrayio.cli.nifti_to_h5 import main as convoxel_main
 
 
 def _make_nifti(data, affine=None):

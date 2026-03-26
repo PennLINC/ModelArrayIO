@@ -1,3 +1,4 @@
+"""Convert NIfTI data to an HDF5 file."""
 import argparse
 import logging
 import os
@@ -24,7 +25,7 @@ from modelarrayio.utils.voxels import _load_cohort_voxels
 logger = logging.getLogger(__name__)
 
 
-def write_storage(
+def nifti_to_h5(
     group_mask_file,
     cohort_file,
     backend='hdf5',
@@ -187,4 +188,4 @@ def main():
         level=getattr(logging, str(log_level).upper(), logging.INFO),
         format='[%(levelname)s] %(name)s: %(message)s',
     )
-    return write_storage(**kwargs)
+    return nifti_to_h5(**kwargs)

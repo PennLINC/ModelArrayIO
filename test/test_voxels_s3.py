@@ -15,7 +15,7 @@ import h5py
 import numpy as np
 import pytest
 
-from modelarrayio.cli.voxels_to_h5 import main as convoxel_main
+from modelarrayio.cli.nifti_to_h5 import main as convoxel_main
 
 # Four confirmed ABIDE OHSU subjects used as test data
 OHSU_SUBJECTS = [

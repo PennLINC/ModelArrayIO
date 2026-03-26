@@ -33,7 +33,8 @@ def _cohort_to_long_dataframe(cohort_df, scalar_columns=None):
     missing = required - set(cohort_df.columns)
     if missing:
         raise ValueError(
-            f'Cohort file must contain columns {sorted(required)} when --scalar-columns is not used.'
+            f'Cohort file must contain columns {sorted(required)} when '
+            '--scalar-columns is not used.'
         )
 
     long_df = cohort_df[list(required)].copy()

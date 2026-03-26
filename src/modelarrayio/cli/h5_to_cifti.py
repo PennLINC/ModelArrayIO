@@ -1,3 +1,4 @@
+"""Convert HDF5 file to CIFTI2 dscalar data."""
 import argparse
 import logging
 import os
@@ -12,7 +13,7 @@ from modelarrayio.cli.parser_utils import _is_file
 logger = logging.getLogger(__name__)
 
 
-def h5_to_ciftis(example_cifti, in_file, analysis_name, output_dir):
+def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
     """Write the contents of an hdf5 file to a fixels directory.
 
     The ``in_file`` parameter should point to an HDF5 file that contains at least two
@@ -106,7 +107,7 @@ def main():
         cohort_df = pd.read_csv(args.cohort_file)
         example_cifti = cohort_df['source_file'][0]
 
-    h5_to_ciftis(
+    h5_to_cifti(
         example_cifti=example_cifti,
         in_file=args.in_file,
         analysis_name=args.analysis_name,

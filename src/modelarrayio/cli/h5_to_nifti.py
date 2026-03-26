@@ -1,3 +1,4 @@
+"""Convert HDF5 file to NIfTI data."""
 import argparse
 import logging
 import os
@@ -12,7 +13,7 @@ from modelarrayio.cli.parser_utils import _is_file
 logger = logging.getLogger(__name__)
 
 
-def h5_to_volumes(in_file, analysis_name, group_mask_file, output_extension, output_dir):
+def h5_to_nifti(in_file, analysis_name, group_mask_file, output_extension, output_dir):
     """Convert stat results in .h5 file to a list of volume (.nii or .nii.gz) files."""
 
     data_type_tosave = np.float32
@@ -132,7 +133,7 @@ def main():
         print('WARNING: Output directory exists')
     os.makedirs(args.output_dir, exist_ok=True)
 
-    h5_to_volumes(*vars(args))
+    h5_to_nifti(*vars(args))
 
 
 def get_parser():

@@ -1,3 +1,4 @@
+"""Convert MIF data to an HDF5 file."""
 import argparse
 import logging
 from collections import defaultdict
@@ -12,8 +13,10 @@ from modelarrayio.cli.parser_utils import _is_file
 from modelarrayio.storage import h5_storage, tiledb_storage
 from modelarrayio.utils.fixels import gather_fixels, mif_to_nifti2
 
+logger = logging.getLogger(__name__)
 
-def write_storage(
+
+def mif_to_h5(
     index_file,
     directions_file,
     cohort_file,
@@ -300,4 +303,4 @@ def main():
         level=getattr(logging, str(log_level).upper(), logging.INFO),
         format='[%(levelname)s] %(name)s: %(message)s',
     )
-    return write_storage(**kwargs)
+    return mif_to_h5(**kwargs)

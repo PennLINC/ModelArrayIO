@@ -1,4 +1,6 @@
+"""Convert HDF5 file to MIF data."""
 import argparse
+import logging
 import os
 import shutil
 from functools import partial
@@ -10,8 +12,10 @@ import pandas as pd
 from modelarrayio.cli.parser_utils import _is_file
 from modelarrayio.utils.fixels import mif_to_nifti2, nifti2_to_mif
 
+logger = logging.getLogger(__name__)
 
-def h5_to_mifs(example_mif, in_file, analysis_name, output_dir):
+
+def h5_to_mif(example_mif, in_file, analysis_name, output_dir):
     """Writes the contents of an hdf5 file to a fixels directory.
 
     The ``in_file`` parameter should point to an HDF5 file that contains at least two
@@ -108,7 +112,7 @@ def main():
     # Get an example mif file
     cohort_df = pd.read_csv(args.cohort_file)
     example_mif = cohort_df['source_file'][0]
-    h5_to_mifs(
+    h5_to_mif(
         example_mif=example_mif,
         in_file=args.in_file,
         analysis_name=args.analysis_name,

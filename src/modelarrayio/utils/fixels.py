@@ -113,35 +113,33 @@ def gather_fixels(index_file, directions_file):
         DataFrame with voxel_id, i, j, k
     """
     _index_img, index_data = mif_to_nifti2(index_file)
-    count_vol = index_data[..., 0].astype(
-        np.uint32
-    )  # number of fixels in each voxel; by index.mif definition
-    id_vol = index_data[
-        ..., 1
-    ]  # index of the first fixel in this voxel, in the list of all fixels (in directions.mif, FD.mif, etc)
+    # number of fixels in each voxel; by index.mif definition
+    count_vol = index_data[..., 0].astype(np.uint32)
+    # index of the first fixel in this voxel, in the list of all fixels
+    # (in directions.mif, FD.mif, etc)
+    id_vol = index_data[..., 1]
     max_id = id_vol.max()
-    max_fixel_id = max_id + int(
-        count_vol[id_vol == max_id]
-    )  # = the maximum id of fixels + 1 = # of fixels in entire image
+    # = the maximum id of fixels + 1 = # of fixels in entire image
+    max_fixel_id = max_id + int(count_vol[id_vol == max_id])
     voxel_mask = count_vol > 0  # voxels that contains fixel(s), =1
     masked_ids = id_vol[voxel_mask]  # 1D array, len = # of voxels with fixel(s), value see id_vol
     masked_counts = count_vol[voxel_mask]  # dim as masked_ids; value see count_vol
-    id_sort = np.argsort(
-        masked_ids
-    )  #  indices that would sort array masked_ids value (i.e. first fixel's id in this voxel) from lowest to highest; so it's sorting voxels by their first fixel id
+    # indices that would sort array masked_ids value (i.e. first fixel's id in this voxel) from
+    # lowest to highest; so it's sorting voxels by their first fixel id
+    id_sort = np.argsort(masked_ids)
     sorted_counts = masked_counts[id_sort]
-    voxel_coords = np.column_stack(
-        np.nonzero(count_vol)
-    )  # dim: [# of voxels with fixel(s)] x 3, each row is the subscript i.e. (i,j,k) in 3D image of a voxel with fixel
+    # dim: [# of voxels with fixel(s)] x 3, each row is the subscript i.e. (i,j,k) in 3D
+    # image of a voxel with fixel
+    voxel_coords = np.column_stack(np.nonzero(count_vol))
 
     fixel_id = 0
     fixel_ids = np.arange(max_fixel_id, dtype=np.int32)
     fixel_voxel_ids = np.zeros_like(fixel_ids)
     for voxel_id, fixel_count in enumerate(sorted_counts):
         for _ in range(fixel_count):
-            fixel_voxel_ids[fixel_id] = (
-                voxel_id  # fixel_voxel_ids: 1D, len = # of fixels; each value is the voxel_id of the voxel where this fixel locates
-            )
+            # fixel_voxel_ids: 1D, len = # of fixels; each value is the voxel_id of the voxel
+            # where this fixel locates
+            fixel_voxel_ids[fixel_id] = voxel_id
             fixel_id += 1
     sorted_coords = voxel_coords[id_sort]
 

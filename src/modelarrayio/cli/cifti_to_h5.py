@@ -1,3 +1,4 @@
+"""Convert CIFTI2 dscalar data to an HDF5 file."""
 import argparse
 import logging
 import os
@@ -29,7 +30,7 @@ from modelarrayio.utils.cifti import (
 logger = logging.getLogger(__name__)
 
 
-def write_storage(
+def cifti_to_h5(
     cohort_file,
     backend='hdf5',
     output_hdf5='fixeldb.h5',
@@ -237,4 +238,4 @@ def main():
         level=getattr(logging, str(log_level).upper(), logging.INFO),
         format='[%(levelname)s] %(name)s: %(message)s',
     )
-    return write_storage(**kwargs)
+    return cifti_to_h5(**kwargs)
