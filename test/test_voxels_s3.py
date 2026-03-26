@@ -87,7 +87,7 @@ def test_convoxel_s3_parallel(tmp_path, group_mask_path, monkeypatch):
                 'group_mask.nii.gz',
                 '--cohort-file',
                 str(cohort_csv),
-                '--output-hdf5',
+                '--output',
                 str(out_h5),
                 '--backend',
                 'hdf5',
@@ -159,9 +159,9 @@ def test_convoxel_s3_serial_matches_parallel(tmp_path, group_mask_path, monkeypa
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv('MODELARRAYIO_S3_ANON', '1')
     for workers, name in [('1', 'serial.h5'), ('4', 'parallel.h5')]:
-        assert (
-            modelarrayio_main(base_argv + ['--output-hdf5', name, '--s3-workers', workers]) == 0
-        ), f'modelarrayio nifti-to-h5 failed (workers={workers})'
+        assert modelarrayio_main(base_argv + ['--output', name, '--s3-workers', workers]) == 0, (
+            f'modelarrayio nifti-to-h5 failed (workers={workers})'
+        )
 
     with (
         h5py.File(tmp_path / 'serial.h5', 'r') as s,
