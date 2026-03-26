@@ -1,6 +1,9 @@
 """ModelArrayIO command-line interface."""
 
+from __future__ import annotations
+
 import argparse
+from importlib.metadata import PackageNotFoundError, version
 
 from modelarrayio.cli.cifti_to_h5 import _parse_cifti_to_h5, cifti_to_h5_main
 from modelarrayio.cli.h5_to_cifti import _parse_h5_to_cifti, h5_to_cifti_main
@@ -19,11 +22,22 @@ COMMANDS = [
 ]
 
 
-def _get_parser():
-    from modelarrayio.__about__ import __version__
+def _get_version() -> str:
+    try:
+        from modelarrayio.__about__ import __version__
+    except ImportError:
+        try:
+            return version('modelarrayio')
+        except PackageNotFoundError:
+            return '0+unknown'
+    return __version__
 
+
+def _get_parser():
     parser = argparse.ArgumentParser(prog='modelarrayio', allow_abbrev=False)
-    parser.add_argument('-V', '--version', action='version', version=f'modelarrayio {__version__}')
+    parser.add_argument(
+        '-V', '--version', action='version', version=f'modelarrayio {_get_version()}'
+    )
     subparsers = parser.add_subparsers(help='modelarrayio subcommands')
 
     for command, parser_func, run_func in COMMANDS:
@@ -42,9 +56,10 @@ def _get_parser():
 
 def main(argv=None):
     """Entry point for the ``modelarrayio`` command."""
-    options = _get_parser().parse_args(argv)
+    parser = _get_parser()
+    options = parser.parse_args(argv)
     if not hasattr(options, 'func'):
-        _get_parser().print_help()
+        parser.print_help()
         return 1
     args = vars(options).copy()
     args.pop('func')

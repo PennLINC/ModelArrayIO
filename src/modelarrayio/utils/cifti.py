@@ -1,7 +1,10 @@
 """Utility functions for CIFTI data."""
 
+from __future__ import annotations
+
 from collections import OrderedDict, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 import nibabel as nb
 import numpy as np
@@ -18,9 +21,9 @@ def _cohort_to_long_dataframe(cohort_df, scalar_columns=None):
         if missing:
             raise ValueError(f'Wide-format cohort is missing scalar columns: {missing}')
         records = []
-        for _, row in cohort_df.iterrows():
-            for scalar_col in scalar_columns:
-                source_val = row[scalar_col]
+        selected_columns = cohort_df[scalar_columns]
+        for row_values in selected_columns.itertuples(index=False, name=None):
+            for scalar_col, source_val in zip(scalar_columns, row_values, strict=True):
                 if pd.isna(source_val) or source_val is None:
                     continue
                 source_str = str(source_val).strip()
@@ -73,33 +76,36 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
     brain_structures: :obj:`numpy.ndarray`
         The per-greyordinate brain structures as strings
     """
-    cifti = cifti_file if hasattr(cifti_file, 'get_fdata') else nb.load(cifti_file)
+    cifti = cifti_file if hasattr(cifti_file, 'get_fdata') else nb.load(Path(cifti_file))
     cifti_hdr = cifti.header
     axes = [cifti_hdr.get_axis(i) for i in range(cifti.ndim)]
-    if len(axes) > 2:
-        raise Exception('Only 2 axes should be present in a scalar cifti file')
-    if len(axes) < 2:
-        raise Exception()
+    if len(axes) != 2:
+        raise ValueError(
+            f'Expected exactly 2 axes in scalar CIFTI data, found {len(axes)} for {cifti_file!r}.'
+        )
 
     scalar_axes = [ax for ax in axes if isinstance(ax, nb.cifti2.cifti2_axes.ScalarAxis)]
     brain_axes = [ax for ax in axes if isinstance(ax, nb.cifti2.cifti2_axes.BrainModelAxis)]
 
-    if not len(scalar_axes) == 1:
-        raise Exception(f'Only one scalar axis should be present. Found {scalar_axes}')
-    if not len(brain_axes) == 1:
-        raise Exception(f'Only one brain axis should be present. Found {brain_axes}')
+    if len(scalar_axes) != 1:
+        raise ValueError(f'Expected one scalar axis in {cifti_file!r}. Found {scalar_axes!r}.')
+    if len(brain_axes) != 1:
+        raise ValueError(f'Expected one brain model axis in {cifti_file!r}. Found {brain_axes!r}.')
     brain_axis = brain_axes.pop()
 
     cifti_data = cifti.get_fdata().squeeze().astype(np.float32)
-    if not cifti_data.ndim == 1:
-        raise Exception('Too many dimensions in the cifti data')
+    if cifti_data.ndim != 1:
+        raise ValueError(f'Expected 1-D scalar CIFTI data in {cifti_file!r}.')
     brain_names = brain_axis.name
-    if not cifti_data.shape[0] == brain_names.shape[0]:
-        raise Exception('Mismatch between the brain names and data array')
+    if cifti_data.shape[0] != brain_names.shape[0]:
+        raise ValueError(
+            f'Mismatch between brain names and data array in {cifti_file!r}: '
+            f'{brain_names.shape[0]} names vs {cifti_data.shape[0]} values.'
+        )
 
     if reference_brain_names is not None:
-        if not (brain_names == reference_brain_names).all():
-            raise Exception(f'Incosistent vertex names in cifti file {cifti_file}')
+        if not np.array_equal(brain_names, reference_brain_names):
+            raise ValueError(f'Inconsistent greyordinate names in CIFTI file {cifti_file!r}.')
 
     return cifti_data, brain_names
 

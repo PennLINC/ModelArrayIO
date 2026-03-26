@@ -1,15 +1,18 @@
 """Convert NIfTI data to an HDF5 file."""
 
+from __future__ import annotations
+
 import argparse
 import logging
-import os
 from functools import partial
+from pathlib import Path
 
 import h5py
 import nibabel as nb
 import numpy as np
 import pandas as pd
 
+from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.parser_utils import (
     _is_file,
     add_backend_arg,
@@ -20,7 +23,6 @@ from modelarrayio.cli.parser_utils import (
     add_storage_args,
     add_tiledb_storage_args,
 )
-from modelarrayio.storage import h5_storage, tiledb_storage
 from modelarrayio.utils.voxels import _load_cohort_voxels
 
 logger = logging.getLogger(__name__)
@@ -71,14 +73,13 @@ def nifti_to_h5(
     """
     # gather cohort data
     cohort_df = pd.read_csv(cohort_file)
+    output_path = Path(output)
 
     # Load the group mask image to define the rows of the matrix
     group_mask_img = nb.load(group_mask_file)
     # get_fdata(): get matrix data in float format
     group_mask_matrix = group_mask_img.get_fdata() > 0
-    # np.nonzero() returns the coords of nonzero elements;
-    # then np.column_stack() stack them together as an (#voxels, 3) array
-    voxel_coords = np.column_stack(np.nonzero(group_mask_img.get_fdata()))
+    voxel_coords = np.column_stack(np.nonzero(group_mask_matrix))
 
     # voxel_table: records the coordinations of the nonzero voxels;
     # coord starts from 0 (because using python)
@@ -91,70 +92,39 @@ def nifti_to_h5(
         }
     )
 
-    # upload each cohort's data
-    print('Extracting NIfTI data...')
+    logger.info('Extracting NIfTI data...')
     scalars, sources_lists = _load_cohort_voxels(cohort_df, group_mask_matrix, s3_workers)
 
     # Write the output:
     if backend == 'hdf5':
-        output_dir = os.path.dirname(output_hdf5)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir, exist_ok=True)
-        f = h5py.File(output_hdf5, 'w')
-
-        voxelsh5 = f.create_dataset(name='voxels', data=voxel_table.to_numpy().T)
-        voxelsh5.attrs['column_names'] = list(voxel_table.columns)
-
-        for scalar_name in scalars.keys():
-            num_subjects = len(scalars[scalar_name])
-            num_voxels = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
-            dset = h5_storage.create_empty_scalar_matrix_dataset(
-                f,
-                f'scalars/{scalar_name}/values',
-                num_subjects,
-                num_voxels,
+        output_path = cli_utils.prepare_output_parent(output_path)
+        with h5py.File(output_path, 'w') as h5_file:
+            cli_utils.write_table_dataset(h5_file, 'voxels', voxel_table)
+            cli_utils.write_hdf5_scalar_matrices(
+                h5_file,
+                scalars,
+                sources_lists,
                 storage_dtype=storage_dtype,
                 compression=compression,
                 compression_level=compression_level,
                 shuffle=shuffle,
                 chunk_voxels=chunk_voxels,
                 target_chunk_mb=target_chunk_mb,
-                sources_list=sources_lists[scalar_name],
             )
+        return int(not output_path.exists())
 
-            h5_storage.write_rows_in_column_stripes(dset, scalars[scalar_name])
-        f.close()
-        return int(not os.path.exists(output_hdf5))
-    else:
-        # TileDB backend
-        os.makedirs(output_tiledb, exist_ok=True)
-
-        # Store voxel coordinates as a small TileDB array (optional):
-        # we store as metadata on base group
-        # Here we serialize as a dense 2D array for parity with HDF5 tables if desired,
-        # but keep it simple: metadata JSON
-        # Create arrays for each scalar
-        for scalar_name in scalars.keys():
-            num_subjects = len(scalars[scalar_name])
-            num_voxels = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
-            dataset_path = f'scalars/{scalar_name}/values'
-            tiledb_storage.create_empty_scalar_matrix_array(
-                output_tiledb,
-                dataset_path,
-                num_subjects,
-                num_voxels,
-                storage_dtype=storage_dtype,
-                compression=tdb_compression,
-                compression_level=tdb_compression_level,
-                shuffle=tdb_shuffle,
-                tile_voxels=tdb_tile_voxels,
-                target_tile_mb=tdb_target_tile_mb,
-                sources_list=sources_lists[scalar_name],
-            )
-            # Stripe-write
-            uri = os.path.join(output_tiledb, dataset_path)
-            tiledb_storage.write_rows_in_column_stripes(uri, scalars[scalar_name])
-        return 0
+    cli_utils.write_tiledb_scalar_matrices(
+        output_path,
+        scalars,
+        sources_lists,
+        storage_dtype=storage_dtype,
+        compression=compression,
+        compression_level=compression_level,
+        shuffle=shuffle,
+        chunk_voxels=chunk_voxels,
+        target_chunk_mb=target_chunk_mb,
+    )
+    return 0
 
 
 def nifti_to_h5_main(
@@ -178,10 +148,7 @@ def nifti_to_h5_main(
     log_level='INFO',
 ):
     """Entry point for the ``modelarrayio nifti-to-h5`` command."""
-    logging.basicConfig(
-        level=getattr(logging, str(log_level).upper(), logging.INFO),
-        format='[%(levelname)s] %(name)s: %(message)s',
-    )
+    cli_utils.configure_logging(log_level)
     return nifti_to_h5(
         group_mask_file=group_mask_file,
         cohort_file=cohort_file,

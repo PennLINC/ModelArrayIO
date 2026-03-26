@@ -19,7 +19,8 @@ def test_resolve_dtype() -> None:
     assert resolve_dtype('float32') == np.float32
     assert resolve_dtype('float64') == np.float64
     assert resolve_dtype('FLOAT32') == np.float32
-    assert resolve_dtype('unknown') == np.float32
+    with pytest.raises(ValueError, match='Unsupported storage dtype'):
+        resolve_dtype('unknown')
 
 
 def test_resolve_compression_gzip_and_none() -> None:
