@@ -22,6 +22,15 @@ def add_to_modelarray_args(parser, default_output='output.h5'):
         default=default_output,
     )
     parser.add_argument(
+        '--scalar-columns',
+        '--scalar_columns',
+        nargs='+',
+        help=(
+            'Column names containing scalar file paths when the cohort table is in wide format. '
+            'If omitted, the cohort file must include "scalar_name" and "source_file" columns.'
+        ),
+    )
+    parser.add_argument(
         '--backend',
         help='Storage backend for subject-by-element matrix',
         choices=['hdf5', 'tiledb'],
@@ -107,19 +116,6 @@ def add_to_modelarray_args(parser, default_output='output.h5'):
 
     add_log_level_arg(parser)
 
-    return parser
-
-
-def add_scalar_columns_arg(parser):
-    parser.add_argument(
-        '--scalar-columns',
-        '--scalar_columns',
-        nargs='+',
-        help=(
-            'Column names containing scalar file paths when the cohort table is in wide format. '
-            "If omitted, the cohort file must include 'scalar_name' and 'source_file' columns."
-        ),
-    )
     return parser
 
 

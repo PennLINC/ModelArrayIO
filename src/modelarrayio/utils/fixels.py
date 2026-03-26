@@ -3,11 +3,14 @@
 import shutil
 import subprocess
 import tempfile
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import nibabel as nb
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 
 def find_mrconvert():
@@ -89,6 +92,69 @@ def mif_to_nifti2(mif_file):
         data = loaded_img.get_fdata(dtype=np.float32).squeeze()
 
     return nifti2_img, data
+
+
+def load_cohort_mif(cohort_long, s3_workers):
+    """Load all MIF scalar rows from the cohort, optionally in parallel.
+
+    When s3_workers > 1, a ThreadPoolExecutor is used to run mrconvert
+    calls concurrently (subprocess calls release the GIL). Results arrive
+    via as_completed and are indexed by (scalar_name, subj_idx) so the
+    final ordered lists are reconstructed correctly regardless of completion
+    order.
+
+    Parameters
+    ----------
+    cohort_long : :obj:`pandas.DataFrame`
+        Long-format cohort dataframe with columns 'scalar_name' and 'source_file'.
+    s3_workers : :obj:`int`
+        Number of parallel workers for loading.
+
+    Returns
+    -------
+    scalars : dict[str, list[np.ndarray]]
+        Per-scalar ordered list of 1-D subject arrays, ready for stripe-write.
+    sources_lists : dict[str, list[str]]
+        Per-scalar ordered list of source file paths (for HDF5 metadata).
+    """
+    scalar_subj_counter = defaultdict(int)
+    jobs = []
+    sources_lists = defaultdict(list)
+
+    for row in cohort_long.itertuples(index=False):
+        sn = row.scalar_name
+        subj_idx = scalar_subj_counter[sn]
+        scalar_subj_counter[sn] += 1
+        src = row.source_file
+        jobs.append((sn, subj_idx, src))
+        sources_lists[sn].append(src)
+
+    def _worker(job):
+        sn, subj_idx, src = job
+        _img, data = mif_to_nifti2(src)
+        return sn, subj_idx, data
+
+    if s3_workers > 1:
+        results = defaultdict(dict)
+        with ThreadPoolExecutor(max_workers=s3_workers) as pool:
+            futures = {pool.submit(_worker, job): job for job in jobs}
+            for future in tqdm(
+                as_completed(futures),
+                total=len(futures),
+                desc='Loading MIF data',
+            ):
+                sn, subj_idx, data = future.result()
+                results[sn][subj_idx] = data
+        scalars = {
+            sn: [results[sn][i] for i in range(cnt)] for sn, cnt in scalar_subj_counter.items()
+        }
+    else:
+        scalars = defaultdict(list)
+        for job in tqdm(jobs, desc='Loading MIF data'):
+            sn, subj_idx, data = _worker(job)
+            scalars[sn].append(data)
+
+    return scalars, sources_lists
 
 
 def gather_fixels(index_file, directions_file):

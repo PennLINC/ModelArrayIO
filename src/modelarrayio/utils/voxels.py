@@ -13,13 +13,23 @@ from tqdm import tqdm
 from modelarrayio.utils.s3_utils import load_nibabel
 
 
-def _load_cohort_voxels(cohort_df, group_mask_matrix, s3_workers):
+def load_cohort_voxels(cohort_long, group_mask_matrix, s3_workers):
     """Load all voxel rows from the cohort, optionally in parallel.
 
     When s3_workers > 1, a ThreadPoolExecutor is used. Threads share memory so
     group_mask_matrix is accessed directly with no copying overhead. Results
     arrive via as_completed and are indexed by (scalar_name, subj_idx) so the
     final ordered lists are reconstructed correctly regardless of completion order.
+
+    Parameters
+    ----------
+    cohort_long : :obj:`pandas.DataFrame`
+        Long-format cohort dataframe with columns 'scalar_name', 'source_file',
+        and 'source_mask_file'.
+    group_mask_matrix : :obj:`numpy.ndarray`
+        Boolean group mask array.
+    s3_workers : :obj:`int`
+        Number of parallel workers for loading.
 
     Returns
     -------
@@ -32,7 +42,7 @@ def _load_cohort_voxels(cohort_df, group_mask_matrix, s3_workers):
     jobs = []
     sources_lists = defaultdict(list)
 
-    for row in cohort_df.itertuples(index=False):
+    for row in cohort_long.itertuples(index=False):
         sn = row.scalar_name
         subj_idx = scalar_subj_counter[sn]
         scalar_subj_counter[sn] += 1

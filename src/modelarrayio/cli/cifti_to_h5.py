@@ -13,14 +13,13 @@ import pandas as pd
 from tqdm import tqdm
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import add_scalar_columns_arg, add_to_modelarray_args
+from modelarrayio.cli.parser_utils import add_to_modelarray_args
 from modelarrayio.utils.cifti import (
-    _build_scalar_sources,
-    _cohort_to_long_dataframe,
-    _load_cohort_cifti,
     brain_names_to_dataframe,
     extract_cifti_scalar_data,
+    load_cohort_cifti,
 )
+from modelarrayio.utils.misc import build_scalar_sources, cohort_to_long_dataframe
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +46,7 @@ def cifti_to_h5(
         Path to a csv with demographic info and paths to data
     backend : :obj:`str`
         Backend to use for storage (``'hdf5'`` or ``'tiledb'``)
-    output : :obj:`str`
+    output : :obj:`pathlib.Path`
         Output path. For the hdf5 backend, path to an .h5 file;
         for the tiledb backend, path to a .tdb directory.
     storage_dtype : :obj:`str`
@@ -77,19 +76,18 @@ def cifti_to_h5(
         0 if successful, 1 if failed.
     """
     cohort_df = pd.read_csv(cohort_file)
-    cohort_long = _cohort_to_long_dataframe(cohort_df, scalar_columns=scalar_columns)
-    output_path = Path(output)
+    cohort_long = cohort_to_long_dataframe(cohort_df, scalar_columns=scalar_columns)
     if cohort_long.empty:
         raise ValueError('Cohort file does not contain any scalar entries after normalization.')
-    scalar_sources = _build_scalar_sources(cohort_long)
+    scalar_sources = build_scalar_sources(cohort_long)
     if not scalar_sources:
         raise ValueError('Unable to derive scalar sources from cohort file.')
 
     if backend == 'hdf5':
-        scalars, last_brain_names = _load_cohort_cifti(cohort_long, s3_workers)
+        scalars, last_brain_names = load_cohort_cifti(cohort_long, s3_workers)
         greyordinate_table, structure_names = brain_names_to_dataframe(last_brain_names)
-        output_path = cli_utils.prepare_output_parent(output_path)
-        with h5py.File(output_path, 'w') as h5_file:
+        output = cli_utils.prepare_output_parent(output)
+        with h5py.File(output, 'w') as h5_file:
             cli_utils.write_table_dataset(
                 h5_file,
                 'greyordinates',
@@ -107,9 +105,9 @@ def cifti_to_h5(
                 chunk_voxels=chunk_voxels,
                 target_chunk_mb=target_chunk_mb,
             )
-        return int(not output_path.exists())
+        return int(not output.exists())
 
-    output_path.mkdir(parents=True, exist_ok=True)
+    output.mkdir(parents=True, exist_ok=True)
     if not scalar_sources:
         return 0
 
@@ -127,7 +125,7 @@ def cifti_to_h5(
 
         if rows:
             cli_utils.write_tiledb_scalar_matrices(
-                output_path,
+                output,
                 {scalar_name: rows},
                 {scalar_name: source_files},
                 storage_dtype=storage_dtype,
@@ -178,5 +176,4 @@ def _parse_cifti_to_h5():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     add_to_modelarray_args(parser, default_output='greyordinatearray.h5')
-    add_scalar_columns_arg(parser)
     return parser
