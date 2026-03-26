@@ -13,14 +13,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import (
-    add_backend_arg,
-    add_cohort_arg,
-    add_output_arg,
-    add_s3_workers_arg,
-    add_scalar_columns_arg,
-    add_storage_args,
-)
+from modelarrayio.cli.parser_utils import add_scalar_columns_arg, add_to_modelarray_args
 from modelarrayio.utils.cifti import (
     _build_scalar_sources,
     _cohort_to_long_dataframe,
@@ -35,7 +28,7 @@ logger = logging.getLogger(__name__)
 def cifti_to_h5(
     cohort_file,
     backend='hdf5',
-    output='fixelarray.h5',
+    output=Path('greyordinatearray.h5'),
     storage_dtype='float32',
     compression='gzip',
     compression_level=4,
@@ -43,8 +36,8 @@ def cifti_to_h5(
     chunk_voxels=0,
     target_chunk_mb=2.0,
     workers=None,
-    scalar_columns=None,
     s3_workers=1,
+    scalar_columns=None,
 ):
     """Load all CIFTI data and write to an HDF5 or TileDB file.
 
@@ -73,10 +66,10 @@ def cifti_to_h5(
     workers : :obj:`int`
         Maximum number of parallel TileDB write workers (``None`` = auto).
         Has no effect when ``backend='hdf5'``.
-    scalar_columns : :obj:`list`
-        List of scalar columns to use
     s3_workers : :obj:`int`
         Number of workers for parallel S3 downloads
+    scalar_columns : :obj:`list`
+        List of scalar columns to use
 
     Returns
     -------
@@ -172,37 +165,11 @@ def cifti_to_h5(
     return 0
 
 
-def cifti_to_h5_main(
-    cohort_file,
-    backend='hdf5',
-    output='fixelarray.h5',
-    storage_dtype='float32',
-    compression='gzip',
-    compression_level=4,
-    shuffle=True,
-    chunk_voxels=0,
-    target_chunk_mb=2.0,
-    workers=None,
-    scalar_columns=None,
-    s3_workers=1,
-    log_level='INFO',
-):
+def cifti_to_h5_main(**kwargs):
     """Entry point for the ``modelarrayio cifti-to-h5`` command."""
+    log_level = kwargs.pop('log_level', 'INFO')
     cli_utils.configure_logging(log_level)
-    return cifti_to_h5(
-        cohort_file=cohort_file,
-        backend=backend,
-        output=output,
-        storage_dtype=storage_dtype,
-        compression=compression,
-        compression_level=compression_level,
-        shuffle=shuffle,
-        chunk_voxels=chunk_voxels,
-        target_chunk_mb=target_chunk_mb,
-        workers=workers,
-        scalar_columns=scalar_columns,
-        s3_workers=s3_workers,
-    )
+    return cifti_to_h5(**kwargs)
 
 
 def _parse_cifti_to_h5():
@@ -210,21 +177,6 @@ def _parse_cifti_to_h5():
         description='Create a hdf5 file of CIFTI2 dscalar data',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    add_cohort_arg(parser)
+    add_to_modelarray_args(parser, default_output='greyordinatearray.h5')
     add_scalar_columns_arg(parser)
-    add_output_arg(parser, default_name='fixelarray.h5')
-    add_backend_arg(parser)
-    add_storage_args(parser)
-    parser.add_argument(
-        '--workers',
-        type=int,
-        help=(
-            'Maximum number of parallel TileDB write workers. '
-            'Default 0 (auto, uses CPU count). '
-            'Set to 1 to disable parallel writes. '
-            'Has no effect when --backend=hdf5.'
-        ),
-        default=0,
-    )
-    add_s3_workers_arg(parser)
     return parser

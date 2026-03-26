@@ -4,19 +4,8 @@ from functools import partial
 from pathlib import Path
 
 
-def add_output_arg(parser, default_name='output.h5'):
-    parser.add_argument(
-        '--output',
-        help=(
-            'Output path. For the hdf5 backend, path to an .h5 file; '
-            'for the tiledb backend, path to a .tdb directory.'
-        ),
-        default=default_name,
-    )
-    return parser
-
-
-def add_cohort_arg(parser):
+def add_to_modelarray_args(parser, default_output='output.h5'):
+    """Add arguments common to all commands that prepare data for ModelArray."""
     parser.add_argument(
         '--cohort-file',
         '--cohort_file',
@@ -24,10 +13,20 @@ def add_cohort_arg(parser):
         required=True,
         type=partial(_is_file, parser=parser),
     )
-    return parser
-
-
-def add_storage_args(parser):
+    parser.add_argument(
+        '--output',
+        help=(
+            'Output path. For the hdf5 backend, path to an .h5 file; '
+            'for the tiledb backend, path to a .tdb directory.'
+        ),
+        default=default_output,
+    )
+    parser.add_argument(
+        '--backend',
+        help='Storage backend for subject-by-element matrix',
+        choices=['hdf5', 'tiledb'],
+        default='hdf5',
+    )
     parser.add_argument(
         '--dtype',
         help='Floating dtype for storing values: float32 (default) or float64',
@@ -80,22 +79,21 @@ def add_storage_args(parser):
         default=2.0,
     )
 
-    add_log_level_arg(parser)
-    return parser
-
-
-def add_backend_arg(parser):
-    parser.add_argument(
-        '--backend',
-        help='Storage backend for subject-by-element matrix',
-        choices=['hdf5', 'tiledb'],
-        default='hdf5',
+    tiledb_group = parser.add_argument_group('TileDB arguments')
+    tiledb_group.add_argument(
+        '--workers',
+        type=int,
+        help=(
+            'Maximum number of parallel TileDB write workers. '
+            'Default 0 (auto, uses CPU count). '
+            'Set to 1 to disable parallel writes. '
+            'Has no effect when --backend=hdf5.'
+        ),
+        default=0,
     )
-    return parser
 
-
-def add_s3_workers_arg(parser):
-    parser.add_argument(
+    s3_group = parser.add_argument_group('S3 arguments')
+    s3_group.add_argument(
         '--s3-workers',
         '--s3_workers',
         type=int,
@@ -106,6 +104,9 @@ def add_s3_workers_arg(parser):
             'Default 1 (serial).'
         ),
     )
+
+    add_log_level_arg(parser)
+
     return parser
 
 
@@ -131,6 +132,34 @@ def add_log_level_arg(parser):
         help='Logging level (default INFO; set to WARNING to reduce verbosity)',
         default='INFO',
     )
+    return parser
+
+
+def add_from_modelarray_args(parser):
+    parser.add_argument(
+        '--analysis-name',
+        '--analysis_name',
+        help='Name for the statistical analysis results to be saved.',
+        required=True,
+    )
+    parser.add_argument(
+        '--input-hdf5',
+        '--input_hdf5',
+        help='Name of HDF5 (.h5) file where results outputs are saved.',
+        type=partial(_is_file, parser=parser),
+        dest='in_file',
+        required=True,
+    )
+    parser.add_argument(
+        '--output-dir',
+        '--output_dir',
+        help=(
+            'Directory where outputs will be saved. '
+            'If the directory does not exist, it will be automatically created.'
+        ),
+        required=True,
+    )
+
     return parser
 
 

@@ -13,13 +13,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import (
-    _is_file,
-    add_backend_arg,
-    add_cohort_arg,
-    add_output_arg,
-    add_storage_args,
-)
+from modelarrayio.cli.parser_utils import _is_file, add_to_modelarray_args
 from modelarrayio.utils.fixels import gather_fixels, mif_to_nifti2
 
 logger = logging.getLogger(__name__)
@@ -37,6 +31,8 @@ def mif_to_h5(
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
+    workers=None,
+    s3_workers=1,
 ):
     """Load all fixeldb data and write to an HDF5 or TileDB file.
 
@@ -66,6 +62,11 @@ def mif_to_h5(
         Chunk/tile size along the fixel axis (0 = auto)
     target_chunk_mb : :obj:`float`
         Target chunk/tile size in MiB when auto-computing the spatial axis length
+    workers : :obj:`int`
+        Maximum number of parallel TileDB write workers. Default 0 (auto).
+        Has no effect when ``backend='hdf5'``.
+    s3_workers : :obj:`int`
+        Number of parallel workers for S3 downloads. Default 1.
 
     Returns
     -------
@@ -122,35 +123,11 @@ def mif_to_h5(
     return 0
 
 
-def mif_to_h5_main(
-    index_file,
-    directions_file,
-    cohort_file,
-    backend='hdf5',
-    output='fixelarray.h5',
-    storage_dtype='float32',
-    compression='gzip',
-    compression_level=4,
-    shuffle=True,
-    chunk_voxels=0,
-    target_chunk_mb=2.0,
-    log_level='INFO',
-):
+def mif_to_h5_main(**kwargs):
     """Entry point for the ``modelarrayio mif-to-h5`` command."""
+    log_level = kwargs.pop('log_level', 'INFO')
     cli_utils.configure_logging(log_level)
-    return mif_to_h5(
-        index_file=index_file,
-        directions_file=directions_file,
-        cohort_file=cohort_file,
-        backend=backend,
-        output=output,
-        storage_dtype=storage_dtype,
-        compression=compression,
-        compression_level=compression_level,
-        shuffle=shuffle,
-        chunk_voxels=chunk_voxels,
-        target_chunk_mb=target_chunk_mb,
-    )
+    return mif_to_h5(**kwargs)
 
 
 def _parse_mif_to_h5():
@@ -160,6 +137,7 @@ def _parse_mif_to_h5():
     )
     IsFile = partial(_is_file, parser=parser)
 
+    # MIF-specific arguments
     parser.add_argument(
         '--index-file',
         '--index_file',
@@ -174,8 +152,7 @@ def _parse_mif_to_h5():
         required=True,
         type=IsFile,
     )
-    add_cohort_arg(parser)
-    add_output_arg(parser, default_name='fixelarray.h5')
-    add_backend_arg(parser)
-    add_storage_args(parser)
+
+    # Common arguments
+    add_to_modelarray_args(parser, default_output='fixelarray.h5')
     return parser

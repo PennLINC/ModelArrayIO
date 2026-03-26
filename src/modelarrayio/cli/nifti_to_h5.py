@@ -13,14 +13,7 @@ import numpy as np
 import pandas as pd
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import (
-    _is_file,
-    add_backend_arg,
-    add_cohort_arg,
-    add_output_arg,
-    add_s3_workers_arg,
-    add_storage_args,
-)
+from modelarrayio.cli.parser_utils import _is_file, add_to_modelarray_args
 from modelarrayio.utils.voxels import _load_cohort_voxels
 
 logger = logging.getLogger(__name__)
@@ -30,13 +23,14 @@ def nifti_to_h5(
     group_mask_file,
     cohort_file,
     backend='hdf5',
-    output='voxeldb.h5',
+    output=Path('voxelarray.h5'),
     storage_dtype='float32',
     compression='gzip',
     compression_level=4,
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
+    workers=None,
     s3_workers=1,
 ):
     """Load all volume data and write to an HDF5 or TileDB file.
@@ -65,6 +59,9 @@ def nifti_to_h5(
         Chunk/tile size along the voxel axis. If 0, auto-compute. Default 0.
     target_chunk_mb : :obj:`float`
         Target chunk/tile size in MiB when auto-computing. Default 2.0.
+    workers : :obj:`int`
+        Maximum number of parallel TileDB write workers. Default 0 (auto).
+        Has no effect when ``backend='hdf5'``.
     s3_workers : :obj:`int`
         Number of parallel workers for S3 downloads. Default 1.
     """
@@ -118,35 +115,11 @@ def nifti_to_h5(
     return 0
 
 
-def nifti_to_h5_main(
-    group_mask_file,
-    cohort_file,
-    backend='hdf5',
-    output='voxeldb.h5',
-    storage_dtype='float32',
-    compression='gzip',
-    compression_level=4,
-    shuffle=True,
-    chunk_voxels=0,
-    target_chunk_mb=2.0,
-    s3_workers=1,
-    log_level='INFO',
-):
+def nifti_to_h5_main(**kwargs):
     """Entry point for the ``modelarrayio nifti-to-h5`` command."""
+    log_level = kwargs.pop('log_level', 'INFO')
     cli_utils.configure_logging(log_level)
-    return nifti_to_h5(
-        group_mask_file=group_mask_file,
-        cohort_file=cohort_file,
-        backend=backend,
-        output=output,
-        storage_dtype=storage_dtype,
-        compression=compression,
-        compression_level=compression_level,
-        shuffle=shuffle,
-        chunk_voxels=chunk_voxels,
-        target_chunk_mb=target_chunk_mb,
-        s3_workers=s3_workers,
-    )
+    return nifti_to_h5(**kwargs)
 
 
 def _parse_nifti_to_h5():
@@ -155,6 +128,8 @@ def _parse_nifti_to_h5():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     IsFile = partial(_is_file, parser=parser)
+
+    # NIfTI-specific arguments
     parser.add_argument(
         '--group-mask-file',
         '--group_mask_file',
@@ -162,9 +137,7 @@ def _parse_nifti_to_h5():
         required=True,
         type=IsFile,
     )
-    add_cohort_arg(parser)
-    add_output_arg(parser, default_name='voxeldb.h5')
-    add_backend_arg(parser)
-    add_storage_args(parser)
-    add_s3_workers_arg(parser)
+
+    # Common arguments
+    add_to_modelarray_args(parser, default_output='voxelarray.h5')
     return parser

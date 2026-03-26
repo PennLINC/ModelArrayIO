@@ -12,7 +12,7 @@ import nibabel as nb
 import numpy as np
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import _is_file, add_log_level_arg
+from modelarrayio.cli.parser_utils import _is_file, add_from_modelarray_args, add_log_level_arg
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +28,8 @@ def h5_to_nifti(in_file, analysis_name, group_mask_file, output_extension, outpu
 
     # modify the header:
     header_tosave = group_mask_img.header
-    header_tosave.set_data_dtype(
-        data_type_tosave
-    )  # modify the data type (mask's data type could be uint8...)
+    # modify the data type (mask's data type could be uint8...)
+    header_tosave.set_data_dtype(data_type_tosave)
 
     output_path = Path(output_dir)
     with h5py.File(in_file, 'r') as h5_data:
@@ -100,26 +99,9 @@ def _parse_h5_to_nifti():
         required=True,
         type=IsFile,
     )
-    parser.add_argument(
-        '--analysis-name',
-        '--analysis_name',
-        help='Name of the statistical analysis results to be saved.',
-    )
-    parser.add_argument(
-        '--input-hdf5',
-        '--input_hdf5',
-        help='Name of HDF5 (.h5) file where results outputs are saved.',
-        type=IsFile,
-        dest='in_file',
-    )
-    parser.add_argument(
-        '--output-dir',
-        '--output_dir',
-        help=(
-            'A directory where output volume files will be saved. '
-            'If the directory does not exist, it will be automatically created.'
-        ),
-    )
+
+    add_from_modelarray_args(parser)
+
     parser.add_argument(
         '--output-ext',
         '--output_ext',

@@ -1,4 +1,5 @@
-This is a toy voxel-wise dataset for testing ModelArrayIO’s voxel pipeline (`convoxel` / `volumestats_write`).
+This is a toy voxel-wise dataset for testing ModelArrayIO’s voxel pipeline (`modelarrayio nifti-to-h5` / `modelarrayio h5-to-nifti`).
+
 * It was generated using scripts in [ModelArray_tests](https://github.com/PennLINC/ModelArray_tests) GitHub repository.
   * Using scripts in folder `testdata_ConFixel` there (historical folder name from the ConFixel era).
 * It includes n=20 voxel-wise data with individual masks and a group mask.
