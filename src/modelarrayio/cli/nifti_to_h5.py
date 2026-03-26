@@ -16,7 +16,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import _is_file, add_scalar_columns_arg, add_to_modelarray_args
+from modelarrayio.cli.parser_utils import _is_file, add_to_modelarray_args
 from modelarrayio.utils.misc import cohort_to_long_dataframe
 from modelarrayio.utils.voxels import load_cohort_voxels
 
