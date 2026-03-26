@@ -98,7 +98,7 @@ ModelArrayIO and MRtrix are already installed.
 #     # activate your conda environment first
 #     conda activate <env_name>
 #
-#     confixel \
+#     modelarrayio mif-to-h5 \
 #         --index-file      /home/username/myProject/data/FD/index.mif \
 #         --directions-file /home/username/myProject/data/FD/directions.mif \
 #         --cohort-file     /home/username/myProject/data/cohort_FD.csv \
@@ -118,7 +118,7 @@ ModelArrayIO and MRtrix are already installed.
 #
 # .. code-block:: console
 #
-#     fixelstats_write \
+#     modelarrayio h5-to-mif \
 #         --index-file      /home/username/myProject/data/FD/index.mif \
 #         --directions-file /home/username/myProject/data/FD/directions.mif \
 #         --cohort-file     /home/username/myProject/data/cohort_FD.csv \
@@ -144,7 +144,7 @@ ModelArrayIO and MRtrix are already installed.
 #
 # .. code-block:: console
 #
-#     confixel --help
-#     fixelstats_write --help
+#     modelarrayio mif-to-h5 --help
+#     modelarrayio h5-to-mif --help
 #
 # or in the :doc:`/usage` page of this documentation.

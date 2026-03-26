@@ -1,12 +1,11 @@
 import csv
 import os.path as op
-import sys
 
 import h5py
 import nibabel as nb
 import numpy as np
 
-from modelarrayio.cli.nifti_to_h5 import main as convoxel_main
+from modelarrayio.cli.main import main as modelarrayio_main
 
 
 def _make_nifti(data, affine=None):
@@ -72,30 +71,17 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
 
     out_h5 = tmp_path / 'out.h5'
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(
-        sys,
-        'argv',
-        [
-            'convoxel',
-            '--group-mask-file',
-            str(group_mask_file),
-            '--cohort-file',
-            str(cohort_csv),
-            '--output-hdf5',
-            str(out_h5),
-            '--backend',
-            'hdf5',
-            '--dtype',
-            'float32',
-            '--compression',
-            'gzip',
-            '--compression-level',
-            '1',
-            '--target-chunk-mb',
-            '1.0',
-        ],
-    )
-    assert convoxel_main() == 0
+    assert modelarrayio_main([
+        'nifti-to-h5',
+        '--group-mask-file', str(group_mask_file),
+        '--cohort-file', str(cohort_csv),
+        '--output-hdf5', str(out_h5),
+        '--backend', 'hdf5',
+        '--dtype', 'float32',
+        '--compression', 'gzip',
+        '--compression-level', '1',
+        '--target-chunk-mb', '1.0',
+    ]) == 0
     assert op.exists(out_h5)
 
     # Validate HDF5 contents

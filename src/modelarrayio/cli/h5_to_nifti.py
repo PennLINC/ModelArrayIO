@@ -126,18 +126,28 @@ def h5_to_nifti(in_file, analysis_name, group_mask_file, output_extension, outpu
             output_img_1mpvalue.to_filename(out_file_1mpvalue)
 
 
-def main():
-    parser = get_parser()
-    args = parser.parse_args()
-
-    if os.path.exists(args.output_dir):
+def h5_to_nifti_main(
+    group_mask_file,
+    analysis_name,
+    in_file,
+    output_dir,
+    output_extension='.nii.gz',
+):
+    """Entry point for the ``modelarrayio h5-to-nifti`` command."""
+    if os.path.exists(output_dir):
         print('WARNING: Output directory exists')
-    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
-    h5_to_nifti(*vars(args))
+    h5_to_nifti(
+        in_file=in_file,
+        analysis_name=analysis_name,
+        group_mask_file=group_mask_file,
+        output_extension=output_extension,
+        output_dir=output_dir,
+    )
 
 
-def get_parser():
+def _parse_h5_to_nifti():
     parser = argparse.ArgumentParser(
         description='Convert statistical results from an hdf5 file to a volume data (NIfTI file)',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -147,13 +157,6 @@ def get_parser():
         '--group-mask-file',
         '--group_mask_file',
         help='Path to a group mask file',
-        required=True,
-        type=IsFile,
-    )
-    parser.add_argument(
-        '--cohort-file',
-        '--cohort_file',
-        help='Path to a csv with demographic info and paths to data.',
         required=True,
         type=IsFile,
     )
@@ -180,6 +183,7 @@ def get_parser():
     parser.add_argument(
         '--output-ext',
         '--output_ext',
+        dest='output_extension',
         help=(
             'The extension for output volume data. '
             'Options are .nii.gz (default) and .nii. Please provide the prefix dot.'
