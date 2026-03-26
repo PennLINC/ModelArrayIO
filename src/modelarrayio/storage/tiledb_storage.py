@@ -1,5 +1,7 @@
 """TileDB storage utilities."""
 
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -8,15 +10,13 @@ from collections.abc import Sequence
 import numpy as np
 import tiledb
 
+from modelarrayio.storage import utils as storage_utils
+
 logger = logging.getLogger(__name__)
 
 
 def resolve_dtype(storage_dtype):
-    dtype_map = {
-        'float32': np.float32,
-        'float64': np.float64,
-    }
-    return dtype_map.get(str(storage_dtype).lower(), np.float32)
+    return storage_utils.resolve_dtype(storage_dtype)
 
 
 def _build_filter_list(compression: str | None, compression_level: int | None, shuffle: bool):
@@ -46,23 +46,13 @@ def _build_filter_list(compression: str | None, compression_level: int | None, s
 def compute_tile_shape_full_subjects(
     num_subjects, num_items, item_tile, target_tile_mb, storage_np_dtype
 ):
-    num_subjects = int(num_subjects)
-    num_items = int(num_items)
-    if num_subjects <= 0 or num_items <= 0:
-        raise ValueError(
-            'Cannot compute tile shape with zero-length dimension: '
-            f'num_subjects={num_subjects}, num_items={num_items}'
-        )
-
-    subjects_per_tile = num_subjects
-    if int(item_tile) > 0:
-        items_per_tile = min(int(item_tile), num_items)
-    else:
-        bytes_per_value = np.dtype(storage_np_dtype).itemsize
-        target_bytes = float(target_tile_mb) * 1024.0 * 1024.0
-        items_per_tile = max(1, int(target_bytes / (bytes_per_value * subjects_per_tile)))
-        items_per_tile = min(items_per_tile, num_items)
-    tile = (subjects_per_tile, items_per_tile)
+    tile = storage_utils.compute_full_subject_chunk_shape(
+        num_subjects=num_subjects,
+        num_items=num_items,
+        item_chunk=item_tile,
+        target_chunk_mb=target_tile_mb,
+        storage_np_dtype=storage_np_dtype,
+    )
     logger.debug(
         'Computed tile shape: %s (subjects=%d, items=%d, item_tile=%s, target_tile_mb=%.2f)',
         tile,
@@ -131,7 +121,9 @@ def create_scalar_matrix_array(
         A[:] = {'values': stacked_values}
         if sources_list is not None:
             try:
-                A.meta['column_names'] = json.dumps(list(sources_list))
+                A.meta['column_names'] = json.dumps(
+                    storage_utils.normalize_column_names(sources_list)
+                )
             except (TypeError, ValueError, tiledb.TileDBError):
                 # Fallback without metadata if serialization fails
                 logger.warning('Failed to write column_names metadata for %s', uri)
@@ -184,7 +176,9 @@ def create_empty_scalar_matrix_array(
     if sources_list is not None:
         try:
             with tiledb.open(uri, 'w') as A:
-                A.meta['column_names'] = json.dumps(list(map(str, sources_list)))
+                A.meta['column_names'] = json.dumps(
+                    storage_utils.normalize_column_names(sources_list)
+                )
         except (TypeError, ValueError, tiledb.TileDBError):
             logger.warning('Failed to write column_names metadata for %s', uri)
     return uri
@@ -236,7 +230,7 @@ def write_column_names(base_uri: str, scalar: str, sources: Sequence[str]):
     Store column names as a 1D dense TileDB array for the given scalar.
     This mirrors the HDF5 dataset approach and scales to large cohorts.
     """
-    sources = list(map(str, sources))
+    sources = storage_utils.normalize_column_names(sources)
     uri = os.path.join(base_uri, 'scalars', scalar, 'column_names')
     _ensure_parent_group(uri)
 

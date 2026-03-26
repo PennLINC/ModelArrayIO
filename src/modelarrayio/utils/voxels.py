@@ -1,7 +1,10 @@
 """Utility functions for voxel-wise data."""
 
+from __future__ import annotations
+
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 import nibabel as nb
 import numpy as np
@@ -29,12 +32,12 @@ def _load_cohort_voxels(cohort_df, group_mask_matrix, s3_workers):
     jobs = []
     sources_lists = defaultdict(list)
 
-    for _, row in cohort_df.iterrows():
-        sn = row['scalar_name']
+    for row in cohort_df.itertuples(index=False):
+        sn = row.scalar_name
         subj_idx = scalar_subj_counter[sn]
         scalar_subj_counter[sn] += 1
-        src = row['source_file']
-        msk = row['source_mask_file']
+        src = row.source_file
+        msk = row.source_mask_file
         jobs.append((sn, subj_idx, src, msk))
         sources_lists[sn].append(src)
 
@@ -69,11 +72,26 @@ def _load_cohort_voxels(cohort_df, group_mask_matrix, s3_workers):
 
 
 def flattened_image(scalar_image, scalar_mask, group_mask_matrix):
-    scalar_mask_img = scalar_mask if hasattr(scalar_mask, 'get_fdata') else nb.load(scalar_mask)
+    scalar_mask_img = (
+        scalar_mask if hasattr(scalar_mask, 'get_fdata') else nb.load(Path(scalar_mask))
+    )
     scalar_mask_matrix = scalar_mask_img.get_fdata() > 0
 
-    scalar_img = scalar_image if hasattr(scalar_image, 'get_fdata') else nb.load(scalar_image)
+    scalar_img = (
+        scalar_image if hasattr(scalar_image, 'get_fdata') else nb.load(Path(scalar_image))
+    )
     scalar_matrix = scalar_img.get_fdata()
+
+    if scalar_matrix.shape != scalar_mask_matrix.shape:
+        raise ValueError(
+            'Scalar image and scalar mask must have matching shapes: '
+            f'{scalar_matrix.shape} != {scalar_mask_matrix.shape}'
+        )
+    if scalar_matrix.shape != group_mask_matrix.shape:
+        raise ValueError(
+            'Scalar image and group mask must have matching shapes: '
+            f'{scalar_matrix.shape} != {group_mask_matrix.shape}'
+        )
 
     scalar_matrix[np.logical_not(scalar_mask_matrix)] = np.nan
     # .shape = (#voxels,)  # squeeze() is to remove the 2nd dimension which is not necessary

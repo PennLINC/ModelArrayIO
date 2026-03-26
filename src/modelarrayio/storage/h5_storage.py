@@ -1,5 +1,7 @@
 """HDF5 storage utilities."""
 
+from __future__ import annotations
+
 import logging
 
 import h5py
@@ -8,15 +10,13 @@ import pandas as pd
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
+from modelarrayio.storage import utils as storage_utils
+
 logger = logging.getLogger(__name__)
 
 
 def resolve_dtype(storage_dtype):
-    dtype_map = {
-        'float32': np.float32,
-        'float64': np.float64,
-    }
-    return dtype_map.get(str(storage_dtype).lower(), np.float32)
+    return storage_utils.resolve_dtype(storage_dtype)
 
 
 def resolve_compression(compression, compression_level, shuffle):
@@ -39,24 +39,13 @@ def resolve_compression(compression, compression_level, shuffle):
 def compute_chunk_shape_full_subjects(
     num_subjects, num_items, item_chunk, target_chunk_mb, storage_np_dtype
 ):
-    # Fail fast on zero-sized dimensions to avoid invalid chunk shapes and division by zero
-    num_subjects = int(num_subjects)
-    num_items = int(num_items)
-    if num_subjects <= 0 or num_items <= 0:
-        raise ValueError(
-            'Cannot compute chunk shape with zero-length dimension: '
-            f'num_subjects={num_subjects}, num_items={num_items}'
-        )
-
-    subjects_per_chunk = num_subjects
-    if int(item_chunk) > 0:
-        items_per_chunk = min(int(item_chunk), num_items)
-    else:
-        bytes_per_value = np.dtype(storage_np_dtype).itemsize
-        target_bytes = float(target_chunk_mb) * 1024.0 * 1024.0
-        items_per_chunk = max(1, int(target_bytes / (bytes_per_value * subjects_per_chunk)))
-        items_per_chunk = min(items_per_chunk, num_items)
-    chunk = (subjects_per_chunk, items_per_chunk)
+    chunk = storage_utils.compute_full_subject_chunk_shape(
+        num_subjects=num_subjects,
+        num_items=num_items,
+        item_chunk=item_chunk,
+        target_chunk_mb=target_chunk_mb,
+        storage_np_dtype=storage_np_dtype,
+    )
     logger.debug(
         'Computed chunk shape: %s (subjects=%d, items=%d, item_chunk=%s, target_chunk_mb=%.2f)',
         chunk,
@@ -161,11 +150,7 @@ def create_empty_scalar_matrix_dataset(
 
 
 def write_column_names(h5_file: h5py.File, scalar: str, sources: pd.Series | list):
-    # Ensure 1-D array of UTF-8 strings
-    if isinstance(sources, list):
-        values = np.array(list(map(str, sources)), dtype=object)
-    else:
-        values = sources.astype(str).to_numpy().astype(object)
+    values = np.array(storage_utils.normalize_column_names(sources), dtype=object)
     grp = h5_file.require_group(f'scalars/{scalar}')
 
     # Variable-length UTF-8 string dtype

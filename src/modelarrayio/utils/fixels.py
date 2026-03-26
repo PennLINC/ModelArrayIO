@@ -1,10 +1,9 @@
 """Utility functions for fixel-wise data."""
 
-import os
-import os.path as op
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
 
 import nibabel as nb
 import numpy as np
@@ -12,17 +11,29 @@ import pandas as pd
 
 
 def find_mrconvert():
-    program = 'mrconvert'
+    return shutil.which('mrconvert')
 
-    def is_exe(fpath):
-        return op.exists(fpath) and os.access(fpath, os.X_OK)
 
-    for path in os.environ['PATH'].split(os.pathsep):
-        path = path.strip('"')
-        exe_file = op.join(path, program)
-        if is_exe(exe_file):
-            return program
-    return None
+def _require_mrconvert() -> str:
+    mrconvert = find_mrconvert()
+    if mrconvert is None:
+        raise FileNotFoundError('The mrconvert executable could not be found on $PATH.')
+    return mrconvert
+
+
+def _run_mrconvert(source_file: Path, output_file: Path) -> None:
+    try:
+        subprocess.run(
+            [_require_mrconvert(), str(source_file), str(output_file)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        message = exc.stderr.strip() or exc.stdout.strip() or 'mrconvert failed.'
+        raise RuntimeError(
+            f'mrconvert failed while converting {source_file} to {output_file}: {message}'
+        ) from exc
 
 
 def nifti2_to_mif(nifti2_image, mif_file):
@@ -35,24 +46,14 @@ def nifti2_to_mif(nifti2_image, mif_file):
     mif_file : :obj:`str`
         Path to a .mif file
     """
-    # Note: because -force is not turned on in "mrconvert", the output files won't be overwritten!
-    mrconvert = find_mrconvert()
-    if mrconvert is None:
-        raise Exception('The mrconvert executable could not be found on $PATH')
+    output_path = Path(mif_file)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_nii = Path(temp_dir) / 'mrconvert_input.nii'
+        nifti2_image.to_filename(temp_nii)
+        _run_mrconvert(temp_nii, output_path)
 
-    nii_file = mif_file.replace('.mif', '.nii')
-    nifti2_image.to_filename(nii_file)  # save as .nii first
-
-    # convert .nii to .mif
-    proc = subprocess.Popen(
-        [mrconvert, nii_file, mif_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    _, err = proc.communicate()
-
-    if not op.exists(mif_file):
-        raise Exception(err)
-
-    os.remove(nii_file)  # remove temporary .nii file
+    if not output_path.exists():
+        raise RuntimeError(f'mrconvert did not create expected output file: {output_path}')
 
 
 def mif_to_nifti2(mif_file):
@@ -70,28 +71,23 @@ def mif_to_nifti2(mif_file):
     data : :obj:`numpy.ndarray`
         Data from the nifti2 image
     """
-    if not mif_file.endswith('.nii'):
-        dirpath = tempfile.mkdtemp()
-        mrconvert = find_mrconvert()
-        if mrconvert is None:
-            raise Exception('The mrconvert executable could not be found on $PATH')
-        nii_file = op.join(dirpath, 'mif.nii')
-        proc = subprocess.Popen(
-            [mrconvert, mif_file, nii_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        _, err = proc.communicate()
-    else:
-        nii_file = mif_file
-        dirpath = None
+    input_path = Path(mif_file)
+    if input_path.suffix == '.nii':
+        nifti2_img = nb.load(input_path)
+        data = nifti2_img.get_fdata(dtype=np.float32).squeeze()
+        return nifti2_img, data
 
-    if not op.exists(nii_file):
-        raise Exception(err)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        nii_path = Path(temp_dir) / 'mif.nii'
+        _run_mrconvert(input_path, nii_path)
+        if not nii_path.exists():
+            raise RuntimeError(f'mrconvert did not create expected output file: {nii_path}')
 
-    nifti2_img = nb.load(nii_file)
-    data = nifti2_img.get_fdata(dtype=np.float32).squeeze()
-    # ... do stuff with dirpath
-    if dirpath:
-        shutil.rmtree(dirpath)
+        loaded_img = nb.load(nii_path)
+        in_memory_data = np.asanyarray(loaded_img.dataobj)
+        nifti2_img = nb.Nifti2Image(in_memory_data, loaded_img.affine, header=loaded_img.header)
+        data = loaded_img.get_fdata(dtype=np.float32).squeeze()
+
     return nifti2_img, data
 
 

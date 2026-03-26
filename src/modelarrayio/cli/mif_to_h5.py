@@ -1,5 +1,7 @@
 """Convert MIF data to an HDF5 file."""
 
+from __future__ import annotations
+
 import argparse
 import logging
 from collections import defaultdict
@@ -10,6 +12,7 @@ import h5py
 import pandas as pd
 from tqdm import tqdm
 
+from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.parser_utils import (
     _is_file,
     add_backend_arg,
@@ -17,7 +20,6 @@ from modelarrayio.cli.parser_utils import (
     add_output_arg,
     add_storage_args,
 )
-from modelarrayio.storage import h5_storage, tiledb_storage
 from modelarrayio.utils.fixels import gather_fixels, mif_to_nifti2
 
 logger = logging.getLogger(__name__)
@@ -72,6 +74,7 @@ def mif_to_h5(
     """
     # gather fixel data
     fixel_table, voxel_table = gather_fixels(index_file, directions_file)
+    output_path = Path(output)
 
     # gather cohort data
     cohort_df = pd.read_csv(cohort_file)
@@ -79,67 +82,44 @@ def mif_to_h5(
     # upload each cohort's data
     scalars = defaultdict(list)
     sources_lists = defaultdict(list)
-    print('Extracting .mif data...')
-    for _ix, row in tqdm(cohort_df.iterrows(), total=cohort_df.shape[0]):
-        scalar_file = row['source_file']
+    logger.info('Extracting .mif data...')
+    for row in tqdm(cohort_df.itertuples(index=False), total=cohort_df.shape[0]):
+        scalar_file = row.source_file
         _scalar_img, scalar_data = mif_to_nifti2(scalar_file)
-        scalars[row['scalar_name']].append(scalar_data)
-        sources_lists[row['scalar_name']].append(row['source_file'])
+        scalars[row.scalar_name].append(scalar_data)
+        sources_lists[row.scalar_name].append(row.source_file)
 
     # Write the output
     if backend == 'hdf5':
-        f = h5py.File(output, 'w')
-
-        fixelsh5 = f.create_dataset(name='fixels', data=fixel_table.to_numpy().T)
-        fixelsh5.attrs['column_names'] = list(fixel_table.columns)
-
-        voxelsh5 = f.create_dataset(name='voxels', data=voxel_table.to_numpy().T)
-        voxelsh5.attrs['column_names'] = list(voxel_table.columns)
-
-        for scalar_name in scalars.keys():
-            num_subjects = len(scalars[scalar_name])
-            num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
-            dset = h5_storage.create_empty_scalar_matrix_dataset(
-                f,
-                f'scalars/{scalar_name}/values',
-                num_subjects,
-                num_items,
+        output_path = cli_utils.prepare_output_parent(output_path)
+        with h5py.File(output_path, 'w') as h5_file:
+            cli_utils.write_table_dataset(h5_file, 'fixels', fixel_table)
+            cli_utils.write_table_dataset(h5_file, 'voxels', voxel_table)
+            cli_utils.write_hdf5_scalar_matrices(
+                h5_file,
+                scalars,
+                sources_lists,
                 storage_dtype=storage_dtype,
                 compression=compression,
                 compression_level=compression_level,
                 shuffle=shuffle,
                 chunk_voxels=chunk_voxels,
                 target_chunk_mb=target_chunk_mb,
-                sources_list=sources_lists[scalar_name],
             )
+        return int(not output_path.exists())
 
-            h5_storage.write_rows_in_column_stripes(dset, scalars[scalar_name])
-        f.close()
-        return int(not output.exists())
-
-    else:
-        output.mkdir(parents=True, exist_ok=True)
-        for scalar_name in scalars.keys():
-            num_subjects = len(scalars[scalar_name])
-            num_items = scalars[scalar_name][0].shape[0] if num_subjects > 0 else 0
-            dataset_path = f'scalars/{scalar_name}/values'
-            tiledb_storage.create_empty_scalar_matrix_array(
-                output,
-                dataset_path,
-                num_subjects,
-                num_items,
-                storage_dtype=storage_dtype,
-                compression=compression,
-                compression_level=compression_level,
-                shuffle=shuffle,
-                tile_voxels=chunk_voxels,
-                target_tile_mb=target_chunk_mb,
-                sources_list=sources_lists[scalar_name],
-            )
-            uri = output / dataset_path
-            tiledb_storage.write_rows_in_column_stripes(uri, scalars[scalar_name])
-
-        return 0
+    cli_utils.write_tiledb_scalar_matrices(
+        output_path,
+        scalars,
+        sources_lists,
+        storage_dtype=storage_dtype,
+        compression=compression,
+        compression_level=compression_level,
+        shuffle=shuffle,
+        chunk_voxels=chunk_voxels,
+        target_chunk_mb=target_chunk_mb,
+    )
+    return 0
 
 
 def mif_to_h5_main(
@@ -157,16 +137,13 @@ def mif_to_h5_main(
     log_level='INFO',
 ):
     """Entry point for the ``modelarrayio mif-to-h5`` command."""
-    logging.basicConfig(
-        level=getattr(logging, str(log_level).upper(), logging.INFO),
-        format='[%(levelname)s] %(name)s: %(message)s',
-    )
+    cli_utils.configure_logging(log_level)
     return mif_to_h5(
         index_file=index_file,
         directions_file=directions_file,
         cohort_file=cohort_file,
         backend=backend,
-        output=Path(output),
+        output=output,
         storage_dtype=storage_dtype,
         compression=compression,
         compression_level=compression_level,

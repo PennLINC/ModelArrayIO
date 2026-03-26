@@ -1,15 +1,18 @@
 """S3 utilities."""
 
+from __future__ import annotations
+
 import gzip
 import logging
 import os
 from io import BytesIO
+from os import PathLike
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
 
-def is_s3_path(path: str) -> bool:
+def is_s3_path(path: str | PathLike[str]) -> bool:
     """Return True if path is an S3 URI (s3://)."""
     return str(path).startswith('s3://')
 
@@ -39,7 +42,7 @@ def _make_s3_client():
     return boto3.client('s3')
 
 
-def load_nibabel(path: str, *, cifti: bool = False):
+def load_nibabel(path: str | PathLike[str], *, cifti: bool = False):
     """Load a nibabel image from a local path or an s3:// URI.
 
     For s3:// paths the object is downloaded directly into memory via
@@ -65,7 +68,7 @@ def load_nibabel(path: str, *, cifti: bool = False):
     if not is_s3_path(path):
         return nb.load(path)
 
-    parsed = urlparse(path)
+    parsed = urlparse(str(path))
     bucket = parsed.netloc
     key = parsed.path.lstrip('/')
 
