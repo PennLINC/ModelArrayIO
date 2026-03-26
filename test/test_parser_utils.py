@@ -24,7 +24,7 @@ def test_minimal_invocation_defaults(tmp_path_factory) -> None:
 
     p = _parser_with_cohort()
     args = p.parse_args(['--cohort-file', str(cohort_file)])
-    assert args.cohort_file == str(cohort_file)
+    assert args.cohort_file == cohort_file
     assert args.storage_dtype == 'float32'
     assert args.compression == 'gzip'
     assert args.compression_level == 4
