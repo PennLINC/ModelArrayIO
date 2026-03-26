@@ -86,10 +86,11 @@ def h5_to_mif(example_mif, in_file, analysis_name, output_dir):
 def h5_to_mif_main(
     index_file,
     directions_file,
-    cohort_file,
     analysis_name,
     in_file,
     output_dir,
+    cohort_file=None,
+    example_mif=None,
     log_level='INFO',
 ):
     """Entry point for the ``modelarrayio h5-to-mif`` command."""
@@ -105,8 +106,13 @@ def h5_to_mif_main(
         output_path / Path(index_file).name,
     )
 
-    cohort_df = pd.read_csv(cohort_file)
-    example_mif = cohort_df['source_file'].iloc[0]
+    if example_mif is None:
+        logger.warning(
+            'No example MIF file provided, using the first MIF file from the cohort file'
+        )
+        cohort_df = pd.read_csv(cohort_file)
+        example_mif = cohort_df['source_file'].iloc[0]
+
     h5_to_mif(
         example_mif=example_mif,
         in_file=in_file,
@@ -126,21 +132,14 @@ def _parse_h5_to_mif():
     parser.add_argument(
         '--index-file',
         '--index_file',
-        help='Index File',
+        help='Index file used to reconstruct MIF files.',
         required=True,
         type=IsFile,
     )
     parser.add_argument(
         '--directions-file',
         '--directions_file',
-        help='Directions File',
-        required=True,
-        type=IsFile,
-    )
-    parser.add_argument(
-        '--cohort-file',
-        '--cohort_file',
-        help='Path to a csv with demographic info and paths to data.',
+        help='Directions file used to reconstruct MIF files.',
         required=True,
         type=IsFile,
     )
@@ -148,6 +147,7 @@ def _parse_h5_to_mif():
         '--analysis-name',
         '--analysis_name',
         help='Name for the statistical analysis results to be saved.',
+        required=True,
     )
     parser.add_argument(
         '--input-hdf5',
@@ -155,6 +155,7 @@ def _parse_h5_to_mif():
         help='Name of HDF5 (.h5) file where results outputs are saved.',
         type=IsFile,
         dest='in_file',
+        required=True,
     )
     parser.add_argument(
         '--output-dir',
@@ -163,6 +164,25 @@ def _parse_h5_to_mif():
             'Fixel directory where outputs will be saved. '
             'If the directory does not exist, it will be automatically created.'
         ),
+        required=True,
+    )
+    example_mif_group = parser.add_mutually_exclusive_group(required=True)
+    example_mif_group.add_argument(
+        '--cohort-file',
+        '--cohort_file',
+        help=(
+            'Path to a csv with demographic info and paths to data. '
+            'Used to select an example MIF file if no example MIF file is provided.'
+        ),
+        type=IsFile,
+        default=None,
+    )
+    example_mif_group.add_argument(
+        '--example-mif',
+        '--example_mif',
+        help='Path to an example MIF file.',
+        type=IsFile,
+        default=None,
     )
     add_log_level_arg(parser)
     return parser

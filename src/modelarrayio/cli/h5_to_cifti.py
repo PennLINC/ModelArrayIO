@@ -121,6 +121,7 @@ def _parse_h5_to_cifti():
         '--analysis-name',
         '--analysis_name',
         help='Name for the statistical analysis results to be saved.',
+        required=True,
     )
     parser.add_argument(
         '--input-hdf5',
@@ -128,6 +129,7 @@ def _parse_h5_to_cifti():
         help='Name of HDF5 (.h5) file where results outputs are saved.',
         type=IsFile,
         dest='in_file',
+        required=True,
     )
     parser.add_argument(
         '--output-dir',
@@ -136,9 +138,10 @@ def _parse_h5_to_cifti():
             'Directory where outputs will be saved. '
             'If the directory does not exist, it will be automatically created.'
         ),
+        required=True,
     )
 
-    example_cifti_group = parser.add_mutually_exclusive_group()
+    example_cifti_group = parser.add_mutually_exclusive_group(required=True)
     example_cifti_group.add_argument(
         '--cohort-file',
         '--cohort_file',
@@ -147,14 +150,12 @@ def _parse_h5_to_cifti():
             'Used to select an example CIFTI file if no example CIFTI file is provided.'
         ),
         type=IsFile,
-        required=False,
         default=None,
     )
     example_cifti_group.add_argument(
         '--example-cifti',
         '--example_cifti',
         help='Path to an example cifti file.',
-        required=False,
         type=IsFile,
         default=None,
     )

@@ -104,6 +104,7 @@ def _parse_h5_to_nifti():
         '--analysis-name',
         '--analysis_name',
         help='Name of the statistical analysis results to be saved.',
+        required=True,
     )
     parser.add_argument(
         '--input-hdf5',
@@ -111,6 +112,7 @@ def _parse_h5_to_nifti():
         help='Name of HDF5 (.h5) file where results outputs are saved.',
         type=IsFile,
         dest='in_file',
+        required=True,
     )
     parser.add_argument(
         '--output-dir',
@@ -119,6 +121,7 @@ def _parse_h5_to_nifti():
             'A directory where output volume files will be saved. '
             'If the directory does not exist, it will be automatically created.'
         ),
+        required=True,
     )
     parser.add_argument(
         '--output-ext',
