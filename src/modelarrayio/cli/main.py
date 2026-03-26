@@ -23,9 +23,7 @@ def _get_parser():
     from modelarrayio.__about__ import __version__
 
     parser = argparse.ArgumentParser(prog='modelarrayio', allow_abbrev=False)
-    parser.add_argument(
-        '-V', '--version', action='version', version=f'modelarrayio {__version__}'
-    )
+    parser.add_argument('-V', '--version', action='version', version=f'modelarrayio {__version__}')
     subparsers = parser.add_subparsers(help='modelarrayio subcommands')
 
     for command, parser_func, run_func in COMMANDS:

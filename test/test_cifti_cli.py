@@ -52,16 +52,28 @@ def test_concifti_cli_creates_expected_hdf5(tmp_path, monkeypatch):
 
     out_h5 = tmp_path / 'out_cifti.h5'
     monkeypatch.chdir(tmp_path)
-    assert modelarrayio_main([
-        'cifti-to-h5',
-        '--cohort-file', str(cohort_csv),
-        '--output-hdf5', str(out_h5),
-        '--backend', 'hdf5',
-        '--dtype', 'float32',
-        '--compression', 'gzip',
-        '--compression-level', '1',
-        '--target-chunk-mb', '1.0',
-    ]) == 0
+    assert (
+        modelarrayio_main(
+            [
+                'cifti-to-h5',
+                '--cohort-file',
+                str(cohort_csv),
+                '--output-hdf5',
+                str(out_h5),
+                '--backend',
+                'hdf5',
+                '--dtype',
+                'float32',
+                '--compression',
+                'gzip',
+                '--compression-level',
+                '1',
+                '--target-chunk-mb',
+                '1.0',
+            ]
+        )
+        == 0
+    )
     assert op.exists(out_h5)
 
     # Validate HDF5 contents
