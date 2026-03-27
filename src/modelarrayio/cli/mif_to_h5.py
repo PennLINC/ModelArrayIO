@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.parser_utils import _is_file, add_to_modelarray_args
-from modelarrayio.utils.fixels import gather_fixels, load_cohort_mif
+from modelarrayio.utils.mif import gather_fixels, load_cohort_mif
 from modelarrayio.utils.misc import cohort_to_long_dataframe
 
 logger = logging.getLogger(__name__)

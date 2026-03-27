@@ -14,7 +14,7 @@ import pandas as pd
 
 from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.parser_utils import _is_file, add_from_modelarray_args, add_log_level_arg
-from modelarrayio.utils.fixels import mif_to_nifti2, nifti2_to_mif
+from modelarrayio.utils.mif import mif_to_nifti2, nifti2_to_mif
 
 logger = logging.getLogger(__name__)
 
