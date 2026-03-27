@@ -20,6 +20,7 @@ def add_to_modelarray_args(parser, default_output='output.h5'):
             'for the tiledb backend, path to a .tdb directory.'
         ),
         default=default_output,
+        type=Path,
     )
     parser.add_argument(
         '--scalar-columns',
