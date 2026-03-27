@@ -200,9 +200,9 @@ def make_realistic_voxel_benchmark_plan(
     subject_key_base_u64 = (
         np.arange(num_input_files, dtype=np.uint64)[:, np.newaxis] * _SUBJECT_MUL
     ) ^ seed_u64
-    dropout_thresholds_u64 = (
-        dropout_probs.astype(np.float64) * _U64_FLOAT_DENOM
-    ).astype(np.uint64)[:, np.newaxis]
+    dropout_thresholds_u64 = (dropout_probs.astype(np.float64) * _U64_FLOAT_DENOM).astype(
+        np.uint64
+    )[:, np.newaxis]
 
     uses_s3_templates = template_rows.shape[1] > 0 and volume_shape != (16, 16, 8)
     metadata: dict[str, object] = {
@@ -260,7 +260,9 @@ def fill_realistic_voxel_stripe(
         Destination array with shape (num_subjects, >= stripe_width), dtype float32.
     """
     if start < 0 or end <= start or end > plan.num_items:
-        raise ValueError(f'invalid stripe bounds: start={start}, end={end}, num_items={plan.num_items}')
+        raise ValueError(
+            f'invalid stripe bounds: start={start}, end={end}, num_items={plan.num_items}'
+        )
     stripe_width = end - start
     if out.shape[0] != plan.num_subjects or out.shape[1] < stripe_width:
         raise ValueError(
@@ -294,9 +296,9 @@ def fill_realistic_voxel_stripe(
         u2 = _u64_to_unit_float(_splitmix64(key_matrix ^ _SALT_NOISE_2))
         u1 = np.clip(u1, 1e-12, 1.0)
         noise = np.sqrt(-2.0 * np.log(u1)) * np.cos(2.0 * np.pi * u2)
-        scaled_noise = noise.astype(np.float32, copy=False) * (plan.noise_std * sd_slice)[
-            np.newaxis, :
-        ]
+        scaled_noise = (
+            noise.astype(np.float32, copy=False) * (plan.noise_std * sd_slice)[np.newaxis, :]
+        )
         view[valid_mask] = view[valid_mask] + scaled_noise[valid_mask]
 
     return np.count_nonzero(np.isnan(view), axis=1)
@@ -356,7 +358,8 @@ def make_realistic_voxel_benchmark_dataset(
     for subject_idx in range(plan.num_subjects):
         row = (
             plan.voxel_mean
-            + plan.subject_scales[subject_idx] * (plan.sampled_templates[plan.template_indices[subject_idx]] - plan.voxel_mean)
+            + plan.subject_scales[subject_idx]
+            * (plan.sampled_templates[plan.template_indices[subject_idx]] - plan.voxel_mean)
             + plan.subject_offsets[subject_idx] * plan.voxel_sd
         ).astype(np.float32, copy=False)
 
@@ -364,7 +367,9 @@ def make_realistic_voxel_benchmark_dataset(
             (np.uint64(plan.seed) << np.uint64(1)) ^ np.uint64(subject_idx + 0xA5A5A5A5)
         )
         row_rng = np.random.default_rng(row_seed)
-        row[row_rng.random(plan.num_items, dtype=np.float32) < plan.dropout_probs[subject_idx]] = np.nan
+        row[row_rng.random(plan.num_items, dtype=np.float32) < plan.dropout_probs[subject_idx]] = (
+            np.nan
+        )
 
         valid = np.isfinite(row)
         if np.any(valid):
