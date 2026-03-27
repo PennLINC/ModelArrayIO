@@ -56,7 +56,7 @@ def test_mif_to_h5_results(
     directions_file = in_dir / 'directions.mif'
     cohort_file = in_dir / 'stat-alpha_cohort.csv'
     if not index_file.exists():
-        raise FileNotFoundError(f'Contents of {out_dir}:\n{os.listdir(out_dir)}')
+        raise FileNotFoundError(f'Contents of {in_dir}:\n{os.listdir(in_dir)}')
 
     # Prepend absolute path to source files in cohort file
     cohort_df = pd.read_csv(cohort_file)
