@@ -486,7 +486,7 @@ class MifHeader(FileBasedHeader):
         origin = self._transform[:, 3].copy()
 
         for i, s in enumerate(self._layout):
-            if i < 3 and s < 0:
+            if i < 3 and s < 0 and self._shape[i] > 1:
                 # disk voxel 0 on this axis = mrtrix voxel (dim_i - 1)
                 origin += rotation_cols[:, i] * (self._shape[i] - 1)
                 rotation_cols[:, i] = -rotation_cols[:, i]
