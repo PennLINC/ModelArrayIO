@@ -1,4 +1,4 @@
-"""Utility functions for fixel-wise data."""
+"""Utility functions for MIF data."""
 
 import shutil
 import subprocess
@@ -14,6 +14,13 @@ from tqdm import tqdm
 
 
 def find_mrconvert():
+    """Find the mrconvert executable on the system.
+
+    Returns
+    -------
+    :obj:`str`
+        Path to the mrconvert executable.
+    """
     return shutil.which('mrconvert')
 
 

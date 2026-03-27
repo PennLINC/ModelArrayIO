@@ -1,4 +1,4 @@
-"""Utility functions for voxel-wise data."""
+"""Utility functions for NIfTI data."""
 
 from __future__ import annotations
 
@@ -82,6 +82,22 @@ def load_cohort_voxels(cohort_long, group_mask_matrix, s3_workers):
 
 
 def flattened_image(scalar_image, scalar_mask, group_mask_matrix):
+    """Flatten a scalar image to a 1-D array.
+
+    Parameters
+    ----------
+    scalar_image : :obj:`nibabel.Nifti1Image`
+        Scalar image.
+    scalar_mask : :obj:`nibabel.Nifti1Image`
+        Scalar mask.
+    group_mask_matrix : :obj:`numpy.ndarray`
+        Group mask matrix.
+
+    Returns
+    -------
+    :obj:`numpy.ndarray`
+        Flattened scalar image.
+    """
     scalar_mask_img = (
         scalar_mask if hasattr(scalar_mask, 'get_fdata') else nb.load(Path(scalar_mask))
     )

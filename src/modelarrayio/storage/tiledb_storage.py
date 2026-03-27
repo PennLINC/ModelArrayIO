@@ -16,6 +16,18 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_dtype(storage_dtype):
+    """Resolve a storage dtype to a supported NumPy floating type.
+
+    Parameters
+    ----------
+    storage_dtype : :obj:`str`
+        Storage dtype.
+
+    Returns
+    -------
+    :obj:`numpy.dtype`
+        Supported NumPy floating type.
+    """
     return storage_utils.resolve_dtype(storage_dtype)
 
 
@@ -46,6 +58,26 @@ def _build_filter_list(compression: str | None, compression_level: int | None, s
 def compute_tile_shape_full_subjects(
     num_subjects, num_items, item_tile, target_tile_mb, storage_np_dtype
 ):
+    """Compute a tile shape for a full subject.
+
+    Parameters
+    ----------
+    num_subjects : :obj:`int`
+        Number of subjects.
+    num_items : :obj:`int`
+        Number of items.
+    item_tile : :obj:`int`
+        Item tile.
+    target_tile_mb : :obj:`float`
+        Target tile size in MB.
+    storage_np_dtype : :obj:`numpy.dtype`
+        Storage numpy dtype.
+
+    Returns
+    -------
+    :obj:`tuple`
+        Tile shape.
+    """
     tile = storage_utils.compute_full_subject_chunk_shape(
         num_subjects=num_subjects,
         num_items=num_items,
@@ -82,6 +114,36 @@ def create_scalar_matrix_array(
     tile_voxels=0,
     target_tile_mb=2.0,
 ):
+    """Create a scalar matrix array in a TileDB directory.
+
+    Parameters
+    ----------
+    base_uri : :obj:`str`
+        Base URI.
+    dataset_path : :obj:`str`
+        Dataset path.
+    stacked_values : :obj:`numpy.ndarray`
+        Stacked values.
+    sources_list : :obj:`list`
+        Sources list.
+    storage_dtype : :obj:`str`
+        Storage dtype.
+    compression : :obj:`str`
+        Compression method.
+    compression_level : :obj:`int`
+        Compression level.
+    shuffle : :obj:`bool`
+        Whether to shuffle the data.
+    tile_voxels : :obj:`int`
+        Tile voxels.
+    target_tile_mb : :obj:`float`
+        Target tile size in MB.
+
+    Returns
+    -------
+    :obj:`str`
+        URI of the created array.
+    """
     storage_np_dtype = resolve_dtype(storage_dtype)
     if stacked_values.dtype != storage_np_dtype:
         stacked_values = stacked_values.astype(storage_np_dtype)
@@ -144,6 +206,38 @@ def create_empty_scalar_matrix_array(
     target_tile_mb=2.0,
     sources_list: Sequence[str] | None = None,
 ):
+    """Create an empty scalar matrix array in a TileDB directory.
+
+    Parameters
+    ----------
+    base_uri : :obj:`str`
+        Base URI.
+    dataset_path : :obj:`str`
+        Dataset path.
+    num_subjects : :obj:`int`
+        Number of subjects.
+    num_items : :obj:`int`
+        Number of items.
+    storage_dtype : :obj:`str`
+        Storage dtype.
+    compression : :obj:`str`
+        Compression method.
+    compression_level : :obj:`int`
+        Compression level.
+    shuffle : :obj:`bool`
+        Whether to shuffle the data.
+    tile_voxels : :obj:`int`
+        Tile voxels.
+    target_tile_mb : :obj:`float`
+        Target tile size in MB.
+    sources_list : :obj:`list`
+        Sources list.
+
+    Returns
+    -------
+    :obj:`str`
+        URI of the created array.
+    """
     storage_np_dtype = resolve_dtype(storage_dtype)
     tile_shape = compute_tile_shape_full_subjects(
         num_subjects, num_items, tile_voxels, target_tile_mb, storage_np_dtype
@@ -185,8 +279,7 @@ def create_empty_scalar_matrix_array(
 
 
 def write_rows_in_column_stripes(uri: str, rows: Sequence[np.ndarray]):
-    """
-    Fill a 2D TileDB dense array by buffering column-aligned stripes to minimize
+    """Fill a 2D TileDB dense array by buffering column-aligned stripes to minimize
     tile writes, using about one tile's worth of memory.
 
     Parameters
@@ -226,9 +319,16 @@ def write_rows_in_column_stripes(uri: str, rows: Sequence[np.ndarray]):
 
 
 def write_column_names(base_uri: str, scalar: str, sources: Sequence[str]):
-    """
-    Store column names as a 1D dense TileDB array for the given scalar.
-    This mirrors the HDF5 dataset approach and scales to large cohorts.
+    """Store column names as a 1D dense TileDB array for the given scalar.
+
+    Parameters
+    ----------
+    base_uri : :obj:`str`
+        Base URI.
+    scalar : :obj:`str`
+        Scalar name.
+    sources : :obj:`list`
+        Sources list.
     """
     sources = storage_utils.normalize_column_names(sources)
     uri = os.path.join(base_uri, 'scalars', scalar, 'column_names')

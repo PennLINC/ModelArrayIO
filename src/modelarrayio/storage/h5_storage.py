@@ -16,10 +16,38 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_dtype(storage_dtype):
+    """Resolve a storage dtype to a supported NumPy floating type.
+
+    Parameters
+    ----------
+    storage_dtype : :obj:`str`
+        Storage dtype.
+
+    Returns
+    -------
+    :obj:`numpy.dtype`
+        Supported NumPy floating type.
+    """
     return storage_utils.resolve_dtype(storage_dtype)
 
 
 def resolve_compression(compression, compression_level, shuffle):
+    """Resolve a compression method to a supported compression method.
+
+    Parameters
+    ----------
+    compression : :obj:`str`
+        Compression method.
+    compression_level : :obj:`int`
+        Compression level.
+    shuffle : :obj:`bool`
+        Whether to shuffle the data.
+
+    Returns
+    -------
+    :obj:`tuple`
+        Compression method, compression level, and whether to shuffle the data.
+    """
     comp = (
         None
         if compression is None or str(compression).lower() == 'none'
@@ -39,6 +67,26 @@ def resolve_compression(compression, compression_level, shuffle):
 def compute_chunk_shape_full_subjects(
     num_subjects, num_items, item_chunk, target_chunk_mb, storage_np_dtype
 ):
+    """Compute a chunk shape for a full subject.
+
+    Parameters
+    ----------
+    num_subjects : :obj:`int`
+        Number of subjects.
+    num_items : :obj:`int`
+        Number of items.
+    item_chunk : :obj:`int`
+        Item chunk.
+    target_chunk_mb : :obj:`float`
+        Target chunk size in MB.
+    storage_np_dtype : :obj:`numpy.dtype`
+        Storage numpy dtype.
+
+    Returns
+    -------
+    :obj:`tuple`
+        Chunk shape.
+    """
     chunk = storage_utils.compute_full_subject_chunk_shape(
         num_subjects=num_subjects,
         num_items=num_items,
@@ -69,6 +117,36 @@ def create_scalar_matrix_dataset(
     chunk_voxels=0,
     target_chunk_mb=2.0,
 ):
+    """Create a scalar matrix dataset in an HDF5 file.
+
+    Parameters
+    ----------
+    h5file : :obj:`h5py.File`
+        HDF5 file.
+    dataset_path : :obj:`str`
+        Dataset path.
+    stacked_values : :obj:`numpy.ndarray`
+        Stacked values.
+    sources_list : :obj:`list`
+        Sources list.
+    storage_dtype : :obj:`str`
+        Storage dtype.
+    compression : :obj:`str`
+        Compression method.
+    compression_level : :obj:`int`
+        Compression level.
+    shuffle : :obj:`bool`
+        Whether to shuffle the data.
+    chunk_voxels : :obj:`int`
+        Chunk voxels.
+    target_chunk_mb : :obj:`float`
+        Target chunk size in MB.
+
+    Returns
+    -------
+    :obj:`h5py.Dataset`
+        Scalar matrix dataset.
+    """
     storage_np_dtype = resolve_dtype(storage_dtype)
     comp, comp_opts, use_shuffle = resolve_compression(compression, compression_level, shuffle)
 
@@ -118,6 +196,38 @@ def create_empty_scalar_matrix_dataset(
     target_chunk_mb=2.0,
     sources_list=None | pd.Series | list,
 ):
+    """Create an empty scalar matrix dataset in an HDF5 file.
+
+    Parameters
+    ----------
+    h5file : :obj:`h5py.File`
+        HDF5 file.
+    dataset_path : :obj:`str`
+        Dataset path.
+    num_subjects : :obj:`int`
+        Number of subjects.
+    num_items : :obj:`int`
+        Number of items.
+    storage_dtype : :obj:`str`
+        Storage dtype.
+    compression : :obj:`str`
+        Compression method.
+    compression_level : :obj:`int`
+        Compression level.
+    shuffle : :obj:`bool`
+        Whether to shuffle the data.
+    chunk_voxels : :obj:`int`
+        Chunk voxels.
+    target_chunk_mb : :obj:`float`
+        Target chunk size in MB.
+    sources_list : :obj:`list`
+        Sources list.
+
+    Returns
+    -------
+    :obj:`h5py.Dataset`
+        Empty scalar matrix dataset.
+    """
     storage_np_dtype = resolve_dtype(storage_dtype)
     comp, comp_opts, use_shuffle = resolve_compression(compression, compression_level, shuffle)
 
@@ -150,6 +260,17 @@ def create_empty_scalar_matrix_dataset(
 
 
 def write_column_names(h5_file: h5py.File, scalar: str, sources: pd.Series | list):
+    """Write column names to an HDF5 file.
+
+    Parameters
+    ----------
+    h5_file : :obj:`h5py.File`
+        HDF5 file.
+    scalar : :obj:`str`
+        Scalar name.
+    sources : :obj:`list`
+        Sources list.
+    """
     values = np.array(storage_utils.normalize_column_names(sources), dtype=object)
     grp = h5_file.require_group(f'scalars/{scalar}')
 
