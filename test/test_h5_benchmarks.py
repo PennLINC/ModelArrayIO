@@ -74,7 +74,7 @@ def _benchmark_results_dir() -> Path:
 
 def _xdist_worker_id() -> str | None:
     worker = os.environ.get('PYTEST_XDIST_WORKER')
-    return worker if worker else None
+    return worker or None
 
 
 def _results_csv_path(results_dir: Path) -> Path:

@@ -58,7 +58,6 @@ test = [
   "pytest-cov>=5",
   "pytest-xdist>=3",
   "pytest-env>=1.0",
-  "matplotlib>=3.8",
 ]
 all = ["modelarrayio[doc,test,s3]"]
 

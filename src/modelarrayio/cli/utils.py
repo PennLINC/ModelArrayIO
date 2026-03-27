@@ -170,14 +170,14 @@ def read_result_names(
 def _decode_names(values: object) -> list[str]:
     if isinstance(values, np.ndarray):
         sequence = values.tolist()
-    elif isinstance(values, (list, tuple)):
+    elif isinstance(values, list | tuple):
         sequence = list(values)
     else:
         sequence = [values]
 
     decoded: list[str] = []
     for value in sequence:
-        if isinstance(value, (bytes, bytearray, np.bytes_)):
+        if isinstance(value, bytes | bytearray | np.bytes_):
             text = value.decode('utf-8', errors='ignore')
         else:
             text = str(value)
