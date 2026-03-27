@@ -71,6 +71,7 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
             )
 
     out_h5 = tmp_path / 'out.h5'
+    diag_dir = tmp_path / 'out_diagnostics'
     monkeypatch.chdir(tmp_path)
     assert (
         modelarrayio_main(
@@ -97,6 +98,9 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
         == 0
     )
     assert op.exists(out_h5)
+    assert (diag_dir / 'FA_mean.nii.gz').exists()
+    assert (diag_dir / 'FA_element_id.nii.gz').exists()
+    assert (diag_dir / 'FA_n_non_nan.nii.gz').exists()
 
     # Validate HDF5 contents
     with h5py.File(out_h5, 'r') as h5:
@@ -141,6 +145,58 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
             assert np.isnan(v1)
         else:
             assert np.isclose(v1, expected_s1, equal_nan=True)
+
+
+def test_convoxel_cli_no_diagnostics_disables_outputs(tmp_path, monkeypatch):
+    shape = (3, 3, 3)
+    group_mask = np.zeros(shape, dtype=bool)
+    group_mask[0, 0, 0] = True
+    group_mask[1, 1, 1] = True
+
+    group_mask_file = tmp_path / 'group_mask.nii.gz'
+    _make_nifti(group_mask.astype(np.uint8)).to_filename(group_mask_file)
+
+    scalar = np.zeros(shape, dtype=np.float32)
+    scalar[0, 0, 0] = 1.0
+    scalar[1, 1, 1] = 2.0
+    scalar_path = tmp_path / 'sub-1_scalar.nii.gz'
+    _make_nifti(scalar).to_filename(scalar_path)
+
+    mask_path = tmp_path / 'sub-1_mask.nii.gz'
+    _make_nifti(group_mask.astype(np.uint8)).to_filename(mask_path)
+
+    cohort_csv = tmp_path / 'cohort.csv'
+    with cohort_csv.open('w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=['scalar_name', 'source_file', 'source_mask_file'])
+        writer.writeheader()
+        writer.writerow(
+            {
+                'scalar_name': 'FA',
+                'source_file': scalar_path.name,
+                'source_mask_file': mask_path.name,
+            }
+        )
+
+    out_h5 = tmp_path / 'out.h5'
+    diag_dir = tmp_path / 'out_diagnostics'
+    monkeypatch.chdir(tmp_path)
+    assert (
+        modelarrayio_main(
+            [
+                'nifti-to-h5',
+                '--group-mask-file',
+                str(group_mask_file),
+                '--cohort-file',
+                str(cohort_csv),
+                '--output',
+                str(out_h5),
+                '--no-diagnostics',
+            ]
+        )
+        == 0
+    )
+    assert out_h5.exists()
+    assert not diag_dir.exists()
 
 
 def test_h5_to_nifti_cli_writes_results_with_dataset_column_names(tmp_path):

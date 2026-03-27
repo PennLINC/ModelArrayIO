@@ -12,8 +12,9 @@ import nibabel as nb
 import numpy as np
 import pandas as pd
 
+from modelarrayio.cli import diagnostics as cli_diagnostics
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import _is_file, add_to_modelarray_args
+from modelarrayio.cli.parser_utils import _is_file, add_diagnostics_args, add_to_modelarray_args
 from modelarrayio.utils.voxels import _load_cohort_voxels
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,9 @@ def nifti_to_h5(
     target_chunk_mb=2.0,
     workers=None,
     s3_workers=1,
+    no_diagnostics=False,
+    diagnostics_dir=None,
+    diagnostic_maps=None,
 ):
     """Load all volume data and write to an HDF5 or TileDB file.
 
@@ -64,6 +68,12 @@ def nifti_to_h5(
         Has no effect when ``backend='hdf5'``.
     s3_workers : :obj:`int`
         Number of parallel workers for S3 downloads. Default 1.
+    no_diagnostics : :obj:`bool`
+        Disable diagnostic outputs in native format.
+    diagnostics_dir : :obj:`str` or :obj:`None`
+        Output directory for diagnostics. Defaults to ``<output_stem>_diagnostics``.
+    diagnostic_maps : :obj:`list` or :obj:`None`
+        Diagnostic maps to write. Supported: ``mean``, ``element_id``, ``n_non_nan``.
     """
     cohort_df = pd.read_csv(cohort_file)
     output_path = Path(output)
@@ -83,6 +93,26 @@ def nifti_to_h5(
 
     logger.info('Extracting NIfTI data...')
     scalars, sources_lists = _load_cohort_voxels(cohort_df, group_mask_matrix, s3_workers)
+    maps_to_write = cli_utils.normalize_diagnostic_maps(diagnostic_maps)
+
+    if not no_diagnostics:
+        output_diag_dir = (
+            Path(diagnostics_dir)
+            if diagnostics_dir is not None
+            else cli_utils.default_diagnostics_dir(output_path)
+        )
+        output_diag_dir.mkdir(parents=True, exist_ok=True)
+        cli_diagnostics.verify_nifti_element_mapping(group_mask_img, group_mask_matrix)
+        for scalar_name, rows in scalars.items():
+            diagnostics = cli_diagnostics.summarize_rows(rows)
+            cli_diagnostics.write_nifti_diagnostics(
+                maps=maps_to_write,
+                scalar_name=scalar_name,
+                diagnostics=diagnostics,
+                group_mask_img=group_mask_img,
+                group_mask_matrix=group_mask_matrix,
+                output_dir=output_diag_dir,
+            )
 
     if backend == 'hdf5':
         output_path = cli_utils.prepare_output_parent(output_path)
@@ -140,4 +170,5 @@ def _parse_nifti_to_h5():
 
     # Common arguments
     add_to_modelarray_args(parser, default_output='voxelarray.h5')
+    add_diagnostics_args(parser)
     return parser
