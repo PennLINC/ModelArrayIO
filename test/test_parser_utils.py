@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from modelarrayio.cli import parser_utils
 
@@ -66,7 +67,7 @@ def test_output_hdf5_default_name_override(tmp_path_factory) -> None:
     p = argparse.ArgumentParser()
     parser_utils.add_to_modelarray_args(p, default_output='custom.h5')
     args = p.parse_args(['--cohort-file', str(cohort_file)])
-    assert args.output == 'custom.h5'
+    assert args.output == Path('custom.h5')
 
 
 def test_tiledb_args_group(tmp_path_factory) -> None:
@@ -77,7 +78,7 @@ def test_tiledb_args_group(tmp_path_factory) -> None:
     parser_utils.add_to_modelarray_args(p, default_output='arrays.tdb')
     args = p.parse_args(['--cohort-file', str(cohort_file), '--backend', 'tiledb'])
     assert args.output == 'arrays.tdb'
-    assert args.backend == 'tiledb'
+    assert args.backend == Path('tiledb')
     assert args.workers == 0
     assert args.s3_workers == 1
     assert args.log_level == 'INFO'
