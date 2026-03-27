@@ -22,6 +22,23 @@ _FIXEL_DATA_URL_ENV = 'MODELARRAYIO_FIXEL_TEST_DATA_URL'
 _FIXEL_DATA_DIR_ENV = 'MODELARRAYIO_FIXEL_TEST_DATA_DIR'
 
 
+def _find_extracted_fixel_data_dir(destination_dir: Path) -> Path:
+    """Locate the extracted fixel dataset directory after unpacking."""
+    preferred_names = ('data_fixel_toy', 'mif_test_data')
+    for name in preferred_names:
+        candidate = destination_dir / name
+        if candidate.exists():
+            return candidate
+
+    child_dirs = sorted(path for path in destination_dir.iterdir() if path.is_dir())
+    if len(child_dirs) == 1:
+        return child_dirs[0]
+
+    raise FileNotFoundError(
+        f'Could not determine extracted fixel dataset directory in {destination_dir}'
+    )
+
+
 def _download_and_extract_fixel_test_data(destination_dir: Path) -> Path:
     """Download and extract the fixel test dataset archive."""
     source_dir = os.environ.get(_FIXEL_DATA_DIR_ENV)
@@ -41,10 +58,7 @@ def _download_and_extract_fixel_test_data(destination_dir: Path) -> Path:
     with tarfile.open(archive_path, mode='r:gz') as archive:
         archive.extractall(destination_dir)  # noqa: S202
 
-    extracted_dir = destination_dir / 'mif_test_data'
-    if not extracted_dir.exists():
-        raise FileNotFoundError(f'Expected extracted dataset at {extracted_dir}')
-    return extracted_dir
+    return _find_extracted_fixel_data_dir(destination_dir)
 
 
 @pytest.fixture(scope='session')
@@ -54,4 +68,4 @@ def downloaded_fixel_data_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     try:
         return _download_and_extract_fixel_test_data(destination_dir)
     except (FileNotFoundError, OSError, URLError, tarfile.TarError) as exc:
-        pytest.skip(f'Downloaded fixel test data unavailable: {exc}')
+        raise RuntimeError(f'Downloaded fixel test data unavailable: {exc}') from exc
