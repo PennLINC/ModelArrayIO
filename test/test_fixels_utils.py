@@ -64,11 +64,11 @@ def test_mif_to_h5_results(
     h5_file = out_dir / 'stat-alpha.h5'
     assert (
         mif_to_h5(
-        index_file=index_file,
-        directions_file=directions_file,
-        cohort_file=temp_cohort_file,
-        output=h5_file,
-    )
+            index_file=index_file,
+            directions_file=directions_file,
+            cohort_file=temp_cohort_file,
+            output=h5_file,
+        )
         == 0
     )
 

@@ -87,6 +87,7 @@ def _readline(fileobj) -> bytes:
             break
     return bytes(buf)
 
+
 _MIF_DTYPE_MAP: dict[str, str] = {
     'Int8': 'i1',
     'UInt8': 'u1',
@@ -172,9 +173,7 @@ def _mif_parse_layout(layout_str: str, ndim: int) -> list[int]:
             sign, val = 1, int(token)
         strides.append(sign * (val + 1))  # convert 0-indexed to 1-indexed
     if len(strides) != ndim:
-        raise ValueError(
-            f'Layout has {len(strides)} axes but dim has {ndim}: {layout_str!r}'
-        )
+        raise ValueError(f'Layout has {len(strides)} axes but dim has {ndim}: {layout_str!r}')
     return strides
 
 
@@ -285,9 +284,7 @@ class MifHeader(FileBasedHeader):
         """
         first_line = _readline(fileobj).decode('latin-1').rstrip('\n\r')
         if first_line != 'mrtrix image':
-            raise ValueError(
-                f'Not a MIF file (expected "mrtrix image", got {first_line!r})'
-            )
+            raise ValueError(f'Not a MIF file (expected "mrtrix image", got {first_line!r})')
 
         shape = None
         zooms = None
@@ -312,7 +309,7 @@ class MifHeader(FileBasedHeader):
 
             colon = line.index(':')
             key = line[:colon].strip()
-            value = line[colon + 1:].strip()
+            value = line[colon + 1 :].strip()
             if not key or not value:
                 continue
 
