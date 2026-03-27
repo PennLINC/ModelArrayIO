@@ -17,7 +17,7 @@ import pytest
 _ROOT = Path(__file__).resolve().parents[1]
 os.environ.setdefault('COVERAGE_RCFILE', str(_ROOT / 'pyproject.toml'))
 
-_FIXEL_DATA_URL = 'https://upenn.box.com/s/aaauvwrsrvsj3yvdkl1b899wx1s8ih2f.tar.gz'
+_FIXEL_DATA_URL = 'https://upenn.box.com/shared/static/aaauvwrsrvsj3yvdkl1b899wx1s8ih2f.tar.gz'
 _FIXEL_DATA_URL_ENV = 'MODELARRAYIO_FIXEL_TEST_DATA_URL'
 _FIXEL_DATA_DIR_ENV = 'MODELARRAYIO_FIXEL_TEST_DATA_DIR'
 
