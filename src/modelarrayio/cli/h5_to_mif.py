@@ -9,12 +9,12 @@ from functools import partial
 from pathlib import Path
 
 import h5py
-import nibabel as nb
+import numpy as np
 import pandas as pd
 
 from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.parser_utils import _is_file, add_from_modelarray_args, add_log_level_arg
-from modelarrayio.utils.fixels import mif_to_nifti2, nifti2_to_mif
+from modelarrayio.utils.fixels import MifImage, image_to_mif, mif_to_image
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +29,9 @@ def h5_to_mif(example_mif, in_file, analysis_name, output_dir):
     named ``results/has_names``. This data can be of any type and does not need to contain
     more than a single row of data. Instead, its attributes are read to get column names
     for the data represented in ``results/results_matrix``.
-    The function takes the example mif file and converts it to Nifti2 to get a header.
-    Then each column in ``results/results_matrix`` is extracted to fill the data of a
-    new Nifti2 file that gets converted to mif and named according to the corresponding
-    item in ``results/has_names``.
+    The function takes the example mif file as a template header. Then each column in
+    ``results/results_matrix`` is extracted to fill the data of a new ``MifImage`` and
+    named according to the corresponding item in ``results/has_names``.
 
     Parameters
     ==========
@@ -50,8 +49,9 @@ def h5_to_mif(example_mif, in_file, analysis_name, output_dir):
     =======
     None
     """
-    # Get a template nifti image.
-    nifti2_img, _ = mif_to_nifti2(example_mif)
+    # Use the example MIF as the template so layout and metadata stay native to MIF.
+    template_img, _ = mif_to_image(example_mif)
+    template_shape = template_img.shape
     output_path = Path(output_dir)
     with h5py.File(in_file, 'r') as h5_data:
         results_matrix = h5_data[f'results/{analysis_name}/results_matrix']
@@ -62,25 +62,33 @@ def h5_to_mif(example_mif, in_file, analysis_name, output_dir):
         for result_col, result_name in enumerate(results_names):
             valid_result_name = cli_utils.sanitize_result_name(result_name)
             out_mif = output_path / f'{analysis_name}_{valid_result_name}.mif'
-            temp_nifti2 = nb.Nifti2Image(
-                results_matrix[result_col, :].reshape(-1, 1, 1),
-                nifti2_img.affine,
-                header=nifti2_img.header,
+            result_data = np.asarray(results_matrix[result_col, :], dtype=np.float32).reshape(
+                template_shape
             )
-            nifti2_to_mif(temp_nifti2, out_mif)
+            result_header = template_img.header.copy()
+            result_header.set_data_shape(result_data.shape)
+            result_header.set_data_dtype(result_data.dtype)
+            result_img = MifImage(result_data, template_img.affine, header=result_header)
+            image_to_mif(result_img, out_mif)
 
             if 'p.value' not in valid_result_name:
                 continue
 
             valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
             out_mif_1mpvalue = output_path / f'{analysis_name}_{valid_result_name_1mpvalue}.mif'
-            output_mifvalues_1mpvalue = 1 - results_matrix[result_col, :]
-            temp_nifti2_1mpvalue = nb.Nifti2Image(
-                output_mifvalues_1mpvalue.reshape(-1, 1, 1),
-                nifti2_img.affine,
-                header=nifti2_img.header,
+            output_mifvalues_1mpvalue = np.asarray(
+                1 - results_matrix[result_col, :],
+                dtype=np.float32,
+            ).reshape(template_shape)
+            output_header_1mpvalue = template_img.header.copy()
+            output_header_1mpvalue.set_data_shape(output_mifvalues_1mpvalue.shape)
+            output_header_1mpvalue.set_data_dtype(output_mifvalues_1mpvalue.dtype)
+            output_img_1mpvalue = MifImage(
+                output_mifvalues_1mpvalue,
+                template_img.affine,
+                header=output_header_1mpvalue,
             )
-            nifti2_to_mif(temp_nifti2_1mpvalue, out_mif_1mpvalue)
+            image_to_mif(output_img_1mpvalue, out_mif_1mpvalue)
 
 
 def h5_to_mif_main(

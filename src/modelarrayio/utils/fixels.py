@@ -2,68 +2,51 @@
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 import sys
-import tempfile
 from copy import deepcopy
 from pathlib import Path
 
-import nibabel as nb
 import numpy as np
 import pandas as pd
 from nibabel.filebasedimages import FileBasedHeader
 from nibabel.spatialimages import SpatialImage
 
 
-def find_mrconvert():
-    return shutil.which('mrconvert')
-
-
-def _require_mrconvert() -> str:
-    mrconvert = find_mrconvert()
-    if mrconvert is None:
-        raise FileNotFoundError('The mrconvert executable could not be found on $PATH.')
-    return mrconvert
-
-
-def _run_mrconvert(source_file: Path, output_file: Path) -> None:
-    try:
-        subprocess.run(
-            [_require_mrconvert(), str(source_file), str(output_file)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        message = exc.stderr.strip() or exc.stdout.strip() or 'mrconvert failed.'
-        raise RuntimeError(
-            f'mrconvert failed while converting {source_file} to {output_file}: {message}'
-        ) from exc
-
-
-def nifti2_to_mif(nifti2_image, mif_file):
-    """Convert a .nii file to a .mif file.
+def image_to_mif(image: SpatialImage, mif_file):
+    """Write a nibabel image to a `.mif` file.
 
     Parameters
     ----------
-    nifti2_image : :obj:`nibabel.Nifti2Image`
-        Nifti2 image
+    image : :obj:`nibabel.spatialimages.SpatialImage`
+        In-memory image to write.
     mif_file : :obj:`str`
         Path to a .mif file
     """
     output_path = Path(mif_file)
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_nii = Path(temp_dir) / 'mrconvert_input.nii'
-        nifti2_image.to_filename(temp_nii)
-        _run_mrconvert(temp_nii, output_path)
+    if isinstance(image, MifImage):
+        mif_image = image
+    else:
+        source_header = image.header if isinstance(image.header, MifHeader) else None
+        header = source_header.copy() if source_header is not None else None
+        mif_image = MifImage(np.asanyarray(image.dataobj), image.affine, header=header)
+
+    mif_image.to_filename(output_path)
 
     if not output_path.exists():
-        raise RuntimeError(f'mrconvert did not create expected output file: {output_path}')
+        raise RuntimeError(f'Failed to create expected output file: {output_path}')
 
 
-def mif_to_nifti2(mif_file):
-    """Convert a .mif file to a .nii file.
+def nifti2_to_mif(nifti2_image, mif_file):
+    """Convert an in-memory nibabel image to a `.mif` file.
+
+    This compatibility wrapper now writes the data directly with
+    :class:`MifImage` instead of shelling out through a temporary NIfTI file.
+    """
+    image_to_mif(nifti2_image, mif_file)
+
+
+def mif_to_image(mif_file):
+    """Load a `.mif` file into a :class:`MifImage`.
 
     Parameters
     ----------
@@ -72,29 +55,15 @@ def mif_to_nifti2(mif_file):
 
     Returns
     -------
-    nifti2_img : :obj:`nibabel.Nifti2Image`
-        Nifti2 image
+    mif_img : :obj:`MifImage`
+        Loaded MIF image
     data : :obj:`numpy.ndarray`
-        Data from the nifti2 image
+        Data from the MIF image
     """
     input_path = Path(mif_file)
-    if input_path.suffix == '.nii':
-        nifti2_img = nb.load(input_path)
-        data = nifti2_img.get_fdata(dtype=np.float32).squeeze()
-        return nifti2_img, data
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        nii_path = Path(temp_dir) / 'mif.nii'
-        _run_mrconvert(input_path, nii_path)
-        if not nii_path.exists():
-            raise RuntimeError(f'mrconvert did not create expected output file: {nii_path}')
-
-        loaded_img = nb.load(nii_path)
-        in_memory_data = np.asanyarray(loaded_img.dataobj)
-        nifti2_img = nb.Nifti2Image(in_memory_data, loaded_img.affine, header=loaded_img.header)
-        data = loaded_img.get_fdata(dtype=np.float32).squeeze()
-
-    return nifti2_img, data
+    mif_img = MifImage.from_filename(str(input_path))
+    data = mif_img.get_fdata(dtype=np.float32).squeeze()
+    return mif_img, data
 
 
 # ============================================================
@@ -679,7 +648,7 @@ def gather_fixels(index_file, directions_file):
     voxel_table : :obj:`pandas.DataFrame`
         DataFrame with voxel_id, i, j, k
     """
-    _index_img, index_data = mif_to_nifti2(index_file)
+    _index_img, index_data = mif_to_image(index_file)
     # number of fixels in each voxel; by index.mif definition
     count_vol = index_data[..., 0].astype(np.uint32)
     # index of the first fixel in this voxel, in the list of all fixels
@@ -687,7 +656,10 @@ def gather_fixels(index_file, directions_file):
     id_vol = index_data[..., 1]
     max_id = id_vol.max()
     # = the maximum id of fixels + 1 = # of fixels in entire image
-    max_fixel_id = max_id + int(count_vol[id_vol == max_id])
+    terminal_counts = count_vol[id_vol == max_id]
+    if terminal_counts.size == 0:
+        raise ValueError('Could not determine the final fixel count from the index image.')
+    max_fixel_id = int(max_id) + int(terminal_counts.max())
     voxel_mask = count_vol > 0  # voxels that contains fixel(s), =1
     masked_ids = id_vol[voxel_mask]  # 1D array, len = # of voxels with fixel(s), value see id_vol
     masked_counts = count_vol[voxel_mask]  # dim as masked_ids; value see count_vol
@@ -719,7 +691,7 @@ def gather_fixels(index_file, directions_file):
         }
     )
 
-    _directions_img, directions_data = mif_to_nifti2(directions_file)
+    _directions_img, directions_data = mif_to_image(directions_file)
     fixel_table = pd.DataFrame(
         {
             'fixel_id': fixel_ids,

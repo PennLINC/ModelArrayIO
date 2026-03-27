@@ -182,6 +182,7 @@ exclude_lines = [
 [tool.pytest.ini_options]
 markers = [
   "s3: tests that require network access to public S3 (deselect with '-m not s3')",
+  "downloaded_data: tests that download external fixture data before running",
 ]
 log_cli = true
 
