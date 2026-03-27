@@ -37,6 +37,35 @@ def prepare_output_parent(output_file: str | Path) -> Path:
     return output_path
 
 
+def normalize_diagnostic_maps(values: Sequence[str] | None) -> list[str]:
+    """Normalize diagnostic map names from CLI input."""
+    if not values:
+        return ['mean', 'element_id', 'n_non_nan']
+
+    maps: list[str] = []
+    valid = {'mean', 'element_id', 'n_non_nan'}
+    for value in values:
+        for token in str(value).split(','):
+            name = token.strip()
+            if not name:
+                continue
+            if name not in valid:
+                valid_str = ', '.join(sorted(valid))
+                raise ValueError(f'Invalid diagnostic map {name!r}. Expected one of: {valid_str}.')
+            if name not in maps:
+                maps.append(name)
+    if not maps:
+        return ['mean', 'element_id', 'n_non_nan']
+    return maps
+
+
+def default_diagnostics_dir(output: str | Path) -> Path:
+    """Return the default diagnostics directory for a conversion output path."""
+    output_path = Path(output)
+    stem = output_path.stem if output_path.suffix else output_path.name
+    return output_path.parent / f'{stem}_diagnostics'
+
+
 def write_table_dataset(
     h5_file: h5py.File,
     dataset_name: str,
@@ -167,6 +196,31 @@ def read_result_names(
     return [f'component{n + 1:03d}' for n in range(results_matrix.shape[0])]
 
 
+def load_hdf5_scalar_row(
+    in_file: str | Path,
+    scalar_name: str,
+    *,
+    column_index: int | None = None,
+    source_file: str | None = None,
+) -> np.ndarray:
+    """Load one row from scalars/<scalar>/values in an HDF5 file."""
+    with h5py.File(in_file, 'r') as h5_data:
+        dataset_path = f'scalars/{scalar_name}/values'
+        if dataset_path not in h5_data:
+            raise ValueError(f'Scalar dataset not found: {dataset_path}')
+        dataset = h5_data[dataset_path]
+        num_subjects = dataset.shape[0]
+
+        resolved_index = _resolve_column_index(
+            h5_data,
+            scalar_name,
+            num_subjects=num_subjects,
+            column_index=column_index,
+            source_file=source_file,
+        )
+        return np.asarray(dataset[resolved_index, :], dtype=np.float32)
+
+
 def _decode_names(values: object) -> list[str]:
     if isinstance(values, np.ndarray):
         sequence = values.tolist()
@@ -183,3 +237,43 @@ def _decode_names(values: object) -> list[str]:
             text = str(value)
         decoded.append(text.rstrip('\x00').strip())
     return [name for name in decoded if name]
+
+
+def _resolve_column_index(
+    h5_data: h5py.File,
+    scalar_name: str,
+    *,
+    num_subjects: int,
+    column_index: int | None,
+    source_file: str | None,
+) -> int:
+    if column_index is not None:
+        if column_index < 0 or column_index >= num_subjects:
+            raise ValueError(
+                f'--column-index {column_index} is out of bounds for scalar '
+                f'{scalar_name!r} with {num_subjects} subjects.'
+            )
+        return int(column_index)
+
+    if source_file is None:
+        raise ValueError('Provide one of --column-index or --source-file.')
+
+    names_path = f'scalars/{scalar_name}/column_names'
+    if names_path not in h5_data:
+        raise ValueError(
+            f'Column names dataset not found for scalar {scalar_name!r} at {names_path}. '
+            'Use --column-index instead.'
+        )
+
+    names = _decode_names(h5_data[names_path][()])
+    matches = [idx for idx, name in enumerate(names) if name == source_file]
+    if not matches:
+        raise ValueError(
+            f'--source-file {source_file!r} was not found in scalars/{scalar_name}/column_names.'
+        )
+    if len(matches) > 1:
+        raise ValueError(
+            f'--source-file {source_file!r} matched multiple rows ({matches}) for scalar '
+            f'{scalar_name!r}. Use --column-index instead.'
+        )
+    return matches[0]

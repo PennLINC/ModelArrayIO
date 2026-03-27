@@ -12,8 +12,13 @@ import h5py
 import pandas as pd
 from tqdm import tqdm
 
+from modelarrayio.cli import diagnostics as cli_diagnostics
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import add_scalar_columns_arg, add_to_modelarray_args
+from modelarrayio.cli.parser_utils import (
+    add_diagnostics_args,
+    add_scalar_columns_arg,
+    add_to_modelarray_args,
+)
 from modelarrayio.utils.cifti import (
     _build_scalar_sources,
     _cohort_to_long_dataframe,
@@ -21,6 +26,7 @@ from modelarrayio.utils.cifti import (
     brain_names_to_dataframe,
     extract_cifti_scalar_data,
 )
+from modelarrayio.utils.s3_utils import load_nibabel
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +44,9 @@ def cifti_to_h5(
     workers=None,
     s3_workers=1,
     scalar_columns=None,
+    no_diagnostics=False,
+    diagnostics_dir=None,
+    diagnostic_maps=None,
 ):
     """Load all CIFTI data and write to an HDF5 or TileDB file.
 
@@ -70,6 +79,12 @@ def cifti_to_h5(
         Number of workers for parallel S3 downloads
     scalar_columns : :obj:`list`
         List of scalar columns to use
+    no_diagnostics : :obj:`bool`
+        Disable diagnostic outputs in native format.
+    diagnostics_dir : :obj:`str` or :obj:`None`
+        Output directory for diagnostics. Defaults to ``<output_stem>_diagnostics``.
+    diagnostic_maps : :obj:`list` or :obj:`None`
+        Diagnostic maps to write. Supported: ``mean``, ``element_id``, ``n_non_nan``.
 
     Returns
     -------
@@ -84,10 +99,35 @@ def cifti_to_h5(
     scalar_sources = _build_scalar_sources(cohort_long)
     if not scalar_sources:
         raise ValueError('Unable to derive scalar sources from cohort file.')
+    maps_to_write = cli_utils.normalize_diagnostic_maps(diagnostic_maps)
+
+    _first_scalar, first_sources = next(iter(scalar_sources.items()))
+    first_path = first_sources[0]
+    template_cifti = load_nibabel(first_path, cifti=True)
+    _first_data, reference_brain_names = extract_cifti_scalar_data(template_cifti)
+
+    if not no_diagnostics:
+        output_diag_dir = (
+            Path(diagnostics_dir)
+            if diagnostics_dir is not None
+            else cli_utils.default_diagnostics_dir(output_path)
+        )
+        output_diag_dir.mkdir(parents=True, exist_ok=True)
+        cli_diagnostics.verify_cifti_element_mapping(template_cifti, reference_brain_names)
 
     if backend == 'hdf5':
         scalars, last_brain_names = _load_cohort_cifti(cohort_long, s3_workers)
         greyordinate_table, structure_names = brain_names_to_dataframe(last_brain_names)
+        if not no_diagnostics:
+            for scalar_name, rows in scalars.items():
+                diagnostics = cli_diagnostics.summarize_rows(rows)
+                cli_diagnostics.write_cifti_diagnostics(
+                    maps=maps_to_write,
+                    scalar_name=scalar_name,
+                    diagnostics=diagnostics,
+                    template_cifti=template_cifti,
+                    output_dir=output_diag_dir,
+                )
         output_path = cli_utils.prepare_output_parent(output_path)
         with h5py.File(output_path, 'w') as h5_file:
             cli_utils.write_table_dataset(
@@ -113,10 +153,6 @@ def cifti_to_h5(
     if not scalar_sources:
         return 0
 
-    _first_scalar, first_sources = next(iter(scalar_sources.items()))
-    first_path = first_sources[0]
-    _, reference_brain_names = extract_cifti_scalar_data(first_path)
-
     def _process_scalar_job(scalar_name, source_files):
         rows = []
         for source_file in source_files:
@@ -126,6 +162,15 @@ def cifti_to_h5(
             rows.append(cifti_data)
 
         if rows:
+            if not no_diagnostics:
+                diagnostics = cli_diagnostics.summarize_rows(rows)
+                cli_diagnostics.write_cifti_diagnostics(
+                    maps=maps_to_write,
+                    scalar_name=scalar_name,
+                    diagnostics=diagnostics,
+                    template_cifti=template_cifti,
+                    output_dir=output_diag_dir,
+                )
             cli_utils.write_tiledb_scalar_matrices(
                 output_path,
                 {scalar_name: rows},
@@ -179,4 +224,5 @@ def _parse_cifti_to_h5():
     )
     add_to_modelarray_args(parser, default_output='greyordinatearray.h5')
     add_scalar_columns_arg(parser)
+    add_diagnostics_args(parser)
     return parser

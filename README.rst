@@ -52,16 +52,19 @@ Once ModelArrayIO is installed, these commands are available in your terminal:
 
   * ``.mif`` → ``.h5``: ``modelarrayio mif-to-h5``
   * ``.h5`` → ``.mif``: ``modelarrayio h5-to-mif``
+  * ``.h5`` scalar row → ``.mif``: ``modelarrayio h5-export-mif-file``
 
 * **Voxel-wise** data (NIfTI):
 
   * NIfTI → ``.h5``: ``modelarrayio nifti-to-h5``
   * ``.h5`` → NIfTI: ``modelarrayio h5-to-nifti``
+  * ``.h5`` scalar row → NIfTI: ``modelarrayio h5-export-nifti-file``
 
 * **Greyordinate-wise** data (CIFTI-2):
 
   * CIFTI-2 → ``.h5``: ``modelarrayio cifti-to-h5``
   * ``.h5`` → CIFTI-2: ``modelarrayio h5-to-cifti``
+  * ``.h5`` scalar row → CIFTI-2: ``modelarrayio h5-export-cifti-file``
 
 
 Storage backends: HDF5 and TileDB

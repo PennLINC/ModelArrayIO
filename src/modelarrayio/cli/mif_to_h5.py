@@ -12,8 +12,9 @@ import h5py
 import pandas as pd
 from tqdm import tqdm
 
+from modelarrayio.cli import diagnostics as cli_diagnostics
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import _is_file, add_to_modelarray_args
+from modelarrayio.cli.parser_utils import _is_file, add_diagnostics_args, add_to_modelarray_args
 from modelarrayio.utils.fixels import gather_fixels, mif_to_nifti2
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,9 @@ def mif_to_h5(
     target_chunk_mb=2.0,
     workers=None,
     s3_workers=1,
+    no_diagnostics=False,
+    diagnostics_dir=None,
+    diagnostic_maps=None,
 ):
     """Load all fixeldb data and write to an HDF5 or TileDB file.
 
@@ -67,6 +71,12 @@ def mif_to_h5(
         Has no effect when ``backend='hdf5'``.
     s3_workers : :obj:`int`
         Number of parallel workers for S3 downloads. Default 1.
+    no_diagnostics : :obj:`bool`
+        Disable diagnostic outputs in native format.
+    diagnostics_dir : :obj:`str` or :obj:`None`
+        Output directory for diagnostics. Defaults to ``<output_stem>_diagnostics``.
+    diagnostic_maps : :obj:`list` or :obj:`None`
+        Diagnostic maps to write. Supported: ``mean``, ``element_id``, ``n_non_nan``.
 
     Returns
     -------
@@ -79,16 +89,38 @@ def mif_to_h5(
 
     # gather cohort data
     cohort_df = pd.read_csv(cohort_file)
+    maps_to_write = cli_utils.normalize_diagnostic_maps(diagnostic_maps)
 
     # upload each cohort's data
     scalars = defaultdict(list)
     sources_lists = defaultdict(list)
+    template_nifti2 = None
     logger.info('Extracting .mif data...')
     for row in tqdm(cohort_df.itertuples(index=False), total=cohort_df.shape[0]):
         scalar_file = row.source_file
-        _scalar_img, scalar_data = mif_to_nifti2(scalar_file)
+        scalar_img, scalar_data = mif_to_nifti2(scalar_file)
+        if template_nifti2 is None:
+            template_nifti2 = scalar_img
         scalars[row.scalar_name].append(scalar_data)
         sources_lists[row.scalar_name].append(row.source_file)
+
+    if not no_diagnostics:
+        output_diag_dir = (
+            Path(diagnostics_dir)
+            if diagnostics_dir is not None
+            else cli_utils.default_diagnostics_dir(output_path)
+        )
+        output_diag_dir.mkdir(parents=True, exist_ok=True)
+        for scalar_name, rows in scalars.items():
+            cli_diagnostics.verify_mif_element_mapping(template_nifti2, rows[0].shape[0])
+            diagnostics = cli_diagnostics.summarize_rows(rows)
+            cli_diagnostics.write_mif_diagnostics(
+                maps=maps_to_write,
+                scalar_name=scalar_name,
+                diagnostics=diagnostics,
+                template_nifti2=template_nifti2,
+                output_dir=output_diag_dir,
+            )
 
     # Write the output
     if backend == 'hdf5':
@@ -155,4 +187,5 @@ def _parse_mif_to_h5():
 
     # Common arguments
     add_to_modelarray_args(parser, default_output='fixelarray.h5')
+    add_diagnostics_args(parser)
     return parser

@@ -135,6 +135,35 @@ def add_log_level_arg(parser):
     return parser
 
 
+def add_diagnostics_args(parser):
+    parser.add_argument(
+        '--no-diagnostics',
+        action='store_true',
+        help='Disable writing conversion diagnostics in the native imaging format.',
+        default=False,
+    )
+    parser.add_argument(
+        '--diagnostics-dir',
+        '--diagnostics_dir',
+        help=(
+            'Directory for diagnostic outputs. Defaults to <output_stem>_diagnostics '
+            'next to --output.'
+        ),
+        default=None,
+    )
+    parser.add_argument(
+        '--diagnostic-maps',
+        '--diagnostic_maps',
+        nargs='+',
+        default=['mean', 'element_id', 'n_non_nan'],
+        help=(
+            'Diagnostic maps to write. Supports space-separated values and/or comma-separated '
+            'tokens. Valid values: mean, element_id, n_non_nan.'
+        ),
+    )
+    return parser
+
+
 def add_from_modelarray_args(parser):
     parser.add_argument(
         '--analysis-name',
@@ -160,6 +189,51 @@ def add_from_modelarray_args(parser):
         required=True,
     )
 
+    return parser
+
+
+def add_hdf5_scalar_export_args(parser):
+    parser.add_argument(
+        '--input-hdf5',
+        '--input_hdf5',
+        dest='in_file',
+        help='Path to an HDF5 (.h5) file containing scalar matrices under scalars/<name>/values.',
+        type=partial(_is_file, parser=parser),
+        required=True,
+    )
+    parser.add_argument(
+        '--scalar-name',
+        '--scalar_name',
+        required=True,
+        help='Scalar name under /scalars in the input HDF5 file.',
+    )
+    parser.add_argument(
+        '--output-file',
+        '--output_file',
+        required=True,
+        help='Output file path in the native imaging format.',
+    )
+
+    selection = parser.add_mutually_exclusive_group(required=True)
+    selection.add_argument(
+        '--column-index',
+        '--column_index',
+        '--subject-index',
+        '--subject_index',
+        type=int,
+        dest='column_index',
+        help='0-based row index within scalars/<scalar-name>/values.',
+        default=None,
+    )
+    selection.add_argument(
+        '--source-file',
+        '--source_file',
+        help=(
+            'Original source path to match against scalars/<scalar-name>/column_names '
+            'for row selection.'
+        ),
+        default=None,
+    )
     return parser
 
 

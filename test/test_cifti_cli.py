@@ -51,6 +51,7 @@ def test_concifti_cli_creates_expected_hdf5(tmp_path, monkeypatch):
             )
 
     out_h5 = tmp_path / 'out_cifti.h5'
+    diag_dir = tmp_path / 'out_cifti_diagnostics'
     monkeypatch.chdir(tmp_path)
     assert (
         modelarrayio_main(
@@ -75,6 +76,9 @@ def test_concifti_cli_creates_expected_hdf5(tmp_path, monkeypatch):
         == 0
     )
     assert op.exists(out_h5)
+    assert (diag_dir / 'THICK_mean.dscalar.nii').exists()
+    assert (diag_dir / 'THICK_element_id.dscalar.nii').exists()
+    assert (diag_dir / 'THICK_n_non_nan.dscalar.nii').exists()
 
     # Validate HDF5 contents
     with h5py.File(out_h5, 'r') as h5:
@@ -107,3 +111,38 @@ def test_concifti_cli_creates_expected_hdf5(tmp_path, monkeypatch):
         # Spot-check a couple values
         assert np.isclose(float(dset[0, 0]), 0.0)
         assert np.isclose(float(dset[1, 0]), 1.0)
+
+
+def test_concifti_cli_no_diagnostics_disables_outputs(tmp_path, monkeypatch):
+    vol_shape = (2, 2, 2)
+    mask = np.zeros(vol_shape, dtype=bool)
+    mask[0, 0, 0] = True
+    mask[1, 1, 1] = True
+
+    path = tmp_path / 'sub-1.dscalar.nii'
+    _make_synthetic_cifti_dscalar(mask, np.array([1.0, 2.0], dtype=np.float32)).to_filename(path)
+
+    cohort_csv = tmp_path / 'cohort_cifti.csv'
+    with cohort_csv.open('w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=['scalar_name', 'source_file'])
+        writer.writeheader()
+        writer.writerow({'scalar_name': 'THICK', 'source_file': path.name})
+
+    out_h5 = tmp_path / 'out_cifti.h5'
+    diag_dir = tmp_path / 'out_cifti_diagnostics'
+    monkeypatch.chdir(tmp_path)
+    assert (
+        modelarrayio_main(
+            [
+                'cifti-to-h5',
+                '--cohort-file',
+                str(cohort_csv),
+                '--output',
+                str(out_h5),
+                '--no-diagnostics',
+            ]
+        )
+        == 0
+    )
+    assert out_h5.exists()
+    assert not diag_dir.exists()
