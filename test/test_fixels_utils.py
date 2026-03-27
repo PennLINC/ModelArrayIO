@@ -47,12 +47,16 @@ def test_mif_to_h5_results(
     tmp_path_factory: pytest.TempPathFactory, downloaded_fixel_data_dir: Path
 ) -> None:
     """Test mif-to-h5 and h5-to-mif conversion, mimicking a ModelArray analysis."""
+    import os
+
     # Step 1: Prepare inputs for conversion
     out_dir = tmp_path_factory.mktemp('data_fixel_toy')
     in_dir = downloaded_fixel_data_dir
     index_file = in_dir / 'index.mif'
     directions_file = in_dir / 'directions.mif'
     cohort_file = in_dir / 'stat-alpha_cohort.csv'
+    if not index_file.exists():
+        raise FileNotFoundError(f'Contents of {out_dir}:\n{os.listdir(out_dir)}')
 
     # Prepend absolute path to source files in cohort file
     cohort_df = pd.read_csv(cohort_file)
