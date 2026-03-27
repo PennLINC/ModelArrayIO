@@ -1,15 +1,18 @@
 """Convert HDF5 file to NIfTI data."""
 
+from __future__ import annotations
+
 import argparse
 import logging
-import os
 from functools import partial
+from pathlib import Path
 
 import h5py
 import nibabel as nb
 import numpy as np
 
-from modelarrayio.cli.parser_utils import _is_file
+from modelarrayio.cli import utils as cli_utils
+from modelarrayio.cli.parser_utils import _is_file, add_from_modelarray_args, add_log_level_arg
 
 logger = logging.getLogger(__name__)
 
@@ -25,119 +28,66 @@ def h5_to_nifti(in_file, analysis_name, group_mask_file, output_extension, outpu
 
     # modify the header:
     header_tosave = group_mask_img.header
-    header_tosave.set_data_dtype(
-        data_type_tosave
-    )  # modify the data type (mask's data type could be uint8...)
 
-    # results in .h5 file:
-    h5_data = h5py.File(in_file, 'r')
-    results_matrix = h5_data['results/' + analysis_name + '/results_matrix']
+    # modify the data type (mask's data type could be uint8...)
+    header_tosave.set_data_dtype(data_type_tosave)
 
-    # NOTE: results_matrix may need to be transposed depending on writer conventions
-    # Attempt to read column names: prefer attribute; fallback to dataset-based names
-    def _decode_names(arr):
-        try:
-            if isinstance(arr, list | tuple):
-                seq = arr
-            elif isinstance(arr, np.ndarray):
-                seq = arr.tolist()
-            else:
-                seq = [arr]
-            out = []
-            for x in seq:
-                if isinstance(x, bytes | bytearray | np.bytes_):
-                    s = x.decode('utf-8', errors='ignore')
-                else:
-                    s = str(x)
-                s = s.rstrip('\x00').strip()
-                out.append(s)
-            return out
-        except (AttributeError, OSError, TypeError, ValueError):
-            return None
-
-    results_names = None
-    # 1) Try attribute (backward compatibility)
-    try:
-        names_attr = results_matrix.attrs.get('colnames', None)
-        if names_attr is not None:
-            results_names = _decode_names(names_attr)
-    except (OSError, RuntimeError, TypeError, ValueError):
-        results_names = None
-
-    # 2) Fallback to dataset-based column names (new format)
-    if not results_names:
-        candidate_paths = [
-            f'results/{analysis_name}/column_names',
-            f'results/{analysis_name}/results_matrix/column_names',
-        ]
-        for p in candidate_paths:
-            if p in h5_data:
-                try:
-                    names_ds = h5_data[p][()]
-                    results_names = _decode_names(names_ds)
-                    if results_names:
-                        break
-                except (KeyError, OSError, RuntimeError, TypeError, ValueError):
-                    logger.debug('Could not read column names from %s', p, exc_info=True)
-                    continue
-
-    # 3) Final fallback to generated names
-    if not results_names:
-        print("Unable to read column names, using 'componentNNN' instead")
-        results_names = [f'component{n + 1:03d}' for n in range(results_matrix.shape[0])]
-
-    # # Make output directory if it does not exist  # has been done in h5_to_volumes_wrapper()
-    # if os.path.isdir(output_dir) == False:
-    #     os.mkdir(output_dir)
-
-    # for loop: save stat metric results one by one:
-    for result_col, result_name in enumerate(results_names):
-        valid_result_name = result_name.replace(' ', '_').replace('/', '_')
-
-        out_file = os.path.join(
-            output_dir, analysis_name + '_' + valid_result_name + output_extension
+    output_path = Path(output_dir)
+    with h5py.File(in_file, 'r') as h5_data:
+        results_matrix = h5_data[f'results/{analysis_name}/results_matrix']
+        results_names = cli_utils.read_result_names(
+            h5_data, analysis_name, results_matrix, logger=logger
         )
-        output = np.zeros(group_mask_matrix.shape)
-        data_tosave = results_matrix[result_col, :]
-        data_tosave = data_tosave.astype(
-            data_type_tosave
-        )  # make sure each result image's data type is the correct one
-        output[group_mask_matrix] = data_tosave
-        output_img = nb.Nifti1Image(output, affine=group_mask_img.affine, header=header_tosave)
-        output_img.to_filename(out_file)
 
-        # if this result is p.value, also write out 1-p.value (1m.p.value)
-        # the result name contains "p.value" (from R package broom)
-        if 'p.value' in valid_result_name:
+        for result_col, result_name in enumerate(results_names):
+            valid_result_name = cli_utils.sanitize_result_name(result_name)
+            out_file = output_path / f'{analysis_name}_{valid_result_name}{output_extension}'
+            output = np.zeros(group_mask_matrix.shape)
+            data_tosave = results_matrix[result_col, :].astype(data_type_tosave)
+            output[group_mask_matrix] = data_tosave
+            output_img = nb.Nifti1Image(output, affine=group_mask_img.affine, header=header_tosave)
+            output_img.to_filename(out_file)
+
+            if 'p.value' not in valid_result_name:
+                continue
+
             valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
-            out_file_1mpvalue = os.path.join(
-                output_dir,
-                analysis_name + '_' + valid_result_name_1mpvalue + output_extension,
+            out_file_1mpvalue = (
+                output_path / f'{analysis_name}_{valid_result_name_1mpvalue}{output_extension}'
             )
             output_1mpvalue = np.zeros(group_mask_matrix.shape)
-            data_tosave = 1 - results_matrix[result_col, :]  # 1 minus
-            data_tosave = data_tosave.astype(
+            output_1mpvalue[group_mask_matrix] = (1 - results_matrix[result_col, :]).astype(
                 data_type_tosave
-            )  # make sure each result image's data type is the correct one
-            output_1mpvalue[group_mask_matrix] = data_tosave
+            )
             output_img_1mpvalue = nb.Nifti1Image(
                 output_1mpvalue, affine=group_mask_img.affine, header=header_tosave
             )
             output_img_1mpvalue.to_filename(out_file_1mpvalue)
 
 
-def main():
-    parser = get_parser()
-    args = parser.parse_args()
+def h5_to_nifti_main(
+    group_mask_file,
+    analysis_name,
+    in_file,
+    output_dir,
+    output_extension='.nii.gz',
+    log_level='INFO',
+):
+    """Entry point for the ``modelarrayio h5-to-nifti`` command."""
+    cli_utils.configure_logging(log_level)
+    output_path = cli_utils.prepare_output_directory(output_dir, logger)
 
-    if os.path.exists(args.output_dir):
-        print('WARNING: Output directory exists')
-    os.makedirs(args.output_dir, exist_ok=True)
+    h5_to_nifti(
+        in_file=in_file,
+        analysis_name=analysis_name,
+        group_mask_file=group_mask_file,
+        output_extension=output_extension,
+        output_dir=output_path,
+    )
+    return 0
 
-    h5_to_nifti(*vars(args))
 
-
-def get_parser():
+def _parse_h5_to_nifti():
     parser = argparse.ArgumentParser(
         description='Convert statistical results from an hdf5 file to a volume data (NIfTI file)',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -150,36 +100,13 @@ def get_parser():
         required=True,
         type=IsFile,
     )
-    parser.add_argument(
-        '--cohort-file',
-        '--cohort_file',
-        help='Path to a csv with demographic info and paths to data.',
-        required=True,
-        type=IsFile,
-    )
-    parser.add_argument(
-        '--analysis-name',
-        '--analysis_name',
-        help='Name of the statistical analysis results to be saved.',
-    )
-    parser.add_argument(
-        '--input-hdf5',
-        '--input_hdf5',
-        help='Name of HDF5 (.h5) file where results outputs are saved.',
-        type=IsFile,
-        dest='in_file',
-    )
-    parser.add_argument(
-        '--output-dir',
-        '--output_dir',
-        help=(
-            'A directory where output volume files will be saved. '
-            'If the directory does not exist, it will be automatically created.'
-        ),
-    )
+
+    add_from_modelarray_args(parser)
+
     parser.add_argument(
         '--output-ext',
         '--output_ext',
+        dest='output_extension',
         help=(
             'The extension for output volume data. '
             'Options are .nii.gz (default) and .nii. Please provide the prefix dot.'
@@ -187,4 +114,5 @@ def get_parser():
         choices=['.nii.gz', '.nii'],
         default='.nii.gz',
     )
+    add_log_level_arg(parser)
     return parser

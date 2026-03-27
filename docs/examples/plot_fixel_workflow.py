@@ -1,10 +1,12 @@
 """
-Fixel-wise Data Conversion
-==========================
+MIF (Fixel-wise) Data Conversion
+================================
 
-For fixel-wise data, use the **``confixel``** command from **ModelArrayIO** to convert between
-MRtrix ``.mif`` files and the HDF5 format (``.h5``) used by ModelArray.  This guide assumes
-ModelArrayIO and MRtrix are already installed.
+To convert fixel-wise data in MIF format to HDF5 format,
+use the ``modelarrayio mif-to-h5`` command to convert the MIF files to the HDF5 format
+(``.h5``) used by **ModelArray**,
+and ``modelarrayio h5-to-mif`` to export results back to MIF.
+This guide assumes **ModelArrayIO** and **MRtrix** are already installed.
 """
 
 # %%
@@ -61,17 +63,17 @@ ModelArrayIO and MRtrix are already installed.
 #      - age
 #      - sex
 #    * - FD
-#      - FD/sub-01_fd.mif
+#      - /home/username/myProject/data/FD/sub-01_fd.mif
 #      - sub-01
 #      - 10
 #      - F
 #    * - FD
-#      - FD/sub-02_fd.mif
+#      - /home/username/myProject/data/FD/sub-02_fd.mif
 #      - sub-02
 #      - 20
 #      - M
 #    * - FD
-#      - FD/sub-03_fd.mif
+#      - /home/username/myProject/data/FD/sub-03_fd.mif
 #      - sub-03
 #      - 15
 #      - F
@@ -98,11 +100,11 @@ ModelArrayIO and MRtrix are already installed.
 #     # activate your conda environment first
 #     conda activate <env_name>
 #
-#     confixel \
+#     modelarrayio mif-to-h5 \
 #         --index-file      /home/username/myProject/data/FD/index.mif \
 #         --directions-file /home/username/myProject/data/FD/directions.mif \
 #         --cohort-file     /home/username/myProject/data/cohort_FD.csv \
-#         --output-hdf5     /home/username/myProject/data/FD.h5
+#         --output          /home/username/myProject/data/FD.h5
 #
 # This produces ``FD.h5`` in ``/home/username/myProject/data``.  You can then use
 # `ModelArray <https://pennlinc.github.io/ModelArray/>`_ to run statistical analyses on it.
@@ -112,13 +114,13 @@ ModelArrayIO and MRtrix are already installed.
 # --------------------------------------
 #
 # After running ModelArray and obtaining statistical results inside ``FD.h5`` (suppose the
-# analysis name is ``"mylm"``), use ``fixelstats_write`` to export them as ``.mif`` files.
+# analysis name is ``"mylm"``), use ``modelarrayio h5-to-mif`` to export them as ``.mif`` files.
 # The command also copies the original ``index.mif`` and ``directions.mif`` into the output
 # folder.
 #
 # .. code-block:: console
 #
-#     fixelstats_write \
+#     modelarrayio h5-to-mif \
 #         --index-file      /home/username/myProject/data/FD/index.mif \
 #         --directions-file /home/username/myProject/data/FD/directions.mif \
 #         --cohort-file     /home/username/myProject/data/cohort_FD.csv \
@@ -130,11 +132,11 @@ ModelArrayIO and MRtrix are already installed.
 #
 # .. warning::
 #
-#    **Existing files are not overwritten.**  ``fixelstats_write`` calls ``mrconvert`` without
+#    **Existing files are not overwritten.**  ``modelarrayio h5-to-mif`` calls ``mrconvert`` without
 #    ``-force``, so any ``.mif`` file already present in ``--output-dir`` with the same name
 #    will be left unchanged.  If ``--output-dir`` itself already exists you will see a
 #    ``WARNING: Output directory exists`` message, but no files will be deleted.  To start
-#    fresh, manually remove the output directory before re-running ``fixelstats_write``.
+#    fresh, manually remove the output directory before re-running ``modelarrayio h5-to-mif``.
 
 # %%
 # Additional help
@@ -144,7 +146,7 @@ ModelArrayIO and MRtrix are already installed.
 #
 # .. code-block:: console
 #
-#     confixel --help
-#     fixelstats_write --help
+#     modelarrayio mif-to-h5 --help
+#     modelarrayio h5-to-mif --help
 #
 # or in the :doc:`/usage` page of this documentation.

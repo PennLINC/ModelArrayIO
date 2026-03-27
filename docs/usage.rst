@@ -3,60 +3,60 @@ Usage
 #####
 
 
-********
-confixel
-********
+**********
+mif-to-h5
+**********
 
 .. argparse::
-   :ref: modelarrayio.cli.mif_to_h5.get_parser
-   :prog: confixel
-   :func: get_parser
+   :ref: modelarrayio.cli.mif_to_h5._parse_mif_to_h5
+   :prog: modelarrayio mif-to-h5
+   :func: _parse_mif_to_h5
 
 
-********
-convoxel
-********
-
-.. argparse::
-   :ref: modelarrayio.cli.nifti_to_h5.get_parser
-   :prog: convoxel
-   :func: get_parser
-
-
-********
-concifti
-********
+**********
+nifti-to-h5
+**********
 
 .. argparse::
-   :ref: modelarrayio.cli.cifti_to_h5.get_parser
-   :prog: concifti
-   :func: get_parser
+   :ref: modelarrayio.cli.nifti_to_h5._parse_nifti_to_h5
+   :prog: modelarrayio nifti-to-h5
+   :func: _parse_nifti_to_h5
 
 
-****************
-fixelstats_write
-****************
-
-.. argparse::
-   :ref: modelarrayio.cli.h5_to_mif.get_parser
-   :prog: fixelstats_write
-   :func: get_parser
-
-*****************
-volumestats_write
-*****************
+**********
+cifti-to-h5
+**********
 
 .. argparse::
-   :ref: modelarrayio.cli.h5_to_nifti.get_parser
-   :prog: volumestats_write
-   :func: get_parser
+   :ref: modelarrayio.cli.cifti_to_h5._parse_cifti_to_h5
+   :prog: modelarrayio cifti-to-h5
+   :func: _parse_cifti_to_h5
 
 
-****************
-ciftistats_write
-****************
+**********
+h5-to-mif
+**********
 
 .. argparse::
-   :ref: modelarrayio.cli.h5_to_cifti.get_parser
-   :prog: ciftistats_write
-   :func: get_parser
+   :ref: modelarrayio.cli.h5_to_mif._parse_h5_to_mif
+   :prog: modelarrayio h5-to-mif
+   :func: _parse_h5_to_mif
+
+***********
+h5-to-nifti
+***********
+
+.. argparse::
+   :ref: modelarrayio.cli.h5_to_nifti._parse_h5_to_nifti
+   :prog: modelarrayio h5-to-nifti
+   :func: _parse_h5_to_nifti
+
+
+***********
+h5-to-cifti
+***********
+
+.. argparse::
+   :ref: modelarrayio.cli.h5_to_cifti._parse_h5_to_cifti
+   :prog: modelarrayio h5-to-cifti
+   :func: _parse_h5_to_cifti

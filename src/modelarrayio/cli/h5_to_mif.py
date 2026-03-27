@@ -1,16 +1,19 @@
 """Convert HDF5 file to MIF data."""
 
+from __future__ import annotations
+
 import argparse
 import logging
-import os
 import shutil
 from functools import partial
+from pathlib import Path
 
 import h5py
 import nibabel as nb
 import pandas as pd
 
-from modelarrayio.cli.parser_utils import _is_file
+from modelarrayio.cli import utils as cli_utils
+from modelarrayio.cli.parser_utils import _is_file, add_from_modelarray_args, add_log_level_arg
 from modelarrayio.utils.fixels import mif_to_nifti2, nifti2_to_mif
 
 logger = logging.getLogger(__name__)
@@ -49,41 +52,29 @@ def h5_to_mif(example_mif, in_file, analysis_name, output_dir):
     """
     # Get a template nifti image.
     nifti2_img, _ = mif_to_nifti2(example_mif)
-    h5_data = h5py.File(in_file, 'r')
-    results_matrix = h5_data['results/' + analysis_name + '/results_matrix']
-    names_data = results_matrix.attrs['colnames']  # NOTE: results_matrix: need to be transposed...
-    # print(results_matrix.shape)
-
-    # print(h5_data['results/' + analysis_name + '/results_matrix'].attrs['column_names'])
-
-    try:
-        results_names = names_data.tolist()
-    except (AttributeError, OSError, TypeError, ValueError):
-        print("Unable to read column names, using 'componentNNN' instead")
-        results_names = [f'component{n + 1:03d}' for n in range(results_matrix.shape[0])]
-
-    # Make output directory if it does not exist
-    if not os.path.isdir(output_dir):
-        os.mkdir(output_dir)
-
-    for result_col, result_name in enumerate(results_names):
-        valid_result_name = result_name.replace(' ', '_').replace('/', '_')
-        out_mif = os.path.join(output_dir, f'{analysis_name}_{valid_result_name}.mif')
-        temp_nifti2 = nb.Nifti2Image(
-            results_matrix[result_col, :].reshape(-1, 1, 1),
-            nifti2_img.affine,
-            header=nifti2_img.header,
+    output_path = Path(output_dir)
+    with h5py.File(in_file, 'r') as h5_data:
+        results_matrix = h5_data[f'results/{analysis_name}/results_matrix']
+        results_names = cli_utils.read_result_names(
+            h5_data, analysis_name, results_matrix, logger=logger
         )
-        nifti2_to_mif(temp_nifti2, out_mif)
 
-        # if this result is p.value, also write out 1-p.value (1m.p.value)
-        # the result name contains "p.value" (from R package broom)
-        if 'p.value' in valid_result_name:
-            valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
-            out_mif_1mpvalue = os.path.join(
-                output_dir, f'{analysis_name}_{valid_result_name_1mpvalue}.mif'
+        for result_col, result_name in enumerate(results_names):
+            valid_result_name = cli_utils.sanitize_result_name(result_name)
+            out_mif = output_path / f'{analysis_name}_{valid_result_name}.mif'
+            temp_nifti2 = nb.Nifti2Image(
+                results_matrix[result_col, :].reshape(-1, 1, 1),
+                nifti2_img.affine,
+                header=nifti2_img.header,
             )
-            output_mifvalues_1mpvalue = 1 - results_matrix[result_col, :]  # 1 minus
+            nifti2_to_mif(temp_nifti2, out_mif)
+
+            if 'p.value' not in valid_result_name:
+                continue
+
+            valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
+            out_mif_1mpvalue = output_path / f'{analysis_name}_{valid_result_name_1mpvalue}.mif'
+            output_mifvalues_1mpvalue = 1 - results_matrix[result_col, :]
             temp_nifti2_1mpvalue = nb.Nifti2Image(
                 output_mifvalues_1mpvalue.reshape(-1, 1, 1),
                 nifti2_img.affine,
@@ -92,36 +83,46 @@ def h5_to_mif(example_mif, in_file, analysis_name, output_dir):
             nifti2_to_mif(temp_nifti2_1mpvalue, out_mif_1mpvalue)
 
 
-def main():
-    parser = get_parser()
-    args = parser.parse_args()
+def h5_to_mif_main(
+    index_file,
+    directions_file,
+    analysis_name,
+    in_file,
+    output_dir,
+    cohort_file=None,
+    example_mif=None,
+    log_level='INFO',
+):
+    """Entry point for the ``modelarrayio h5-to-mif`` command."""
+    cli_utils.configure_logging(log_level)
+    output_path = cli_utils.prepare_output_directory(output_dir, logger)
 
-    if os.path.exists(args.output_dir):
-        print('WARNING: Output directory exists')
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    # Copy in the index and directions
     shutil.copyfile(
-        args.directions_file,
-        os.path.join(args.output_dir, os.path.basename(args.directions_file)),
+        directions_file,
+        output_path / Path(directions_file).name,
     )
     shutil.copyfile(
-        args.index_file,
-        os.path.join(args.output_dir, os.path.basename(args.index_file)),
+        index_file,
+        output_path / Path(index_file).name,
     )
 
-    # Get an example mif file
-    cohort_df = pd.read_csv(args.cohort_file)
-    example_mif = cohort_df['source_file'][0]
+    if example_mif is None:
+        logger.warning(
+            'No example MIF file provided, using the first MIF file from the cohort file'
+        )
+        cohort_df = pd.read_csv(cohort_file)
+        example_mif = cohort_df['source_file'].iloc[0]
+
     h5_to_mif(
         example_mif=example_mif,
-        in_file=args.in_file,
-        analysis_name=args.analysis_name,
-        output_dir=args.output_dir,
+        in_file=in_file,
+        analysis_name=analysis_name,
+        output_dir=output_path,
     )
+    return 0
 
 
-def get_parser():
+def _parse_h5_to_mif():
     parser = argparse.ArgumentParser(
         description='Create a fixel directory from an hdf5 file',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -131,42 +132,37 @@ def get_parser():
     parser.add_argument(
         '--index-file',
         '--index_file',
-        help='Index File',
+        help='Index file used to reconstruct MIF files.',
         required=True,
         type=IsFile,
     )
     parser.add_argument(
         '--directions-file',
         '--directions_file',
-        help='Directions File',
+        help='Directions file used to reconstruct MIF files.',
         required=True,
         type=IsFile,
     )
-    parser.add_argument(
+
+    add_from_modelarray_args(parser)
+
+    example_mif_group = parser.add_mutually_exclusive_group(required=True)
+    example_mif_group.add_argument(
         '--cohort-file',
         '--cohort_file',
-        help='Path to a csv with demographic info and paths to data.',
-        required=True,
-        type=IsFile,
-    )
-    parser.add_argument(
-        '--analysis-name',
-        '--analysis_name',
-        help='Name for the statistical analysis results to be saved.',
-    )
-    parser.add_argument(
-        '--input-hdf5',
-        '--input_hdf5',
-        help='Name of HDF5 (.h5) file where results outputs are saved.',
-        type=IsFile,
-        dest='in_file',
-    )
-    parser.add_argument(
-        '--output-dir',
-        '--output_dir',
         help=(
-            'Fixel directory where outputs will be saved. '
-            'If the directory does not exist, it will be automatically created.'
+            'Path to a csv with demographic info and paths to data. '
+            'Used to select an example MIF file if no example MIF file is provided.'
         ),
+        type=IsFile,
+        default=None,
     )
+    example_mif_group.add_argument(
+        '--example-mif',
+        '--example_mif',
+        help='Path to an example MIF file.',
+        type=IsFile,
+        default=None,
+    )
+    add_log_level_arg(parser)
     return parser

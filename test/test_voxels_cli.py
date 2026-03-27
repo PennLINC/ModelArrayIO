@@ -1,12 +1,12 @@
 import csv
 import os.path as op
-import sys
 
 import h5py
 import nibabel as nb
 import numpy as np
+import pytest
 
-from modelarrayio.cli.nifti_to_h5 import main as convoxel_main
+from modelarrayio.cli.main import main as modelarrayio_main
 
 
 def _make_nifti(data, affine=None):
@@ -72,30 +72,30 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
 
     out_h5 = tmp_path / 'out.h5'
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(
-        sys,
-        'argv',
-        [
-            'convoxel',
-            '--group-mask-file',
-            str(group_mask_file),
-            '--cohort-file',
-            str(cohort_csv),
-            '--output-hdf5',
-            str(out_h5),
-            '--backend',
-            'hdf5',
-            '--dtype',
-            'float32',
-            '--compression',
-            'gzip',
-            '--compression-level',
-            '1',
-            '--target-chunk-mb',
-            '1.0',
-        ],
+    assert (
+        modelarrayio_main(
+            [
+                'nifti-to-h5',
+                '--group-mask-file',
+                str(group_mask_file),
+                '--cohort-file',
+                str(cohort_csv),
+                '--output',
+                str(out_h5),
+                '--backend',
+                'hdf5',
+                '--dtype',
+                'float32',
+                '--compression',
+                'gzip',
+                '--compression-level',
+                '1',
+                '--target-chunk-mb',
+                '1.0',
+            ]
+        )
+        == 0
     )
-    assert convoxel_main() == 0
     assert op.exists(out_h5)
 
     # Validate HDF5 contents
@@ -141,3 +141,66 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
             assert np.isnan(v1)
         else:
             assert np.isclose(v1, expected_s1, equal_nan=True)
+
+
+def test_h5_to_nifti_cli_writes_results_with_dataset_column_names(tmp_path):
+    shape = (3, 3, 3)
+    group_mask = np.zeros(shape, dtype=bool)
+    true_coords = [(0, 0, 0), (1, 1, 1), (2, 2, 2)]
+    for coord in true_coords:
+        group_mask[coord] = True
+
+    group_mask_file = tmp_path / 'group_mask.nii.gz'
+    _make_nifti(group_mask.astype(np.uint8)).to_filename(group_mask_file)
+
+    in_file = tmp_path / 'results.h5'
+    with h5py.File(in_file, 'w') as h5:
+        group = h5.require_group('results/lm')
+        group.create_dataset(
+            'results_matrix',
+            data=np.array(
+                [
+                    [0.1, 0.2, 0.3],
+                    [0.9, 0.8, 0.7],
+                ],
+                dtype=np.float32,
+            ),
+        )
+        group.create_dataset(
+            'column_names',
+            data=np.array(['effect size', 'p.value'], dtype=h5py.string_dtype('utf-8')),
+        )
+
+    output_dir = tmp_path / 'nifti_results'
+    assert (
+        modelarrayio_main(
+            [
+                'h5-to-nifti',
+                '--group-mask-file',
+                str(group_mask_file),
+                '--analysis-name',
+                'lm',
+                '--input-hdf5',
+                str(in_file),
+                '--output-dir',
+                str(output_dir),
+            ]
+        )
+        == 0
+    )
+
+    effect_file = output_dir / 'lm_effect_size.nii.gz'
+    pvalue_file = output_dir / 'lm_p.value.nii.gz'
+    inv_pvalue_file = output_dir / 'lm_1m.p.value.nii.gz'
+    assert effect_file.exists()
+    assert pvalue_file.exists()
+    assert inv_pvalue_file.exists()
+
+    effect_data = nb.load(effect_file).get_fdata()
+    pvalue_data = nb.load(pvalue_file).get_fdata()
+    inv_pvalue_data = nb.load(inv_pvalue_file).get_fdata()
+
+    for idx, coord in enumerate(true_coords):
+        assert effect_data[coord] == pytest.approx([0.1, 0.2, 0.3][idx])
+        assert pvalue_data[coord] == pytest.approx([0.9, 0.8, 0.7][idx])
+        assert inv_pvalue_data[coord] == pytest.approx([0.1, 0.2, 0.3][idx])

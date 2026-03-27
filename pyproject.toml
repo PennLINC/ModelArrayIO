@@ -68,12 +68,7 @@ Repository = "https://github.com/PennLINC/ModelArrayIO"
 Documentation = "https://modelarrayio.readthedocs.io"
 
 [project.scripts]
-confixel = "modelarrayio.cli.mif_to_h5:main"
-convoxel = "modelarrayio.cli.nifti_to_h5:main"
-concifti = "modelarrayio.cli.cifti_to_h5:main"
-fixelstats_write = "modelarrayio.cli.h5_to_mif:main"
-volumestats_write = "modelarrayio.cli.h5_to_nifti:main"
-ciftistats_write = "modelarrayio.cli.h5_to_cifti:main"
+modelarrayio = "modelarrayio.cli.main:main"
 
 #
 # Hatch
@@ -106,6 +101,7 @@ exclude = ".*"
 [tool.ruff]
 line-length = 99
 src = ["src"]
+extend-exclude = ["src/modelarrayio/__about__.py"]
 
 [tool.ruff.lint]
 extend-select = [
@@ -161,6 +157,7 @@ inline-quotes = "single"
 [tool.ruff.lint.extend-per-file-ignores]
 "*/test_*.py" = ["S101"]
 "docs/conf.py" = ["A001"]
+"src/modelarrayio/__about__.py" = ["Q000", "RUF022"]
 
 [tool.ruff.format]
 quote-style = "single"
