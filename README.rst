@@ -135,3 +135,16 @@ Notes and minor differences:
 * Compression: HDF5 uses ``gzip`` by default; TileDB defaults to ``zstd`` with shuffle for better speed/ratio. You can switch to ``gzip`` for parity.
 * Metadata: HDF5 stores ``column_names`` as a dataset attribute; TileDB stores names as JSON metadata on the array/group.
 * Layout: Both backends keep dimensions in the same order and use zero-based indices.
+
+HDF5 Benchmarking and Plots
+===========================
+
+Benchmark commands, environment setup, output artifacts, and plotting workflow
+are documented in the dedicated benchmarking guide:
+`docs/benchmarking.rst <docs/benchmarking.rst>`_.
+
+Faceted HDF5 benchmark summary:
+
+.. image:: docs/_static/h5_benchmark_summary.svg
+   :align: center
+   :alt: Faceted HDF5 benchmark summary (write time, output size, throughput, and Pareto trade-off)

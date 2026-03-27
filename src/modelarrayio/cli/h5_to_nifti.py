@@ -37,7 +37,7 @@ def h5_to_nifti(in_file, analysis_name, group_mask_file, output_extension, outpu
     # Attempt to read column names: prefer attribute; fallback to dataset-based names
     def _decode_names(arr):
         try:
-            if isinstance(arr, (list, tuple)):
+            if isinstance(arr, list | tuple):
                 seq = arr
             elif isinstance(arr, np.ndarray):
                 seq = arr.tolist()
@@ -45,7 +45,7 @@ def h5_to_nifti(in_file, analysis_name, group_mask_file, output_extension, outpu
                 seq = [arr]
             out = []
             for x in seq:
-                if isinstance(x, (bytes, bytearray, np.bytes_)):
+                if isinstance(x, bytes | bytearray | np.bytes_):
                     s = x.decode('utf-8', errors='ignore')
                 else:
                     s = str(x)

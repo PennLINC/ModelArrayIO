@@ -58,6 +58,7 @@ test = [
   "pytest-cov>=5",
   "pytest-xdist>=3",
   "pytest-env>=1.0",
+  "matplotlib>=3.8",
 ]
 all = ["modelarrayio[doc,test,s3]"]
 
@@ -185,6 +186,10 @@ exclude_lines = [
 [tool.pytest.ini_options]
 markers = [
   "s3: tests that require network access to public S3 (deselect with '-m not s3')",
+  "benchmark: benchmarks that write persistent performance artifacts",
+  "benchmark_quick: small, fast benchmark subset for local inspection",
+  "benchmark_medium: medium benchmark subset excluding the largest cohort size",
+  "benchmark_full: full benchmark sweep including the largest cohort size",
 ]
 log_cli = true
 

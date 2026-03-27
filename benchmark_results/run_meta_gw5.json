@@ -1,0 +1,13 @@
+{
+  "commands": {
+    "full": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 MODELARRAYIO_S3_ANON=1 PYTHONPATH=src pytest -m benchmark_full test/test_h5_benchmarks.py -q",
+    "medium": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 MODELARRAYIO_S3_ANON=1 PYTHONPATH=src pytest -m benchmark_medium test/test_h5_benchmarks.py -q",
+    "parallel": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 MODELARRAYIO_S3_ANON=1 PYTHONPATH=src pytest -n auto -m benchmark_full test/test_h5_benchmarks.py -q",
+    "plot": "Rscript test/plot_h5_benchmarks.R",
+    "quick": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 MODELARRAYIO_S3_ANON=1 PYTHONPATH=src pytest -m benchmark_quick test/test_h5_benchmarks.py -q"
+  },
+  "csv_path": "/Users/tientong/projects/ModelArrayIO/benchmark_results/h5_benchmark_results_gw5.csv",
+  "last_run_kind": "full",
+  "plots_dir": "/Users/tientong/projects/ModelArrayIO/benchmark_results/plots",
+  "updated_utc": "2026-03-26T21:59:14.306858+00:00"
+}
