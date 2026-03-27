@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.parser_utils import _is_file, add_to_modelarray_args
-from modelarrayio.utils.fixels import gather_fixels, mif_to_nifti2
+from modelarrayio.utils.fixels import gather_fixels, mif_to_image
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ def mif_to_h5(
     logger.info('Extracting .mif data...')
     for row in tqdm(cohort_df.itertuples(index=False), total=cohort_df.shape[0]):
         scalar_file = row.source_file
-        _scalar_img, scalar_data = mif_to_nifti2(scalar_file)
+        _scalar_img, scalar_data = mif_to_image(scalar_file)
         scalars[row.scalar_name].append(scalar_data)
         sources_lists[row.scalar_name].append(row.source_file)
 
