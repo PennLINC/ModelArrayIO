@@ -239,9 +239,7 @@ def write_parcel_names(base_uri: str, array_path: str, names: Sequence[str]):
         Parcel name strings to store.
     """
     if len(names) == 0:
-        raise ValueError(
-            f"Cannot write parcel names to '{array_path}': names must not be empty."
-        )
+        raise ValueError(f"Cannot write parcel names to '{array_path}': names must not be empty.")
 
     uri = os.path.join(base_uri, array_path)
     _ensure_parent_group(uri)
