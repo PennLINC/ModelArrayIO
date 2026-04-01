@@ -114,9 +114,7 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
             )
         if reference_brain_names is not None:
             if not np.array_equal(brain_names, reference_brain_names):
-                raise ValueError(
-                    f'Inconsistent greyordinate names in CIFTI file {cifti_file!r}.'
-                )
+                raise ValueError(f'Inconsistent greyordinate names in CIFTI file {cifti_file!r}.')
         return cifti_data, brain_names
 
     elif len(scalar_axes) == 1 and len(parcel_axes) == 1:
@@ -133,9 +131,7 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
             )
         if reference_brain_names is not None:
             if not np.array_equal(parcel_names, reference_brain_names):
-                raise ValueError(
-                    f'Inconsistent parcel names in CIFTI file {cifti_file!r}.'
-                )
+                raise ValueError(f'Inconsistent parcel names in CIFTI file {cifti_file!r}.')
         return cifti_data, parcel_names
 
     elif len(parcel_axes) == 2:
@@ -153,9 +149,7 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
         cifti_data_flat = cifti_data.flatten()
         if reference_brain_names is not None:
             if not np.array_equal(element_names, reference_brain_names):
-                raise ValueError(
-                    f'Inconsistent parcel names in CIFTI file {cifti_file!r}.'
-                )
+                raise ValueError(f'Inconsistent parcel names in CIFTI file {cifti_file!r}.')
         return cifti_data_flat, element_names
 
     else:

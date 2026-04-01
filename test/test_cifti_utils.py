@@ -24,9 +24,7 @@ def _make_parcels_axis(parcel_names: list[str]) -> ParcelsAxis:
     nvertices = {'CIFTI_STRUCTURE_CORTEX_LEFT': n}
     vox_dtype = np.dtype([('ijk', '<i4', (3,))])
     voxels = [np.array([], dtype=vox_dtype) for _ in range(n)]
-    vertices = [
-        {'CIFTI_STRUCTURE_CORTEX_LEFT': np.array([i], dtype=np.int32)} for i in range(n)
-    ]
+    vertices = [{'CIFTI_STRUCTURE_CORTEX_LEFT': np.array([i], dtype=np.int32)} for i in range(n)]
     affine = np.eye(4)
     volume_shape = (10, 10, 10)
     return ParcelsAxis(parcel_names, voxels, vertices, affine, volume_shape, nvertices)

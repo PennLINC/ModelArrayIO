@@ -31,9 +31,7 @@ def _cifti_output_ext(cifti_img):
         One of ``'.dscalar.nii'``, ``'.pscalar.nii'``, or ``'.pconn.nii'``.
     """
     axes = [cifti_img.header.get_axis(i) for i in range(cifti_img.ndim)]
-    n_parcel_axes = sum(
-        isinstance(ax, nb.cifti2.cifti2_axes.ParcelsAxis) for ax in axes
-    )
+    n_parcel_axes = sum(isinstance(ax, nb.cifti2.cifti2_axes.ParcelsAxis) for ax in axes)
     if n_parcel_axes == 2:
         return '.pconn.nii'
     elif n_parcel_axes == 1:
