@@ -89,7 +89,33 @@ def mif_to_h5(
     if not sources_lists:
         raise ValueError('Unable to derive scalar sources from cohort file.')
 
+    scalar_names = list(sources_lists.keys())
+    split_scalar_outputs = bool(scalar_columns)
+
     if backend == 'hdf5':
+        if split_scalar_outputs:
+            outputs: list[Path] = []
+            for scalar_name in scalar_names:
+                scalar_output = cli_utils.prepare_output_parent(
+                    cli_utils.prefixed_output_path(output, scalar_name)
+                )
+                with h5py.File(scalar_output, 'w') as h5_file:
+                    cli_utils.write_table_dataset(h5_file, 'fixels', fixel_table)
+                    cli_utils.write_table_dataset(h5_file, 'voxels', voxel_table)
+                    cli_utils.write_hdf5_scalar_matrices(
+                        h5_file,
+                        {scalar_name: scalars[scalar_name]},
+                        {scalar_name: sources_lists[scalar_name]},
+                        storage_dtype=storage_dtype,
+                        compression=compression,
+                        compression_level=compression_level,
+                        shuffle=shuffle,
+                        chunk_voxels=chunk_voxels,
+                        target_chunk_mb=target_chunk_mb,
+                    )
+                outputs.append(scalar_output)
+            return int(not all(path.exists() for path in outputs))
+
         output = cli_utils.prepare_output_parent(output)
         with h5py.File(output, 'w') as h5_file:
             cli_utils.write_table_dataset(h5_file, 'fixels', fixel_table)
@@ -107,9 +133,6 @@ def mif_to_h5(
             )
         return int(not output.exists())
 
-    output.mkdir(parents=True, exist_ok=True)
-
-    scalar_names = list(sources_lists.keys())
     worker_count = workers if isinstance(workers, int) and workers > 0 else None
     if worker_count is None:
         cpu_count = os.cpu_count() or 1
@@ -118,8 +141,11 @@ def mif_to_h5(
         worker_count = min(len(scalar_names), worker_count)
 
     def _write_scalar_job(scalar_name):
+        scalar_output = (
+            cli_utils.prefixed_output_path(output, scalar_name) if split_scalar_outputs else output
+        )
         cli_utils.write_tiledb_scalar_matrices(
-            output,
+            scalar_output,
             {scalar_name: scalars[scalar_name]},
             {scalar_name: sources_lists[scalar_name]},
             storage_dtype=storage_dtype,

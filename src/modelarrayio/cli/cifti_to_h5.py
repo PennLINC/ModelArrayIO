@@ -82,8 +82,39 @@ def cifti_to_h5(
     scalar_sources = build_scalar_sources(cohort_long)
     if not scalar_sources:
         raise ValueError('Unable to derive scalar sources from cohort file.')
+    scalar_names = list(scalar_sources.keys())
+    split_scalar_outputs = bool(scalar_columns)
 
     if backend == 'hdf5':
+        if split_scalar_outputs:
+            scalars, last_brain_names = load_cohort_cifti(cohort_long, s3_workers)
+            greyordinate_table, structure_names = brain_names_to_dataframe(last_brain_names)
+            outputs: list[Path] = []
+            for scalar_name in scalar_names:
+                scalar_output = cli_utils.prepare_output_parent(
+                    cli_utils.prefixed_output_path(output, scalar_name)
+                )
+                with h5py.File(scalar_output, 'w') as h5_file:
+                    cli_utils.write_table_dataset(
+                        h5_file,
+                        'greyordinates',
+                        greyordinate_table,
+                        extra_attrs={'structure_names': structure_names},
+                    )
+                    cli_utils.write_hdf5_scalar_matrices(
+                        h5_file,
+                        {scalar_name: scalars[scalar_name]},
+                        {scalar_name: scalar_sources[scalar_name]},
+                        storage_dtype=storage_dtype,
+                        compression=compression,
+                        compression_level=compression_level,
+                        shuffle=shuffle,
+                        chunk_voxels=chunk_voxels,
+                        target_chunk_mb=target_chunk_mb,
+                    )
+                outputs.append(scalar_output)
+            return int(not all(path.exists() for path in outputs))
+
         scalars, last_brain_names = load_cohort_cifti(cohort_long, s3_workers)
         greyordinate_table, structure_names = brain_names_to_dataframe(last_brain_names)
         output = cli_utils.prepare_output_parent(output)
@@ -107,7 +138,6 @@ def cifti_to_h5(
             )
         return int(not output.exists())
 
-    output.mkdir(parents=True, exist_ok=True)
     if not scalar_sources:
         return 0
 
@@ -124,8 +154,13 @@ def cifti_to_h5(
             rows.append(cifti_data)
 
         if rows:
+            scalar_output = (
+                cli_utils.prefixed_output_path(output, scalar_name)
+                if split_scalar_outputs
+                else output
+            )
             cli_utils.write_tiledb_scalar_matrices(
-                output,
+                scalar_output,
                 {scalar_name: rows},
                 {scalar_name: source_files},
                 storage_dtype=storage_dtype,
@@ -138,7 +173,6 @@ def cifti_to_h5(
             )
             return scalar_name
 
-    scalar_names = list(scalar_sources.keys())
     worker_count = workers if isinstance(workers, int) and workers > 0 else None
     if worker_count is None:
         cpu_count = os.cpu_count() or 1

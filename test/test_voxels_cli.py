@@ -204,3 +204,82 @@ def test_h5_to_nifti_cli_writes_results_with_dataset_column_names(tmp_path):
         assert effect_data[coord] == pytest.approx([0.1, 0.2, 0.3][idx])
         assert pvalue_data[coord] == pytest.approx([0.9, 0.8, 0.7][idx])
         assert inv_pvalue_data[coord] == pytest.approx([0.1, 0.2, 0.3][idx])
+
+
+def test_nifti_to_h5_scalar_columns_writes_prefixed_outputs(tmp_path, monkeypatch):
+    shape = (3, 3, 3)
+    group_mask = np.zeros(shape, dtype=bool)
+    true_coords = [(0, 0, 1), (1, 1, 1), (2, 2, 0)]
+    for i, j, k in true_coords:
+        group_mask[i, j, k] = True
+
+    group_mask_file = tmp_path / 'group_mask.nii.gz'
+    _make_nifti(group_mask.astype(np.uint8)).to_filename(group_mask_file)
+
+    rows = []
+    for sidx in range(2):
+        subj_mask_file = tmp_path / f'sub-{sidx + 1}_mask.nii.gz'
+        _make_nifti(group_mask.astype(np.uint8)).to_filename(subj_mask_file)
+
+        alpha_data = np.zeros(shape, dtype=np.float32)
+        beta_data = np.zeros(shape, dtype=np.float32)
+        for i, j, k in true_coords:
+            alpha_data[i, j, k] = 10.0 + sidx
+            beta_data[i, j, k] = 20.0 + sidx
+
+        alpha_file = tmp_path / f'sub-{sidx + 1}_alpha.nii.gz'
+        beta_file = tmp_path / f'sub-{sidx + 1}_beta.nii.gz'
+        _make_nifti(alpha_data).to_filename(alpha_file)
+        _make_nifti(beta_data).to_filename(beta_file)
+
+        rows.append(
+            {
+                'subject_id': f'sub-{sidx + 1}',
+                'alpha': alpha_file.name,
+                'beta': beta_file.name,
+                'source_mask_file': subj_mask_file.name,
+            }
+        )
+
+    cohort_csv = tmp_path / 'cohort_wide.csv'
+    with cohort_csv.open('w', newline='') as f:
+        writer = csv.DictWriter(
+            f, fieldnames=['subject_id', 'alpha', 'beta', 'source_mask_file']
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+    out_h5 = tmp_path / 'voxelarray.h5'
+    alpha_out = tmp_path / 'alpha_voxelarray.h5'
+    beta_out = tmp_path / 'beta_voxelarray.h5'
+
+    monkeypatch.chdir(tmp_path)
+    assert (
+        modelarrayio_main(
+            [
+                'nifti-to-h5',
+                '--group-mask-file',
+                str(group_mask_file),
+                '--cohort-file',
+                str(cohort_csv),
+                '--scalar-columns',
+                'alpha',
+                'beta',
+                '--output',
+                str(out_h5),
+            ]
+        )
+        == 0
+    )
+
+    assert alpha_out.exists()
+    assert beta_out.exists()
+    assert not out_h5.exists()
+
+    with h5py.File(alpha_out, 'r') as h5:
+        assert 'voxels' in h5
+        assert sorted(h5['scalars'].keys()) == ['alpha']
+
+    with h5py.File(beta_out, 'r') as h5:
+        assert 'voxels' in h5
+        assert sorted(h5['scalars'].keys()) == ['beta']

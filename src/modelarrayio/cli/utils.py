@@ -37,6 +37,13 @@ def prepare_output_parent(output_file: str | Path) -> Path:
     return output_path
 
 
+def prefixed_output_path(output_path: str | Path, prefix: str) -> Path:
+    """Return output path with a sanitized prefix added to its filename."""
+    path = Path(output_path)
+    safe_prefix = sanitize_result_name(prefix)
+    return path.with_name(f'{safe_prefix}_{path.name}')
+
+
 def write_table_dataset(
     h5_file: h5py.File,
     dataset_name: str,
