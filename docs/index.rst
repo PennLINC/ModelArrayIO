@@ -14,4 +14,5 @@
    installation
    auto_examples/index
    usage
+   outputs
    api
