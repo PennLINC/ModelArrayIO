@@ -98,7 +98,11 @@ def compute_tile_shape_full_subjects(
 
 def _ensure_parent_group(uri: str):
     parent = os.path.dirname(uri.rstrip('/'))
-    if parent and not tiledb.object_type(parent):
+    if not parent or parent == uri:
+        return
+    if not tiledb.object_type(parent):
+        if not os.path.exists(parent):
+            _ensure_parent_group(parent)
         tiledb.group_create(parent)
 
 
@@ -176,6 +180,9 @@ def create_scalar_matrix_array(
         storage_np_dtype,
         tile_shape,
     )
+    if tiledb.object_type(uri):
+        logger.warning('Removing existing array %s', uri)
+        tiledb.remove(uri)
     tiledb.Array.create(uri, schema)
 
     logger.info('Writing full array %s to TileDB (this may take a while)...', uri)
@@ -265,6 +272,9 @@ def create_empty_scalar_matrix_array(
         storage_np_dtype,
         tile_shape,
     )
+    if tiledb.object_type(uri):
+        logger.warning('Removing existing array %s', uri)
+        tiledb.remove(uri)
     tiledb.Array.create(uri, schema)
 
     if sources_list is not None:
@@ -346,6 +356,7 @@ def write_parcel_names(base_uri: str, array_path: str, names: Sequence[str]):
     schema = tiledb.ArraySchema(domain=dom, attrs=[attr_values], sparse=False)
 
     if tiledb.object_type(uri):
+        logger.warning('Removing existing array %s', uri)
         tiledb.remove(uri)
     tiledb.Array.create(uri, schema)
 
@@ -378,6 +389,7 @@ def write_column_names(base_uri: str, scalar: str, sources: Sequence[str]):
     schema = tiledb.ArraySchema(domain=dom, attrs=[attr_values], sparse=False)
 
     if tiledb.object_type(uri):
+        logger.warning('Removing existing array %s', uri)
         tiledb.remove(uri)
     tiledb.Array.create(uri, schema)
 
