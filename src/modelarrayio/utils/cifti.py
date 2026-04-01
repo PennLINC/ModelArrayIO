@@ -178,7 +178,7 @@ def _get_cifti_parcel_info(cifti_file):
         For ``'pconn'``: ``{'parcel_id_from': row_names, 'parcel_id_to': col_names}`` —
         one entry per unique row/column parcel axis.
     """
-    cifti = cifti_file if hasattr(cifti_file, 'get_fdata') else nb.load(Path(cifti_file))
+    cifti = cifti_file if hasattr(cifti_file, 'get_fdata') else load_nibabel(cifti_file, cifti=True)
     axes = [cifti.header.get_axis(i) for i in range(cifti.ndim)]
 
     scalar_axes = [ax for ax in axes if isinstance(ax, nb.cifti2.cifti2_axes.ScalarAxis)]
