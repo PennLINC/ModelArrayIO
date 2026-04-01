@@ -73,15 +73,15 @@ def write_hdf5_scalar_matrices(
 ) -> None:
     """Write per-scalar matrices into an open HDF5 file."""
     for scalar_name, rows in scalars.items():
-        num_subjects = len(rows)
-        if num_subjects == 0:
+        n_files = len(rows)
+        if n_files == 0:
             continue
-        num_items = rows[0].shape[0]
+        n_elements = rows[0].shape[0]
         dataset = h5_storage.create_empty_scalar_matrix_dataset(
             h5_file,
             f'scalars/{scalar_name}/values',
-            num_subjects,
-            num_items,
+            n_files,
+            n_elements,
             storage_dtype=storage_dtype,
             compression=compression,
             compression_level=compression_level,
@@ -111,16 +111,16 @@ def write_tiledb_scalar_matrices(
     output_path.mkdir(parents=True, exist_ok=True)
 
     for scalar_name, rows in scalars.items():
-        num_subjects = len(rows)
-        if num_subjects == 0:
+        n_files = len(rows)
+        if n_files == 0:
             continue
-        num_items = rows[0].shape[0]
+        n_elements = rows[0].shape[0]
         dataset_path = f'scalars/{scalar_name}/values'
         tiledb_storage.create_empty_scalar_matrix_array(
             str(output_path),
             dataset_path,
-            num_subjects,
-            num_items,
+            n_files,
+            n_elements,
             storage_dtype=storage_dtype,
             compression=compression,
             compression_level=compression_level,

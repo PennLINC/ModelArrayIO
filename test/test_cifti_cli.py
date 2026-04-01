@@ -92,9 +92,9 @@ def test_concifti_cli_creates_expected_hdf5(tmp_path, monkeypatch):
 
         # Scalars dataset
         dset = h5['scalars/THICK/values']
-        num_subjects, num_items = dset.shape
-        assert num_subjects == 2
-        assert num_items == n_grayordinates
+        n_files, n_elements = dset.shape
+        assert n_files == 2
+        assert n_elements == n_grayordinates
 
         # Column names exist and match subjects count
         grp = h5['scalars/THICK']

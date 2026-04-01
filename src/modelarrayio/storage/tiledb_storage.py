@@ -56,15 +56,15 @@ def _build_filter_list(compression: str | None, compression_level: int | None, s
 
 
 def compute_tile_shape_full_subjects(
-    num_subjects, num_items, item_tile, target_tile_mb, storage_np_dtype
+    n_files, n_elements, item_tile, target_tile_mb, storage_np_dtype
 ):
     """Compute a tile shape for a full subject.
 
     Parameters
     ----------
-    num_subjects : :obj:`int`
+    n_files : :obj:`int`
         Number of subjects.
-    num_items : :obj:`int`
+    n_elements : :obj:`int`
         Number of items.
     item_tile : :obj:`int`
         Item tile.
@@ -79,8 +79,8 @@ def compute_tile_shape_full_subjects(
         Tile shape.
     """
     tile = storage_utils.compute_full_subject_chunk_shape(
-        num_subjects=num_subjects,
-        num_items=num_items,
+        n_files=n_files,
+        n_elements=n_elements,
         item_chunk=item_tile,
         target_chunk_mb=target_tile_mb,
         storage_np_dtype=storage_np_dtype,
@@ -88,8 +88,8 @@ def compute_tile_shape_full_subjects(
     logger.debug(
         'Computed tile shape: %s (subjects=%d, items=%d, item_tile=%s, target_tile_mb=%.2f)',
         tile,
-        num_subjects,
-        num_items,
+        n_files,
+        n_elements,
         str(item_tile),
         float(target_tile_mb),
     )
@@ -148,9 +148,9 @@ def create_scalar_matrix_array(
     if stacked_values.dtype != storage_np_dtype:
         stacked_values = stacked_values.astype(storage_np_dtype)
 
-    num_subjects, num_items = stacked_values.shape
+    n_files, n_elements = stacked_values.shape
     tile_shape = compute_tile_shape_full_subjects(
-        num_subjects, num_items, tile_voxels, target_tile_mb, storage_np_dtype
+        n_files, n_elements, tile_voxels, target_tile_mb, storage_np_dtype
     )
 
     uri = os.path.join(base_uri, dataset_path)
@@ -158,10 +158,10 @@ def create_scalar_matrix_array(
 
     # Domain and schema
     dim_subjects = tiledb.Dim(
-        name='subjects', domain=(0, num_subjects - 1), tile=tile_shape[0], dtype=np.int64
+        name='subjects', domain=(0, n_files - 1), tile=tile_shape[0], dtype=np.int64
     )
     dim_items = tiledb.Dim(
-        name='items', domain=(0, num_items - 1), tile=tile_shape[1], dtype=np.int64
+        name='items', domain=(0, n_elements - 1), tile=tile_shape[1], dtype=np.int64
     )
     dom = tiledb.Domain(dim_subjects, dim_items)
     attr_filters = _build_filter_list(compression, compression_level, shuffle)
@@ -171,8 +171,8 @@ def create_scalar_matrix_array(
     logger.info(
         'Creating TileDB array %s with shape (%d, %d), dtype=%s, tiles=%s',
         uri,
-        num_subjects,
-        num_items,
+        n_files,
+        n_elements,
         storage_np_dtype,
         tile_shape,
     )
@@ -196,8 +196,8 @@ def create_scalar_matrix_array(
 def create_empty_scalar_matrix_array(
     base_uri,
     dataset_path,
-    num_subjects,
-    num_items,
+    n_files,
+    n_elements,
     storage_dtype='float32',
     compression='zstd',
     compression_level=5,
@@ -214,9 +214,9 @@ def create_empty_scalar_matrix_array(
         Base URI.
     dataset_path : :obj:`str`
         Dataset path.
-    num_subjects : :obj:`int`
+    n_files : :obj:`int`
         Number of subjects.
-    num_items : :obj:`int`
+    n_elements : :obj:`int`
         Number of items.
     storage_dtype : :obj:`str`
         Storage dtype.
@@ -240,17 +240,17 @@ def create_empty_scalar_matrix_array(
     """
     storage_np_dtype = resolve_dtype(storage_dtype)
     tile_shape = compute_tile_shape_full_subjects(
-        num_subjects, num_items, tile_voxels, target_tile_mb, storage_np_dtype
+        n_files, n_elements, tile_voxels, target_tile_mb, storage_np_dtype
     )
 
     uri = os.path.join(base_uri, dataset_path)
     _ensure_parent_group(uri)
 
     dim_subjects = tiledb.Dim(
-        name='subjects', domain=(0, num_subjects - 1), tile=tile_shape[0], dtype=np.int64
+        name='subjects', domain=(0, n_files - 1), tile=tile_shape[0], dtype=np.int64
     )
     dim_items = tiledb.Dim(
-        name='items', domain=(0, num_items - 1), tile=tile_shape[1], dtype=np.int64
+        name='items', domain=(0, n_elements - 1), tile=tile_shape[1], dtype=np.int64
     )
     dom = tiledb.Domain(dim_subjects, dim_items)
     attr_filters = _build_filter_list(compression, compression_level, shuffle)
@@ -260,8 +260,8 @@ def create_empty_scalar_matrix_array(
     logger.info(
         'Creating empty TileDB array %s with shape (%d, %d), dtype=%s, tiles=%s',
         uri,
-        num_subjects,
-        num_items,
+        n_files,
+        n_elements,
         storage_np_dtype,
         tile_shape,
     )
@@ -285,18 +285,18 @@ def write_rows_in_column_stripes(uri: str, rows: Sequence[np.ndarray]):
     Parameters
     ----------
     uri : str
-        Target array URI with shape (num_subjects, num_elements).
+        Target array URI with shape (n_files, num_elements).
     rows : Sequence[np.ndarray]
         List/sequence of 1D arrays, one per subject, length == num_elements.
         Each will be cast on write to array attr dtype if needed.
     """
     with tiledb.open(uri, 'r') as Ainfo:
         dom = Ainfo.schema.domain
-        num_subjects = dom.dim(0).domain[1] - dom.dim(0).domain[0] + 1
+        n_files = dom.dim(0).domain[1] - dom.dim(0).domain[0] + 1
         num_elements = dom.dim(1).domain[1] - dom.dim(1).domain[0] + 1
         attr_dtype = Ainfo.schema.attr(0).dtype
 
-    if len(rows) != num_subjects:
+    if len(rows) != n_files:
         raise ValueError('rows length does not match array subjects dimension')
 
     # Try to align stripe width to the items tile for best throughput
@@ -304,7 +304,7 @@ def write_rows_in_column_stripes(uri: str, rows: Sequence[np.ndarray]):
         items_tile = Ainfo2.schema.domain.dim(1).tile
     stripe_width = items_tile if items_tile is not None else max(1, num_elements // 8)
 
-    buf = np.empty((num_subjects, stripe_width), dtype=attr_dtype)
+    buf = np.empty((n_files, stripe_width), dtype=attr_dtype)
     for start in range(0, num_elements, stripe_width):
         end = min(start + stripe_width, num_elements)
         width = end - start

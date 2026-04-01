@@ -46,8 +46,8 @@ def test_resolve_compression_invalid_gzip_level_falls_back() -> None:
 
 def test_compute_chunk_shape_full_subjects() -> None:
     chunk = compute_chunk_shape_full_subjects(
-        num_subjects=3,
-        num_items=100,
+        n_files=3,
+        n_elements=100,
         item_chunk=10,
         target_chunk_mb=2.0,
         storage_np_dtype=np.float32,
@@ -57,8 +57,8 @@ def test_compute_chunk_shape_full_subjects() -> None:
 
 def test_compute_chunk_shape_auto_item_chunk() -> None:
     chunk = compute_chunk_shape_full_subjects(
-        num_subjects=2,
-        num_items=50,
+        n_files=2,
+        n_elements=50,
         item_chunk=0,
         target_chunk_mb=1.0,
         storage_np_dtype=np.float32,
@@ -68,14 +68,14 @@ def test_compute_chunk_shape_auto_item_chunk() -> None:
 
 
 @pytest.mark.parametrize(
-    ('num_subjects', 'num_items'),
+    ('n_files', 'n_elements'),
     [(0, 10), (3, 0), (0, 0)],
 )
-def test_compute_chunk_shape_rejects_zero_dimension(num_subjects: int, num_items: int) -> None:
+def test_compute_chunk_shape_rejects_zero_dimension(n_files: int, n_elements: int) -> None:
     with pytest.raises(ValueError, match='zero-length'):
         compute_chunk_shape_full_subjects(
-            num_subjects,
-            num_items,
+            n_files,
+            n_elements,
             item_chunk=0,
             target_chunk_mb=2.0,
             storage_np_dtype=np.float32,
@@ -103,16 +103,12 @@ def test_create_scalar_matrix_dataset_writes_data_and_attrs(tmp_path) -> None:
 def test_write_rows_in_column_stripes_matches_dense_write(tmp_path) -> None:
     """Stripe writer should match assigning the full matrix."""
     path = tmp_path / 'stripe.h5'
-    num_subjects, num_elements = 3, 17
-    full = np.arange(num_subjects * num_elements, dtype=np.float64).reshape(
-        num_subjects, num_elements
-    )
-    rows = [full[i].copy() for i in range(num_subjects)]
+    n_files, num_elements = 3, 17
+    full = np.arange(n_files * num_elements, dtype=np.float64).reshape(n_files, num_elements)
+    rows = [full[i].copy() for i in range(n_files)]
 
     with h5py.File(path, 'w') as h5:
-        dset = h5.create_dataset(
-            'm', shape=(num_subjects, num_elements), dtype='f8', chunks=(3, 5)
-        )
+        dset = h5.create_dataset('m', shape=(n_files, num_elements), dtype='f8', chunks=(3, 5))
         write_rows_in_column_stripes(dset, rows)
 
     with h5py.File(path, 'r') as h5:

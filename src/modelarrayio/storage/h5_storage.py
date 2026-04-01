@@ -65,15 +65,15 @@ def resolve_compression(compression, compression_level, shuffle):
 
 
 def compute_chunk_shape_full_subjects(
-    num_subjects, num_items, item_chunk, target_chunk_mb, storage_np_dtype
+    n_files, n_elements, item_chunk, target_chunk_mb, storage_np_dtype
 ):
     """Compute a chunk shape for a full subject.
 
     Parameters
     ----------
-    num_subjects : :obj:`int`
+    n_files : :obj:`int`
         Number of subjects.
-    num_items : :obj:`int`
+    n_elements : :obj:`int`
         Number of items.
     item_chunk : :obj:`int`
         Item chunk.
@@ -88,8 +88,8 @@ def compute_chunk_shape_full_subjects(
         Chunk shape.
     """
     chunk = storage_utils.compute_full_subject_chunk_shape(
-        num_subjects=num_subjects,
-        num_items=num_items,
+        n_files=n_files,
+        n_elements=n_elements,
         item_chunk=item_chunk,
         target_chunk_mb=target_chunk_mb,
         storage_np_dtype=storage_np_dtype,
@@ -97,8 +97,8 @@ def compute_chunk_shape_full_subjects(
     logger.debug(
         'Computed chunk shape: %s (subjects=%d, items=%d, item_chunk=%s, target_chunk_mb=%.2f)',
         chunk,
-        num_subjects,
-        num_items,
+        n_files,
+        n_elements,
         str(item_chunk),
         float(target_chunk_mb),
     )
@@ -153,22 +153,22 @@ def create_scalar_matrix_dataset(
     if stacked_values.dtype != storage_np_dtype:
         stacked_values = stacked_values.astype(storage_np_dtype)
 
-    num_subjects, num_items = stacked_values.shape
+    n_files, n_elements = stacked_values.shape
     chunk_shape = compute_chunk_shape_full_subjects(
-        num_subjects, num_items, chunk_voxels, target_chunk_mb, storage_np_dtype
+        n_files, n_elements, chunk_voxels, target_chunk_mb, storage_np_dtype
     )
     logger.info(
         'Creating dataset %s with shape (%d, %d), dtype=%s, chunks=%s, compression=%s',
         dataset_path,
-        num_subjects,
-        num_items,
+        n_files,
+        n_elements,
         storage_np_dtype,
         chunk_shape,
         str(comp),
     )
     dset = h5file.create_dataset(
         dataset_path,
-        shape=(num_subjects, num_items),
+        shape=(n_files, n_elements),
         dtype=storage_np_dtype,
         chunks=chunk_shape,
         compression=comp,
@@ -186,8 +186,8 @@ def create_scalar_matrix_dataset(
 def create_empty_scalar_matrix_dataset(
     h5file,
     dataset_path,
-    num_subjects,
-    num_items,
+    n_files,
+    n_elements,
     storage_dtype='float32',
     compression='gzip',
     compression_level=4,
@@ -204,9 +204,9 @@ def create_empty_scalar_matrix_dataset(
         HDF5 file.
     dataset_path : :obj:`str`
         Dataset path.
-    num_subjects : :obj:`int`
+    n_files : :obj:`int`
         Number of subjects.
-    num_items : :obj:`int`
+    n_elements : :obj:`int`
         Number of items.
     storage_dtype : :obj:`str`
         Storage dtype.
@@ -232,20 +232,20 @@ def create_empty_scalar_matrix_dataset(
     comp, comp_opts, use_shuffle = resolve_compression(compression, compression_level, shuffle)
 
     chunk_shape = compute_chunk_shape_full_subjects(
-        num_subjects, num_items, chunk_voxels, target_chunk_mb, storage_np_dtype
+        n_files, n_elements, chunk_voxels, target_chunk_mb, storage_np_dtype
     )
     logger.info(
         'Creating empty dataset %s with shape (%d, %d), dtype=%s, chunks=%s, compression=%s',
         dataset_path,
-        num_subjects,
-        num_items,
+        n_files,
+        n_elements,
         storage_np_dtype,
         chunk_shape,
         str(comp),
     )
     dset = h5file.create_dataset(
         dataset_path,
-        shape=(num_subjects, num_items),
+        shape=(n_files, n_elements),
         dtype=storage_np_dtype,
         chunks=chunk_shape,
         compression=comp,
@@ -293,13 +293,13 @@ def write_rows_in_column_stripes(dset, rows):
     Parameters
     ----------
     dset : h5py.Dataset
-        Target dataset with shape (num_subjects, num_elements) and chunking set.
+        Target dataset with shape (n_files, num_elements) and chunking set.
     rows : Sequence[np.ndarray]
         List/sequence of 1D arrays, one per subject, length == num_elements.
         Each will be cast on write to dset.dtype if needed.
     """
-    num_subjects, num_elements = dset.shape
-    if len(rows) != num_subjects:
+    n_files, num_elements = dset.shape
+    if len(rows) != n_files:
         raise ValueError('rows length does not match dataset subjects dimension')
     stripe_width = dset.chunks[1] if dset.chunks is not None else max(1, num_elements // 8)
     logger.info(
@@ -309,7 +309,7 @@ def write_rows_in_column_stripes(dset, rows):
         str(dset.chunks),
     )
 
-    buf = np.empty((num_subjects, stripe_width), dtype=dset.dtype)
+    buf = np.empty((n_files, stripe_width), dtype=dset.dtype)
     with logging_redirect_tqdm():
         for start in tqdm(
             range(0, num_elements, stripe_width),

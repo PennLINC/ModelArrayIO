@@ -111,8 +111,8 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
 
         # Scalars dataset
         dset = h5['scalars/FA/values']
-        num_subjects, num_voxels = dset.shape
-        assert num_subjects == 2
+        n_files, num_voxels = dset.shape
+        assert n_files == 2
         assert num_voxels == ijk.shape[1]
 
         # Column names exist and match subjects count
