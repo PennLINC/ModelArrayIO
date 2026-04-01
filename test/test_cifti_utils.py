@@ -1,47 +1,13 @@
-"""Unit tests for CIFTI validation helpers."""
+"""Unit tests for CIFTI utility helpers."""
 
 from __future__ import annotations
 
-import nibabel as nb
 import numpy as np
 import pytest
-from nibabel.cifti2.cifti2_axes import BrainModelAxis, ParcelsAxis, ScalarAxis
+from nibabel.cifti2.cifti2_axes import ScalarAxis
+from utils import make_dscalar, make_parcels_axis, make_pconn, make_pscalar
 
-from modelarrayio.utils.cifti import extract_cifti_scalar_data
-
-
-def _make_scalar_cifti(mask_bool: np.ndarray, values: np.ndarray) -> nb.Cifti2Image:
-    scalar_axis = ScalarAxis(['synthetic'])
-    brain_axis = BrainModelAxis.from_mask(mask_bool)
-    header = nb.cifti2.Cifti2Header.from_axes((scalar_axis, brain_axis))
-    return nb.Cifti2Image(values.reshape(1, -1).astype(np.float32), header=header)
-
-
-def _make_parcels_axis(parcel_names: list[str]) -> ParcelsAxis:
-    """Create a minimal surface-only ParcelsAxis for testing."""
-    # One vertex per parcel on the left cortex
-    n = len(parcel_names)
-    nvertices = {'CIFTI_STRUCTURE_CORTEX_LEFT': n}
-    vox_dtype = np.dtype([('ijk', '<i4', (3,))])
-    voxels = [np.array([], dtype=vox_dtype) for _ in range(n)]
-    vertices = [{'CIFTI_STRUCTURE_CORTEX_LEFT': np.array([i], dtype=np.int32)} for i in range(n)]
-    affine = np.eye(4)
-    volume_shape = (10, 10, 10)
-    return ParcelsAxis(parcel_names, voxels, vertices, affine, volume_shape, nvertices)
-
-
-def _make_pscalar_cifti(parcel_names: list[str], values: np.ndarray) -> nb.Cifti2Image:
-    scalar_axis = ScalarAxis(['synthetic'])
-    parcels_axis = _make_parcels_axis(parcel_names)
-    header = nb.cifti2.Cifti2Header.from_axes((scalar_axis, parcels_axis))
-    return nb.Cifti2Image(values.reshape(1, -1).astype(np.float32), header=header)
-
-
-def _make_pconn_cifti(parcel_names: list[str], values: np.ndarray) -> nb.Cifti2Image:
-    parcels_axis = _make_parcels_axis(parcel_names)
-    header = nb.cifti2.Cifti2Header.from_axes((parcels_axis, parcels_axis))
-    n = len(parcel_names)
-    return nb.Cifti2Image(values.reshape(n, n).astype(np.float32), header=header)
+from modelarrayio.utils.cifti import brain_names_to_dataframe, extract_cifti_scalar_data
 
 
 class _FakeHeader:
@@ -66,7 +32,7 @@ def test_extract_cifti_scalar_data_returns_data_and_names() -> None:
     mask = np.zeros((2, 2, 2), dtype=bool)
     mask[0, 0, 0] = True
     mask[1, 1, 1] = True
-    image = _make_scalar_cifti(mask, np.array([1.0, 2.0], dtype=np.float32))
+    image = make_dscalar(mask, np.array([1.0, 2.0], dtype=np.float32))
 
     data, names = extract_cifti_scalar_data(image)
 
@@ -95,7 +61,7 @@ def test_extract_cifti_scalar_data_rejects_inconsistent_reference_names() -> Non
     mask = np.zeros((2, 2, 2), dtype=bool)
     mask[0, 0, 0] = True
     mask[1, 1, 1] = True
-    image = _make_scalar_cifti(mask, np.array([1.0, 2.0], dtype=np.float32))
+    image = make_dscalar(mask, np.array([1.0, 2.0], dtype=np.float32))
 
     with pytest.raises(ValueError, match='Inconsistent greyordinate names'):
         extract_cifti_scalar_data(image, reference_brain_names=np.array(['wrong', 'names']))
@@ -104,7 +70,7 @@ def test_extract_cifti_scalar_data_rejects_inconsistent_reference_names() -> Non
 def test_extract_cifti_scalar_data_pscalar_returns_data_and_names() -> None:
     parcel_names = ['parcel_A', 'parcel_B', 'parcel_C']
     values = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-    image = _make_pscalar_cifti(parcel_names, values)
+    image = make_pscalar(parcel_names, values)
 
     data, names = extract_cifti_scalar_data(image)
 
@@ -115,7 +81,7 @@ def test_extract_cifti_scalar_data_pscalar_returns_data_and_names() -> None:
 def test_extract_cifti_scalar_data_pscalar_validates_reference_names() -> None:
     parcel_names = ['parcel_A', 'parcel_B', 'parcel_C']
     values = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-    image = _make_pscalar_cifti(parcel_names, values)
+    image = make_pscalar(parcel_names, values)
 
     with pytest.raises(ValueError, match='Inconsistent parcel names'):
         extract_cifti_scalar_data(image, reference_brain_names=np.array(['X', 'Y', 'Z']))
@@ -125,7 +91,7 @@ def test_extract_cifti_scalar_data_pconn_flattens_matrix() -> None:
     parcel_names = ['parcel_A', 'parcel_B']
     n = len(parcel_names)
     matrix = np.arange(n * n, dtype=np.float32).reshape(n, n)
-    image = _make_pconn_cifti(parcel_names, matrix)
+    image = make_pconn(parcel_names, matrix)
 
     data, names = extract_cifti_scalar_data(image)
 
@@ -140,7 +106,7 @@ def test_extract_cifti_scalar_data_pconn_validates_reference_names() -> None:
     parcel_names = ['parcel_A', 'parcel_B']
     n = len(parcel_names)
     matrix = np.zeros((n, n), dtype=np.float32)
-    image = _make_pconn_cifti(parcel_names, matrix)
+    image = make_pconn(parcel_names, matrix)
 
     # Get the correct element_names first
     _, element_names = extract_cifti_scalar_data(image)
@@ -150,3 +116,23 @@ def test_extract_cifti_scalar_data_pconn_validates_reference_names() -> None:
     bad_names[0] = 'wrong'
     with pytest.raises(ValueError, match='Inconsistent parcel names'):
         extract_cifti_scalar_data(image, reference_brain_names=bad_names)
+
+
+def test_make_parcels_axis_produces_valid_axis() -> None:
+    """Smoke test: make_parcels_axis should return a ParcelsAxis with correct length."""
+    from nibabel.cifti2.cifti2_axes import ParcelsAxis
+
+    names = ['A', 'B', 'C']
+    axis = make_parcels_axis(names)
+    assert isinstance(axis, ParcelsAxis)
+    assert len(axis) == len(names)
+
+
+def test_brain_names_to_dataframe() -> None:
+    names = np.array(['CORTEX_LEFT', 'CORTEX_LEFT', 'CORTEX_RIGHT'])
+    gdf, struct_strings = brain_names_to_dataframe(names)
+    assert len(gdf) == 3
+    assert 'vertex_id' in gdf.columns
+    assert 'structure_id' in gdf.columns
+    assert gdf['vertex_id'].tolist() == [0, 1, 2]
+    assert len(struct_strings) == 2  # factorize unique structures

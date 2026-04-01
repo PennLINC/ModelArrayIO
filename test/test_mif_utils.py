@@ -1,4 +1,4 @@
-"""Unit tests for fixel utility error handling."""
+"""Unit tests for MIF/fixel utility helpers."""
 
 from __future__ import annotations
 
