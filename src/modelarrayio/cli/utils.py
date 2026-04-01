@@ -146,9 +146,10 @@ def write_hdf5_parcel_arrays(
         Keys are dataset names (e.g. ``'parcel_id'``, ``'parcel_id_from'``,
         ``'parcel_id_to'``); values are arrays of parcel name strings.
     """
+    grp = h5_file.require_group('parcels')
     for name, values in parcel_arrays.items():
-        h5_file.create_dataset(
-            f'parcels/{name}',
+        grp.create_dataset(
+            name,
             data=np.array(values, dtype=object),
             dtype=h5py.string_dtype(),
         )

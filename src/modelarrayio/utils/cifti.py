@@ -137,17 +137,41 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
     elif len(parcel_axes) == 2:
         # pconn.nii: ParcelsAxis (axis 0, rows) + ParcelsAxis (axis 1, cols)
         row_axis = parcel_axes[0]
+        col_axis = parcel_axes[1]
         cifti_data = cifti.get_fdata().astype(np.float32)
         if cifti_data.ndim != 2:
             raise ValueError(
                 f'Expected 2-D parcellated connectivity CIFTI data in {cifti_file!r}.'
             )
-        n_col = cifti_data.shape[1]
+        n_rows, n_cols = cifti_data.shape
         row_parcel_names = row_axis.name
-        # One parcel name per flattened entry: repeat each row parcel name n_col times
-        parcel_names = np.repeat(row_parcel_names, n_col)
-        cifti_data_flat = cifti_data.flatten()
+        col_parcel_names = col_axis.name
+        # Validate that parcel axes lengths match the data shape
+        if len(row_parcel_names) != n_rows:
+            raise ValueError(
+                f'Mismatch between row parcel names and data array in {cifti_file!r}: '
+                f'{len(row_parcel_names)} names vs {n_rows} rows.'
+            )
+        if len(col_parcel_names) != n_cols:
+            raise ValueError(
+                f'Mismatch between column parcel names and data array in {cifti_file!r}: '
+                f'{len(col_parcel_names)} names vs {n_cols} columns.'
+            )
+        # One parcel name per flattened entry: repeat each row parcel name n_cols times
+        parcel_names = np.repeat(row_parcel_names, n_cols)
+        cifti_data_flat = cifti_data.ravel()
         if reference_brain_names is not None:
+            if reference_brain_names.ndim != 1:
+                raise ValueError(
+                    f'Expected 1-D reference_brain_names for pconn CIFTI file {cifti_file!r}, '
+                    f'got {reference_brain_names.ndim}-D array.'
+                )
+            if reference_brain_names.shape[0] != cifti_data_flat.shape[0]:
+                raise ValueError(
+                    f'Mismatch between reference_brain_names and data array in {cifti_file!r}: '
+                    f'{reference_brain_names.shape[0]} names vs '
+                    f'{cifti_data_flat.shape[0]} flattened connectivity values.'
+                )
             if not np.array_equal(parcel_names, reference_brain_names):
                 raise ValueError(f'Inconsistent parcel names in CIFTI file {cifti_file!r}.')
         return cifti_data_flat, parcel_names
