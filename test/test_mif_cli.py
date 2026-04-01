@@ -21,7 +21,9 @@ def test_mif_to_h5_scalar_columns_writes_prefixed_outputs(tmp_path, monkeypatch)
         writer.writerow({'subject_id': 'sub-1', 'alpha': 'a1.mif', 'beta': 'b1.mif'})
         writer.writerow({'subject_id': 'sub-2', 'alpha': 'a2.mif', 'beta': 'b2.mif'})
 
-    fixel_table = pd.DataFrame({'fixel_id': [0, 1], 'x': [0.0, 1.0], 'y': [0.0, 1.0], 'z': [0.0, 1.0]})
+    fixel_table = pd.DataFrame(
+        {'fixel_id': [0, 1], 'x': [0.0, 1.0], 'y': [0.0, 1.0], 'z': [0.0, 1.0]}
+    )
     voxel_table = pd.DataFrame({'voxel_id': [0], 'i': [0], 'j': [0], 'k': [0]})
 
     def fake_gather_fixels(_index_file, _directions_file):

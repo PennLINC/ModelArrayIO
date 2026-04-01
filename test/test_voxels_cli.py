@@ -243,9 +243,7 @@ def test_nifti_to_h5_scalar_columns_writes_prefixed_outputs(tmp_path, monkeypatc
 
     cohort_csv = tmp_path / 'cohort_wide.csv'
     with cohort_csv.open('w', newline='') as f:
-        writer = csv.DictWriter(
-            f, fieldnames=['subject_id', 'alpha', 'beta', 'source_mask_file']
-        )
+        writer = csv.DictWriter(f, fieldnames=['subject_id', 'alpha', 'beta', 'source_mask_file'])
         writer.writeheader()
         writer.writerows(rows)
 
