@@ -293,15 +293,15 @@ def write_rows_in_column_stripes(dset, rows):
     Parameters
     ----------
     dset : h5py.Dataset
-        Target dataset with shape (n_files, num_elements) and chunking set.
+        Target dataset with shape (n_files, n_elements) and chunking set.
     rows : Sequence[np.ndarray]
-        List/sequence of 1D arrays, one per subject, length == num_elements.
+        List/sequence of 1D arrays, one per subject, length == n_elements.
         Each will be cast on write to dset.dtype if needed.
     """
-    n_files, num_elements = dset.shape
+    n_files, n_elements = dset.shape
     if len(rows) != n_files:
         raise ValueError('rows length does not match dataset subjects dimension')
-    stripe_width = dset.chunks[1] if dset.chunks is not None else max(1, num_elements // 8)
+    stripe_width = dset.chunks[1] if dset.chunks is not None else max(1, n_elements // 8)
     logger.info(
         'Stripe-writing dataset %s with stripe width=%d (chunks=%s)',
         dset.name,
@@ -312,14 +312,14 @@ def write_rows_in_column_stripes(dset, rows):
     buf = np.empty((n_files, stripe_width), dtype=dset.dtype)
     with logging_redirect_tqdm():
         for start in tqdm(
-            range(0, num_elements, stripe_width),
+            range(0, n_elements, stripe_width),
             bar_format=(
                 '{percentage:3.0f}% {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
             ),
             ascii=True,
-            mininterval=max(1, (num_elements / stripe_width) // 200),
+            mininterval=max(1, (n_elements / stripe_width) // 200),
         ):
-            end = min(start + stripe_width, num_elements)
+            end = min(start + stripe_width, n_elements)
             width = end - start
             if width != stripe_width:
                 # resize buffer view on last partial stripe

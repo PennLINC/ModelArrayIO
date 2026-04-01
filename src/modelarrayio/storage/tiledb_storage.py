@@ -285,15 +285,15 @@ def write_rows_in_column_stripes(uri: str, rows: Sequence[np.ndarray]):
     Parameters
     ----------
     uri : str
-        Target array URI with shape (n_files, num_elements).
+        Target array URI with shape (n_files, n_elements).
     rows : Sequence[np.ndarray]
-        List/sequence of 1D arrays, one per subject, length == num_elements.
+        List/sequence of 1D arrays, one per subject, length == n_elements.
         Each will be cast on write to array attr dtype if needed.
     """
     with tiledb.open(uri, 'r') as Ainfo:
         dom = Ainfo.schema.domain
         n_files = dom.dim(0).domain[1] - dom.dim(0).domain[0] + 1
-        num_elements = dom.dim(1).domain[1] - dom.dim(1).domain[0] + 1
+        n_elements = dom.dim(1).domain[1] - dom.dim(1).domain[0] + 1
         attr_dtype = Ainfo.schema.attr(0).dtype
 
     if len(rows) != n_files:
@@ -302,11 +302,11 @@ def write_rows_in_column_stripes(uri: str, rows: Sequence[np.ndarray]):
     # Try to align stripe width to the items tile for best throughput
     with tiledb.open(uri, 'r') as Ainfo2:
         items_tile = Ainfo2.schema.domain.dim(1).tile
-    stripe_width = items_tile if items_tile is not None else max(1, num_elements // 8)
+    stripe_width = items_tile if items_tile is not None else max(1, n_elements // 8)
 
     buf = np.empty((n_files, stripe_width), dtype=attr_dtype)
-    for start in range(0, num_elements, stripe_width):
-        end = min(start + stripe_width, num_elements)
+    for start in range(0, n_elements, stripe_width):
+        end = min(start + stripe_width, n_elements)
         width = end - start
         if width != stripe_width:
             buf_view = buf[:, :width]

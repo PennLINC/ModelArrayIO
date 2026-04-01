@@ -103,12 +103,12 @@ def test_create_scalar_matrix_dataset_writes_data_and_attrs(tmp_path) -> None:
 def test_write_rows_in_column_stripes_matches_dense_write(tmp_path) -> None:
     """Stripe writer should match assigning the full matrix."""
     path = tmp_path / 'stripe.h5'
-    n_files, num_elements = 3, 17
-    full = np.arange(n_files * num_elements, dtype=np.float64).reshape(n_files, num_elements)
+    n_files, n_elements = 3, 17
+    full = np.arange(n_files * n_elements, dtype=np.float64).reshape(n_files, n_elements)
     rows = [full[i].copy() for i in range(n_files)]
 
     with h5py.File(path, 'w') as h5:
-        dset = h5.create_dataset('m', shape=(n_files, num_elements), dtype='f8', chunks=(3, 5))
+        dset = h5.create_dataset('m', shape=(n_files, n_elements), dtype='f8', chunks=(3, 5))
         write_rows_in_column_stripes(dset, rows)
 
     with h5py.File(path, 'r') as h5:
