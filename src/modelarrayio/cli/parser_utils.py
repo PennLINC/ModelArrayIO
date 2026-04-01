@@ -20,6 +20,16 @@ def add_to_modelarray_args(parser, default_output='output.h5'):
             'for the tiledb backend, path to a .tdb directory.'
         ),
         default=default_output,
+        type=Path,
+    )
+    parser.add_argument(
+        '--scalar-columns',
+        '--scalar_columns',
+        nargs='+',
+        help=(
+            'Column names containing scalar file paths when the cohort table is in wide format. '
+            'If omitted, the cohort file must include "scalar_name" and "source_file" columns.'
+        ),
     )
     parser.add_argument(
         '--backend',
@@ -85,11 +95,10 @@ def add_to_modelarray_args(parser, default_output='output.h5'):
         type=int,
         help=(
             'Maximum number of parallel TileDB write workers. '
-            'Default 0 (auto, uses CPU count). '
-            'Set to 1 to disable parallel writes. '
+            'Default 1. '
             'Has no effect when --backend=hdf5.'
         ),
-        default=0,
+        default=1,
     )
 
     s3_group = parser.add_argument_group('S3 arguments')
@@ -107,19 +116,6 @@ def add_to_modelarray_args(parser, default_output='output.h5'):
 
     add_log_level_arg(parser)
 
-    return parser
-
-
-def add_scalar_columns_arg(parser):
-    parser.add_argument(
-        '--scalar-columns',
-        '--scalar_columns',
-        nargs='+',
-        help=(
-            'Column names containing scalar file paths when the cohort table is in wide format. '
-            "If omitted, the cohort file must include 'scalar_name' and 'source_file' columns."
-        ),
-    )
     return parser
 
 

@@ -107,13 +107,13 @@ def test_convoxel_s3_parallel(tmp_path, group_mask_path, monkeypatch):
 
     with h5py.File(out_h5, 'r') as h5:
         dset = h5['scalars/alff/values']
-        num_subjects, num_voxels = dset.shape
+        n_files, n_voxels = dset.shape
 
-        assert num_subjects == len(OHSU_SUBJECTS)
-        assert num_voxels > 0
+        assert n_files == len(OHSU_SUBJECTS)
+        assert n_voxels > 0
 
         # Each subject should have at least some non-NaN values
-        for i in range(num_subjects):
+        for i in range(n_files):
             assert not np.all(np.isnan(dset[i, :]))
 
         # Column names recorded in the file

@@ -36,29 +36,29 @@ def resolve_dtype(
 
 
 def compute_full_subject_chunk_shape(
-    num_subjects: int,
-    num_items: int,
+    n_files: int,
+    n_elements: int,
     item_chunk: int,
     target_chunk_mb: float,
     storage_np_dtype: str | np.dtype | type[np.floating],
 ) -> tuple[int, int]:
     """Compute a 2-D chunk/tile shape that spans all subjects."""
-    num_subjects = int(num_subjects)
-    num_items = int(num_items)
-    if num_subjects <= 0 or num_items <= 0:
+    n_files = int(n_files)
+    n_elements = int(n_elements)
+    if n_files <= 0 or n_elements <= 0:
         raise ValueError(
             'Cannot compute chunk shape with zero-length dimension: '
-            f'num_subjects={num_subjects}, num_items={num_items}'
+            f'n_files={n_files}, n_elements={n_elements}'
         )
 
-    subjects_per_chunk = num_subjects
+    subjects_per_chunk = n_files
     if int(item_chunk) > 0:
-        items_per_chunk = min(int(item_chunk), num_items)
+        items_per_chunk = min(int(item_chunk), n_elements)
     else:
         bytes_per_value = np.dtype(resolve_dtype(storage_np_dtype)).itemsize
         target_bytes = float(target_chunk_mb) * 1024.0 * 1024.0
         items_per_chunk = max(1, int(target_bytes / (bytes_per_value * subjects_per_chunk)))
-        items_per_chunk = min(items_per_chunk, num_items)
+        items_per_chunk = min(items_per_chunk, n_elements)
 
     return subjects_per_chunk, items_per_chunk
 

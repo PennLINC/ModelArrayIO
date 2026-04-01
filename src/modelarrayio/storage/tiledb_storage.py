@@ -16,6 +16,18 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_dtype(storage_dtype):
+    """Resolve a storage dtype to a supported NumPy floating type.
+
+    Parameters
+    ----------
+    storage_dtype : :obj:`str`
+        Storage dtype.
+
+    Returns
+    -------
+    :obj:`numpy.dtype`
+        Supported NumPy floating type.
+    """
     return storage_utils.resolve_dtype(storage_dtype)
 
 
@@ -44,11 +56,31 @@ def _build_filter_list(compression: str | None, compression_level: int | None, s
 
 
 def compute_tile_shape_full_subjects(
-    num_subjects, num_items, item_tile, target_tile_mb, storage_np_dtype
+    n_files, n_elements, item_tile, target_tile_mb, storage_np_dtype
 ):
+    """Compute a tile shape for a full subject.
+
+    Parameters
+    ----------
+    n_files : :obj:`int`
+        Number of subjects.
+    n_elements : :obj:`int`
+        Number of items.
+    item_tile : :obj:`int`
+        Item tile.
+    target_tile_mb : :obj:`float`
+        Target tile size in MB.
+    storage_np_dtype : :obj:`numpy.dtype`
+        Storage numpy dtype.
+
+    Returns
+    -------
+    :obj:`tuple`
+        Tile shape.
+    """
     tile = storage_utils.compute_full_subject_chunk_shape(
-        num_subjects=num_subjects,
-        num_items=num_items,
+        n_files=n_files,
+        n_elements=n_elements,
         item_chunk=item_tile,
         target_chunk_mb=target_tile_mb,
         storage_np_dtype=storage_np_dtype,
@@ -56,8 +88,8 @@ def compute_tile_shape_full_subjects(
     logger.debug(
         'Computed tile shape: %s (subjects=%d, items=%d, item_tile=%s, target_tile_mb=%.2f)',
         tile,
-        num_subjects,
-        num_items,
+        n_files,
+        n_elements,
         str(item_tile),
         float(target_tile_mb),
     )
@@ -82,13 +114,43 @@ def create_scalar_matrix_array(
     tile_voxels=0,
     target_tile_mb=2.0,
 ):
+    """Create a scalar matrix array in a TileDB directory.
+
+    Parameters
+    ----------
+    base_uri : :obj:`str`
+        Base URI.
+    dataset_path : :obj:`str`
+        Dataset path.
+    stacked_values : :obj:`numpy.ndarray`
+        Stacked values.
+    sources_list : :obj:`list`
+        Sources list.
+    storage_dtype : :obj:`str`
+        Storage dtype.
+    compression : :obj:`str`
+        Compression method.
+    compression_level : :obj:`int`
+        Compression level.
+    shuffle : :obj:`bool`
+        Whether to shuffle the data.
+    tile_voxels : :obj:`int`
+        Tile voxels.
+    target_tile_mb : :obj:`float`
+        Target tile size in MB.
+
+    Returns
+    -------
+    :obj:`str`
+        URI of the created array.
+    """
     storage_np_dtype = resolve_dtype(storage_dtype)
     if stacked_values.dtype != storage_np_dtype:
         stacked_values = stacked_values.astype(storage_np_dtype)
 
-    num_subjects, num_items = stacked_values.shape
+    n_files, n_elements = stacked_values.shape
     tile_shape = compute_tile_shape_full_subjects(
-        num_subjects, num_items, tile_voxels, target_tile_mb, storage_np_dtype
+        n_files, n_elements, tile_voxels, target_tile_mb, storage_np_dtype
     )
 
     uri = os.path.join(base_uri, dataset_path)
@@ -96,10 +158,10 @@ def create_scalar_matrix_array(
 
     # Domain and schema
     dim_subjects = tiledb.Dim(
-        name='subjects', domain=(0, num_subjects - 1), tile=tile_shape[0], dtype=np.int64
+        name='subjects', domain=(0, n_files - 1), tile=tile_shape[0], dtype=np.int64
     )
     dim_items = tiledb.Dim(
-        name='items', domain=(0, num_items - 1), tile=tile_shape[1], dtype=np.int64
+        name='items', domain=(0, n_elements - 1), tile=tile_shape[1], dtype=np.int64
     )
     dom = tiledb.Domain(dim_subjects, dim_items)
     attr_filters = _build_filter_list(compression, compression_level, shuffle)
@@ -109,8 +171,8 @@ def create_scalar_matrix_array(
     logger.info(
         'Creating TileDB array %s with shape (%d, %d), dtype=%s, tiles=%s',
         uri,
-        num_subjects,
-        num_items,
+        n_files,
+        n_elements,
         storage_np_dtype,
         tile_shape,
     )
@@ -134,8 +196,8 @@ def create_scalar_matrix_array(
 def create_empty_scalar_matrix_array(
     base_uri,
     dataset_path,
-    num_subjects,
-    num_items,
+    n_files,
+    n_elements,
     storage_dtype='float32',
     compression='zstd',
     compression_level=5,
@@ -144,19 +206,51 @@ def create_empty_scalar_matrix_array(
     target_tile_mb=2.0,
     sources_list: Sequence[str] | None = None,
 ):
+    """Create an empty scalar matrix array in a TileDB directory.
+
+    Parameters
+    ----------
+    base_uri : :obj:`str`
+        Base URI.
+    dataset_path : :obj:`str`
+        Dataset path.
+    n_files : :obj:`int`
+        Number of subjects.
+    n_elements : :obj:`int`
+        Number of items.
+    storage_dtype : :obj:`str`
+        Storage dtype.
+    compression : :obj:`str`
+        Compression method.
+    compression_level : :obj:`int`
+        Compression level.
+    shuffle : :obj:`bool`
+        Whether to shuffle the data.
+    tile_voxels : :obj:`int`
+        Tile voxels.
+    target_tile_mb : :obj:`float`
+        Target tile size in MB.
+    sources_list : :obj:`list`
+        Sources list.
+
+    Returns
+    -------
+    :obj:`str`
+        URI of the created array.
+    """
     storage_np_dtype = resolve_dtype(storage_dtype)
     tile_shape = compute_tile_shape_full_subjects(
-        num_subjects, num_items, tile_voxels, target_tile_mb, storage_np_dtype
+        n_files, n_elements, tile_voxels, target_tile_mb, storage_np_dtype
     )
 
     uri = os.path.join(base_uri, dataset_path)
     _ensure_parent_group(uri)
 
     dim_subjects = tiledb.Dim(
-        name='subjects', domain=(0, num_subjects - 1), tile=tile_shape[0], dtype=np.int64
+        name='subjects', domain=(0, n_files - 1), tile=tile_shape[0], dtype=np.int64
     )
     dim_items = tiledb.Dim(
-        name='items', domain=(0, num_items - 1), tile=tile_shape[1], dtype=np.int64
+        name='items', domain=(0, n_elements - 1), tile=tile_shape[1], dtype=np.int64
     )
     dom = tiledb.Domain(dim_subjects, dim_items)
     attr_filters = _build_filter_list(compression, compression_level, shuffle)
@@ -166,8 +260,8 @@ def create_empty_scalar_matrix_array(
     logger.info(
         'Creating empty TileDB array %s with shape (%d, %d), dtype=%s, tiles=%s',
         uri,
-        num_subjects,
-        num_items,
+        n_files,
+        n_elements,
         storage_np_dtype,
         tile_shape,
     )
@@ -185,35 +279,34 @@ def create_empty_scalar_matrix_array(
 
 
 def write_rows_in_column_stripes(uri: str, rows: Sequence[np.ndarray]):
-    """
-    Fill a 2D TileDB dense array by buffering column-aligned stripes to minimize
+    """Fill a 2D TileDB dense array by buffering column-aligned stripes to minimize
     tile writes, using about one tile's worth of memory.
 
     Parameters
     ----------
     uri : str
-        Target array URI with shape (num_subjects, num_elements).
+        Target array URI with shape (n_files, n_elements).
     rows : Sequence[np.ndarray]
-        List/sequence of 1D arrays, one per subject, length == num_elements.
+        List/sequence of 1D arrays, one per subject, length == n_elements.
         Each will be cast on write to array attr dtype if needed.
     """
     with tiledb.open(uri, 'r') as Ainfo:
         dom = Ainfo.schema.domain
-        num_subjects = dom.dim(0).domain[1] - dom.dim(0).domain[0] + 1
-        num_elements = dom.dim(1).domain[1] - dom.dim(1).domain[0] + 1
+        n_files = dom.dim(0).domain[1] - dom.dim(0).domain[0] + 1
+        n_elements = dom.dim(1).domain[1] - dom.dim(1).domain[0] + 1
         attr_dtype = Ainfo.schema.attr(0).dtype
 
-    if len(rows) != num_subjects:
+    if len(rows) != n_files:
         raise ValueError('rows length does not match array subjects dimension')
 
     # Try to align stripe width to the items tile for best throughput
     with tiledb.open(uri, 'r') as Ainfo2:
         items_tile = Ainfo2.schema.domain.dim(1).tile
-    stripe_width = items_tile if items_tile is not None else max(1, num_elements // 8)
+    stripe_width = items_tile if items_tile is not None else max(1, n_elements // 8)
 
-    buf = np.empty((num_subjects, stripe_width), dtype=attr_dtype)
-    for start in range(0, num_elements, stripe_width):
-        end = min(start + stripe_width, num_elements)
+    buf = np.empty((n_files, stripe_width), dtype=attr_dtype)
+    for start in range(0, n_elements, stripe_width):
+        end = min(start + stripe_width, n_elements)
         width = end - start
         if width != stripe_width:
             buf_view = buf[:, :width]
@@ -226,9 +319,16 @@ def write_rows_in_column_stripes(uri: str, rows: Sequence[np.ndarray]):
 
 
 def write_column_names(base_uri: str, scalar: str, sources: Sequence[str]):
-    """
-    Store column names as a 1D dense TileDB array for the given scalar.
-    This mirrors the HDF5 dataset approach and scales to large cohorts.
+    """Store column names as a 1D dense TileDB array for the given scalar.
+
+    Parameters
+    ----------
+    base_uri : :obj:`str`
+        Base URI.
+    scalar : :obj:`str`
+        Scalar name.
+    sources : :obj:`list`
+        Sources list.
     """
     sources = storage_utils.normalize_column_names(sources)
     uri = os.path.join(base_uri, 'scalars', scalar, 'column_names')
@@ -239,7 +339,7 @@ def write_column_names(base_uri: str, scalar: str, sources: Sequence[str]):
         name='idx', domain=(0, max(n - 1, 0)), tile=max(1, min(n, 1024)), dtype=np.int64
     )
     dom = tiledb.Domain(dim_idx)
-    attr_values = tiledb.Attr(name='values', dtype=np.unicode_)
+    attr_values = tiledb.Attr(name='values', dtype=np.str_)
     schema = tiledb.ArraySchema(domain=dom, attrs=[attr_values], sparse=False)
 
     if tiledb.object_type(uri):

@@ -6,11 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from modelarrayio.utils.cifti import (
-    _build_scalar_sources,
-    _cohort_to_long_dataframe,
-    brain_names_to_dataframe,
-)
+from modelarrayio.utils.cifti import brain_names_to_dataframe
+from modelarrayio.utils.misc import build_scalar_sources, cohort_to_long_dataframe
 
 
 def test_cohort_long_format_preserves_rows() -> None:
@@ -21,9 +18,9 @@ def test_cohort_long_format_preserves_rows() -> None:
             'extra_col': [1, 2],
         }
     )
-    long_df = _cohort_to_long_dataframe(df)
+    long_df = cohort_to_long_dataframe(df)
     assert len(long_df) == 2
-    assert set(long_df.columns) == {'scalar_name', 'source_file'}
+    assert set(long_df.columns) == {'extra_col', 'scalar_name', 'source_file'}
     assert long_df.iloc[0]['scalar_name'] == 'THICK'
 
 
@@ -34,7 +31,7 @@ def test_cohort_long_format_strips_and_drops_empty() -> None:
             'source_file': ['  a.nii  ', '  b.nii  '],
         }
     )
-    long_df = _cohort_to_long_dataframe(df)
+    long_df = cohort_to_long_dataframe(df)
     assert len(long_df) == 1
     assert long_df.iloc[0]['scalar_name'] == 'THICK'
 
@@ -47,7 +44,7 @@ def test_cohort_wide_format_expands_columns() -> None:
             'FA': ['f1.nii', ''],
         }
     )
-    long_df = _cohort_to_long_dataframe(df, scalar_columns=['THICK', 'FA'])
+    long_df = cohort_to_long_dataframe(df, scalar_columns=['THICK', 'FA'])
     # Row 2 has empty FA — skipped
     assert len(long_df) == 3
     scalars = set(long_df['scalar_name'])
@@ -57,13 +54,13 @@ def test_cohort_wide_format_expands_columns() -> None:
 def test_cohort_wide_format_missing_scalar_column_raises() -> None:
     df = pd.DataFrame({'THICK': ['a.nii']})
     with pytest.raises(ValueError, match='missing scalar columns'):
-        _cohort_to_long_dataframe(df, scalar_columns=['THICK', 'MISSING'])
+        cohort_to_long_dataframe(df, scalar_columns=['THICK', 'MISSING'])
 
 
 def test_cohort_long_missing_required_raises() -> None:
     df = pd.DataFrame({'only_this': [1]})
     with pytest.raises(ValueError, match='scalar_name'):
-        _cohort_to_long_dataframe(df)
+        cohort_to_long_dataframe(df)
 
 
 def test_build_scalar_sources_ordering() -> None:
@@ -73,7 +70,7 @@ def test_build_scalar_sources_ordering() -> None:
             'source_file': ['x1', 'x2', 'y1'],
         }
     )
-    src = _build_scalar_sources(long_df)
+    src = build_scalar_sources(long_df)
     assert list(src.keys()) == ['A', 'B']
     assert src['A'] == ['x1', 'x2']
     assert src['B'] == ['y1']
