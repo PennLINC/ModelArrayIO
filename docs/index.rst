@@ -13,5 +13,6 @@
 
    installation
    auto_examples/index
+   benchmarking
    usage
    api

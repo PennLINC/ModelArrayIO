@@ -28,6 +28,7 @@ def h5_to_nifti(in_file, analysis_name, group_mask_file, output_extension, outpu
 
     # modify the header:
     header_tosave = group_mask_img.header
+
     # modify the data type (mask's data type could be uint8...)
     header_tosave.set_data_dtype(data_type_tosave)
 
