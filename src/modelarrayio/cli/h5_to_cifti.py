@@ -47,8 +47,8 @@ def _cifti_output_ext(cifti_img):
     # Expect 2D CIFTI images for these output types.
     if len(axes) != 2:
         raise ValueError(
-            f"Unsupported CIFTI dimensionality {len(axes)}; "
-            "only 2D CIFTI images are supported for dscalar/pscalar/pconn outputs."
+            f'Unsupported CIFTI dimensionality {len(axes)}; '
+            'only 2D CIFTI images are supported for dscalar/pscalar/pconn outputs.'
         )
 
     scalar_axis_cls = nb.cifti2.cifti2_axes.ScalarAxis
@@ -71,9 +71,11 @@ def _cifti_output_ext(cifti_img):
 
     axis_types = (type(first_axis).__name__, type(second_axis).__name__)
     raise ValueError(
-        "Unsupported CIFTI axis combination "
-        f"{axis_types}; cannot determine appropriate output extension."
+        'Unsupported CIFTI axis combination '
+        f'{axis_types}; cannot determine appropriate output extension.'
     )
+
+
 def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
     """Write the contents of an hdf5 file to a fixels directory.
 
