@@ -17,6 +17,30 @@ from modelarrayio.cli.parser_utils import _is_file, add_from_modelarray_args, ad
 logger = logging.getLogger(__name__)
 
 
+def _cifti_output_ext(cifti_img):
+    """Return the output filename extension for a CIFTI image.
+
+    Parameters
+    ----------
+    cifti_img : :obj:`nibabel.Cifti2Image`
+        Loaded CIFTI image whose axes determine the file type.
+
+    Returns
+    -------
+    ext : :obj:`str`
+        One of ``'.dscalar.nii'``, ``'.pscalar.nii'``, or ``'.pconn.nii'``.
+    """
+    axes = [cifti_img.header.get_axis(i) for i in range(cifti_img.ndim)]
+    n_parcel_axes = sum(
+        isinstance(ax, nb.cifti2.cifti2_axes.ParcelsAxis) for ax in axes
+    )
+    if n_parcel_axes == 2:
+        return '.pconn.nii'
+    elif n_parcel_axes == 1:
+        return '.pscalar.nii'
+    return '.dscalar.nii'
+
+
 def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
     """Write the contents of an hdf5 file to a fixels directory.
 
@@ -50,6 +74,12 @@ def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
     # Get a template nifti image.
     cifti = nb.load(example_cifti)
     output_path = Path(output_dir)
+
+    output_ext = _cifti_output_ext(cifti)
+    is_pconn = output_ext == '.pconn.nii'
+    if is_pconn:
+        n_rows, n_cols = cifti.shape
+
     with h5py.File(in_file, 'r') as h5_data:
         results_matrix = h5_data[f'results/{analysis_name}/results_matrix']
         results_names = cli_utils.read_result_names(
@@ -58,9 +88,11 @@ def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
 
         for result_col, result_name in enumerate(results_names):
             valid_result_name = cli_utils.sanitize_result_name(result_name)
-            out_cifti = output_path / f'{analysis_name}_{valid_result_name}.dscalar.nii'
+            out_cifti = output_path / f'{analysis_name}_{valid_result_name}{output_ext}'
+            row_data = results_matrix[result_col, :]
+            data_array = row_data.reshape(n_rows, n_cols) if is_pconn else row_data.reshape(1, -1)
             temp_cifti2 = nb.Cifti2Image(
-                results_matrix[result_col, :].reshape(1, -1),
+                data_array,
                 header=cifti.header,
                 nifti_header=cifti.nifti_header,
             )
@@ -71,11 +103,16 @@ def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
 
             valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
             out_cifti_1mpvalue = (
-                output_path / f'{analysis_name}_{valid_result_name_1mpvalue}.dscalar.nii'
+                output_path / f'{analysis_name}_{valid_result_name_1mpvalue}{output_ext}'
             )
-            output_mifvalues_1mpvalue = 1 - results_matrix[result_col, :]
+            output_mifvalues_1mpvalue = 1 - row_data
+            data_array_1mpvalue = (
+                output_mifvalues_1mpvalue.reshape(n_rows, n_cols)
+                if is_pconn
+                else output_mifvalues_1mpvalue.reshape(1, -1)
+            )
             temp_nifti2_1mpvalue = nb.Cifti2Image(
-                output_mifvalues_1mpvalue.reshape(1, -1),
+                data_array_1mpvalue,
                 header=cifti.header,
                 nifti_header=cifti.nifti_header,
             )

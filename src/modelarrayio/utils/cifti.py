@@ -60,21 +60,33 @@ def _build_scalar_sources(long_df):
 
 
 def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
-    """Load a scalar cifti file and get its data and mapping
+    """Load a scalar cifti file and get its data and mapping.
+
+    Supports dscalar (.dscalar.nii), parcellated scalar (.pscalar.nii), and
+    parcellated connectivity (.pconn.nii) files. For pconn files the 2-D
+    connectivity matrix is flattened to a 1-D array (row-major order) and
+    ``brain_structures`` contains the row parcel name repeated once per
+    column, so callers receive a consistent 1-D array of element names.
 
     Parameters
     ----------
     cifti_file : :obj:`str`
         CIFTI2 file on disk
     reference_brain_names : :obj:`numpy.ndarray`
-        Array of vertex names
+        Array of vertex/parcel names used for cross-file consistency checks.
+        For pconn files this must be the ``brain_structures`` value returned
+        by a previous call to this function.
 
     Returns
     -------
     cifti_scalar_data: :obj:`numpy.ndarray`
-        The scalar data from the cifti file
+        The scalar data from the cifti file, always 1-D.  For pconn files
+        this is the row-major flattened connectivity matrix.
     brain_structures: :obj:`numpy.ndarray`
-        The per-greyordinate brain structures as strings
+        Per-element spatial labels as strings.  For dscalar files these are
+        the per-greyordinate brain structure names.  For pscalar files these
+        are the parcel names.  For pconn files these are the row-parcel names
+        repeated ``n_col_parcels`` times (one entry per flattened element).
     """
     cifti = cifti_file if hasattr(cifti_file, 'get_fdata') else nb.load(Path(cifti_file))
     cifti_hdr = cifti.header
@@ -86,28 +98,72 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
 
     scalar_axes = [ax for ax in axes if isinstance(ax, nb.cifti2.cifti2_axes.ScalarAxis)]
     brain_axes = [ax for ax in axes if isinstance(ax, nb.cifti2.cifti2_axes.BrainModelAxis)]
+    parcel_axes = [ax for ax in axes if isinstance(ax, nb.cifti2.cifti2_axes.ParcelsAxis)]
 
-    if len(scalar_axes) != 1:
-        raise ValueError(f'Expected one scalar axis in {cifti_file!r}. Found {scalar_axes!r}.')
-    if len(brain_axes) != 1:
-        raise ValueError(f'Expected one brain model axis in {cifti_file!r}. Found {brain_axes!r}.')
-    brain_axis = brain_axes.pop()
+    if len(scalar_axes) == 1 and len(brain_axes) == 1:
+        # dscalar.nii: ScalarAxis (axis 0) + BrainModelAxis (axis 1)
+        brain_axis = brain_axes[0]
+        cifti_data = cifti.get_fdata().squeeze().astype(np.float32)
+        if cifti_data.ndim != 1:
+            raise ValueError(f'Expected 1-D scalar CIFTI data in {cifti_file!r}.')
+        brain_names = brain_axis.name
+        if cifti_data.shape[0] != brain_names.shape[0]:
+            raise ValueError(
+                f'Mismatch between brain names and data array in {cifti_file!r}: '
+                f'{brain_names.shape[0]} names vs {cifti_data.shape[0]} values.'
+            )
+        if reference_brain_names is not None:
+            if not np.array_equal(brain_names, reference_brain_names):
+                raise ValueError(
+                    f'Inconsistent greyordinate names in CIFTI file {cifti_file!r}.'
+                )
+        return cifti_data, brain_names
 
-    cifti_data = cifti.get_fdata().squeeze().astype(np.float32)
-    if cifti_data.ndim != 1:
-        raise ValueError(f'Expected 1-D scalar CIFTI data in {cifti_file!r}.')
-    brain_names = brain_axis.name
-    if cifti_data.shape[0] != brain_names.shape[0]:
+    elif len(scalar_axes) == 1 and len(parcel_axes) == 1:
+        # pscalar.nii: ScalarAxis (axis 0) + ParcelsAxis (axis 1)
+        parcel_axis = parcel_axes[0]
+        cifti_data = cifti.get_fdata().squeeze().astype(np.float32)
+        if cifti_data.ndim != 1:
+            raise ValueError(f'Expected 1-D parcellated scalar CIFTI data in {cifti_file!r}.')
+        parcel_names = parcel_axis.name
+        if cifti_data.shape[0] != parcel_names.shape[0]:
+            raise ValueError(
+                f'Mismatch between parcel names and data array in {cifti_file!r}: '
+                f'{parcel_names.shape[0]} names vs {cifti_data.shape[0]} values.'
+            )
+        if reference_brain_names is not None:
+            if not np.array_equal(parcel_names, reference_brain_names):
+                raise ValueError(
+                    f'Inconsistent parcel names in CIFTI file {cifti_file!r}.'
+                )
+        return cifti_data, parcel_names
+
+    elif len(parcel_axes) == 2:
+        # pconn.nii: ParcelsAxis (axis 0, rows) + ParcelsAxis (axis 1, cols)
+        row_axis = parcel_axes[0]
+        cifti_data = cifti.get_fdata().astype(np.float32)
+        if cifti_data.ndim != 2:
+            raise ValueError(
+                f'Expected 2-D parcellated connectivity CIFTI data in {cifti_file!r}.'
+            )
+        n_col = cifti_data.shape[1]
+        row_parcel_names = row_axis.name
+        # One element name per flattened entry: repeat each row parcel name n_col times
+        element_names = np.repeat(row_parcel_names, n_col)
+        cifti_data_flat = cifti_data.flatten()
+        if reference_brain_names is not None:
+            if not np.array_equal(element_names, reference_brain_names):
+                raise ValueError(
+                    f'Inconsistent parcel names in CIFTI file {cifti_file!r}.'
+                )
+        return cifti_data_flat, element_names
+
+    else:
         raise ValueError(
-            f'Mismatch between brain names and data array in {cifti_file!r}: '
-            f'{brain_names.shape[0]} names vs {cifti_data.shape[0]} values.'
+            f'Unsupported CIFTI axis combination in {cifti_file!r}. '
+            'Supported types: dscalar (ScalarAxis+BrainModelAxis), '
+            'pscalar (ScalarAxis+ParcelsAxis), pconn (ParcelsAxis+ParcelsAxis).'
         )
-
-    if reference_brain_names is not None:
-        if not np.array_equal(brain_names, reference_brain_names):
-            raise ValueError(f'Inconsistent greyordinate names in CIFTI file {cifti_file!r}.')
-
-    return cifti_data, brain_names
 
 
 def brain_names_to_dataframe(brain_names):
