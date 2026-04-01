@@ -318,6 +318,41 @@ def write_rows_in_column_stripes(uri: str, rows: Sequence[np.ndarray]):
             A[:, start:end] = {'values': buf_view}
 
 
+def write_parcel_names(base_uri: str, array_path: str, names: Sequence[str]):
+    """Store parcel names as a 1D dense TileDB string array.
+
+    Parameters
+    ----------
+    base_uri : str
+        Root directory of the TileDB store.
+    array_path : str
+        Path relative to *base_uri* where the array will be created
+        (e.g. ``'parcels/parcel_id'``).
+    names : sequence of str
+        Parcel name strings to store.
+    """
+    if len(names) == 0:
+        raise ValueError(f"Cannot write parcel names to '{array_path}': names must not be empty.")
+
+    uri = os.path.join(base_uri, array_path)
+    _ensure_parent_group(uri)
+
+    n = len(names)
+    dim_idx = tiledb.Dim(
+        name='idx', domain=(0, max(n - 1, 0)), tile=max(1, min(n, 1024)), dtype=np.int64
+    )
+    dom = tiledb.Domain(dim_idx)
+    attr_values = tiledb.Attr(name='values', dtype=np.unicode_)
+    schema = tiledb.ArraySchema(domain=dom, attrs=[attr_values], sparse=False)
+
+    if tiledb.object_type(uri):
+        tiledb.remove(uri)
+    tiledb.Array.create(uri, schema)
+
+    with tiledb.open(uri, 'w') as A:
+        A[:] = {'values': np.array(names, dtype=object)}
+
+
 def write_column_names(base_uri: str, scalar: str, sources: Sequence[str]):
     """Store column names as a 1D dense TileDB array for the given scalar.
 
