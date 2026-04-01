@@ -1,4 +1,4 @@
-"""Integration test for s3:// path support in convoxel.
+"""Integration test for s3:// path support in nifti.
 
 Requires network access and boto3. Run with:
     pytest test/test_voxels_s3.py -v
@@ -56,8 +56,8 @@ def group_mask_path(tmp_path_factory):
 
 
 @pytest.mark.s3
-def test_convoxel_s3_parallel(tmp_path, group_mask_path, monkeypatch):
-    """convoxel downloads s3:// paths in parallel and produces a valid HDF5."""
+def test_nifti_s3_parallel(tmp_path, group_mask_path, monkeypatch):
+    """nifti downloads s3:// paths in parallel and produces a valid HDF5."""
     pytest.importorskip('boto3')
 
     shutil.copy(group_mask_path, tmp_path / 'group_mask.nii.gz')
@@ -123,7 +123,7 @@ def test_convoxel_s3_parallel(tmp_path, group_mask_path, monkeypatch):
 
 
 @pytest.mark.s3
-def test_convoxel_s3_serial_matches_parallel(tmp_path, group_mask_path, monkeypatch):
+def test_nifti_s3_serial_matches_parallel(tmp_path, group_mask_path, monkeypatch):
     """Serial (s3-workers=1) and parallel (s3-workers=4) produce identical data."""
     pytest.importorskip('boto3')
 
