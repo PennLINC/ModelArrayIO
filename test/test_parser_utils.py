@@ -79,6 +79,6 @@ def test_tiledb_args_group(tmp_path_factory) -> None:
     args = p.parse_args(['--cohort-file', str(cohort_file), '--backend', 'tiledb'])
     assert args.output == Path('arrays.tdb')
     assert args.backend == 'tiledb'
-    assert args.workers == 0
+    assert args.workers == 1
     assert args.s3_workers == 1
     assert args.log_level == 'INFO'
