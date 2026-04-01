@@ -29,16 +29,51 @@ def _cifti_output_ext(cifti_img):
     -------
     ext : :obj:`str`
         One of ``'.dscalar.nii'``, ``'.pscalar.nii'``, or ``'.pconn.nii'``.
+
+    Notes
+    -----
+    This function currently supports only a limited set of axis-type
+    combinations:
+
+    * ``ScalarAxis`` + ``BrainModelAxis``  -> ``.dscalar.nii``
+    * ``ScalarAxis`` + ``ParcelsAxis``    -> ``.pscalar.nii``
+    * ``ParcelsAxis`` + ``ParcelsAxis``   -> ``.pconn.nii``
+
+    Any other axis configuration (e.g., ``SeriesAxis + BrainModelAxis``
+    for ``dtseries``) will raise a :class:`ValueError`.
     """
     axes = [cifti_img.header.get_axis(i) for i in range(cifti_img.ndim)]
-    n_parcel_axes = sum(isinstance(ax, nb.cifti2.cifti2_axes.ParcelsAxis) for ax in axes)
-    if n_parcel_axes == 2:
-        return '.pconn.nii'
-    elif n_parcel_axes == 1:
+
+    # Expect 2D CIFTI images for these output types.
+    if len(axes) != 2:
+        raise ValueError(
+            f"Unsupported CIFTI dimensionality {len(axes)}; "
+            "only 2D CIFTI images are supported for dscalar/pscalar/pconn outputs."
+        )
+
+    scalar_axis_cls = nb.cifti2.cifti2_axes.ScalarAxis
+    parcels_axis_cls = nb.cifti2.cifti2_axes.ParcelsAxis
+    brainmodel_axis_cls = nb.cifti2.cifti2_axes.BrainModelAxis
+
+    first_axis, second_axis = axes
+
+    # Scalar + BrainModel -> dscalar
+    if isinstance(first_axis, scalar_axis_cls) and isinstance(second_axis, brainmodel_axis_cls):
+        return '.dscalar.nii'
+
+    # Scalar + Parcels -> pscalar
+    if isinstance(first_axis, scalar_axis_cls) and isinstance(second_axis, parcels_axis_cls):
         return '.pscalar.nii'
-    return '.dscalar.nii'
 
+    # Parcels + Parcels -> pconn
+    if isinstance(first_axis, parcels_axis_cls) and isinstance(second_axis, parcels_axis_cls):
+        return '.pconn.nii'
 
+    axis_types = (type(first_axis).__name__, type(second_axis).__name__)
+    raise ValueError(
+        "Unsupported CIFTI axis combination "
+        f"{axis_types}; cannot determine appropriate output extension."
+    )
 def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
     """Write the contents of an hdf5 file to a fixels directory.
 
