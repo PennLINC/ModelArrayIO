@@ -95,11 +95,10 @@ def add_to_modelarray_args(parser, default_output='output.h5'):
         type=int,
         help=(
             'Maximum number of parallel TileDB write workers. '
-            'Default 0 (auto, uses CPU count). '
-            'Set to 1 to disable parallel writes. '
+            'Default 1. '
             'Has no effect when --backend=hdf5.'
         ),
-        default=0,
+        default=1,
     )
 
     s3_group = parser.add_argument_group('S3 arguments')

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from pathlib import Path
@@ -34,7 +33,7 @@ def nifti_to_h5(
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
-    workers=None,
+    workers=1,
     s3_workers=1,
     scalar_columns=None,
 ):
@@ -65,7 +64,7 @@ def nifti_to_h5(
     target_chunk_mb : :obj:`float`
         Target chunk/tile size in MiB when auto-computing. Default 2.0.
     workers : :obj:`int`
-        Maximum number of parallel TileDB write workers. Default 0 (auto).
+        Maximum number of parallel TileDB write workers. Default 1.
         Has no effect when ``backend='hdf5'``.
     s3_workers : :obj:`int`
         Number of parallel workers for S3 downloads. Default 1.
@@ -134,12 +133,7 @@ def nifti_to_h5(
             )
         return int(not output.exists())
 
-    worker_count = workers if isinstance(workers, int) and workers > 0 else None
-    if worker_count is None:
-        cpu_count = os.cpu_count() or 1
-        worker_count = min(len(scalar_names), max(1, cpu_count))
-    else:
-        worker_count = min(len(scalar_names), worker_count)
+    worker_count = min(len(scalar_names), workers)
 
     def _write_scalar_job(scalar_name):
         scalar_output = (
