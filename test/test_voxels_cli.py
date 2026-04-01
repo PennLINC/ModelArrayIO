@@ -5,6 +5,7 @@ import h5py
 import nibabel as nb
 import numpy as np
 import pytest
+import tiledb
 
 from modelarrayio.cli.main import main as modelarrayio_main
 
@@ -281,3 +282,76 @@ def test_nifti_to_h5_scalar_columns_writes_prefixed_outputs(tmp_path, monkeypatc
     with h5py.File(beta_out, 'r') as h5:
         assert 'voxels' in h5
         assert sorted(h5['scalars'].keys()) == ['beta']
+
+
+def _build_nifti_cohort(tmp_path):
+    """Create a minimal NIfTI cohort (group mask + 2 subjects) and return CLI args."""
+    shape = (4, 4, 4)
+    true_coords = [(0, 0, 0), (1, 1, 1), (2, 2, 2), (3, 3, 3)]
+
+    group_mask = np.zeros(shape, dtype=np.uint8)
+    for coord in true_coords:
+        group_mask[coord] = 1
+    group_mask_file = tmp_path / 'group_mask.nii.gz'
+    _make_nifti(group_mask).to_filename(group_mask_file)
+
+    rows = []
+    for sidx in range(2):
+        scalar = np.zeros(shape, dtype=np.float32)
+        for i, j, k in true_coords:
+            scalar[i, j, k] = float(i + j + k + sidx)
+        scalar_file = tmp_path / f'sub-{sidx + 1}_scalar.nii.gz'
+        mask_file = tmp_path / f'sub-{sidx + 1}_mask.nii.gz'
+        _make_nifti(scalar).to_filename(scalar_file)
+        _make_nifti(group_mask).to_filename(mask_file)
+        rows.append(
+            {
+                'scalar_name': 'FA',
+                'source_file': scalar_file.name,
+                'source_mask_file': mask_file.name,
+            }
+        )
+
+    cohort_csv = tmp_path / 'cohort.csv'
+    with cohort_csv.open('w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=['scalar_name', 'source_file', 'source_mask_file'])
+        writer.writeheader()
+        writer.writerows(rows)
+
+    return group_mask_file, cohort_csv
+
+
+def test_nifti_tiledb_fails_when_output_already_exists(tmp_path, monkeypatch):
+    """Regression test for https://github.com/PennLINC/ModelArrayIO/issues/39.
+
+    The TileDB backend should raise an error when the output directory already
+    contains arrays from a previous run (tiledb.Array.create fails if the URI
+    already exists).
+    """
+    group_mask_file, cohort_csv = _build_nifti_cohort(tmp_path)
+    out_tdb = tmp_path / 'out.tdb'
+    monkeypatch.chdir(tmp_path)
+
+    cli_args = [
+        'nifti-to-h5',
+        '--group-mask-file',
+        str(group_mask_file),
+        '--cohort-file',
+        str(cohort_csv),
+        '--output',
+        str(out_tdb),
+        '--backend',
+        'tiledb',
+        '--compression',
+        'gzip',
+    ]
+
+    # First run should succeed
+    assert modelarrayio_main(cli_args) == 0
+    assert out_tdb.exists()
+    assert tiledb.object_type(str(out_tdb / 'scalars' / 'FA' / 'values')) is not None
+
+    # Second run to the same output directory should fail because the TileDB
+    # arrays already exist (this is the bug reported in issue #39).
+    with pytest.raises(tiledb.TileDBError, match='already exists'):
+        modelarrayio_main(cli_args)
