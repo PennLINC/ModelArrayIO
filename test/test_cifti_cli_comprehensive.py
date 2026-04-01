@@ -365,7 +365,7 @@ class TestCiftiToH5Pconn:
         out_h5 = tmp_path / 'out.h5'
         cifti_to_h5(cohort, output=out_h5)
         with h5py.File(out_h5, 'r') as h5:
-            # pconn matrix is row-major flattened: n_subjects × (n_parcels * n_parcels)
+            # pconn matrix is row-major flattened: n_subjects x (n_parcels * n_parcels)
             assert h5['scalars/FC/values'].shape == (2, n * n)
 
     def test_greyordinates_size_equals_flattened_matrix(self, tmp_path):
@@ -431,7 +431,7 @@ class TestCiftiToH5Errors:
     def test_missing_required_columns_raises(self, tmp_path):
         cohort = tmp_path / 'bad.csv'
         pd.DataFrame({'subject': ['sub-01']}).to_csv(cohort, index=False)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match='must contain columns'):
             cifti_to_h5(cohort, output=tmp_path / 'out.h5')
 
 
