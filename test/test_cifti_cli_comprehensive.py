@@ -34,9 +34,7 @@ def _make_parcels_axis(parcel_names: list[str]) -> ParcelsAxis:
     nvertices = {'CIFTI_STRUCTURE_CORTEX_LEFT': n}
     vox_dtype = np.dtype([('ijk', '<i4', (3,))])
     voxels = [np.array([], dtype=vox_dtype) for _ in range(n)]
-    vertices = [
-        {'CIFTI_STRUCTURE_CORTEX_LEFT': np.array([i], dtype=np.int32)} for i in range(n)
-    ]
+    vertices = [{'CIFTI_STRUCTURE_CORTEX_LEFT': np.array([i], dtype=np.int32)} for i in range(n)]
     return ParcelsAxis(parcel_names, voxels, vertices, np.eye(4), (10, 10, 10), nvertices)
 
 
@@ -205,10 +203,9 @@ class TestCiftiToH5Dscalar:
         paths_thick = _write_dscalar_subjects(tmp_path, mask, scalar_name='THICK')
         paths_area = _write_dscalar_subjects(tmp_path, mask, scalar_name='AREA')
         cohort = tmp_path / 'cohort.csv'
-        rows = (
-            [{'scalar_name': 'THICK', 'source_file': str(p)} for p in paths_thick]
-            + [{'scalar_name': 'AREA', 'source_file': str(p)} for p in paths_area]
-        )
+        rows = [{'scalar_name': 'THICK', 'source_file': str(p)} for p in paths_thick] + [
+            {'scalar_name': 'AREA', 'source_file': str(p)} for p in paths_area
+        ]
         _write_cohort_csv(cohort, rows)
         out_h5 = tmp_path / 'out.h5'
         cifti_to_h5(cohort, output=out_h5)
@@ -320,9 +317,7 @@ class TestCiftiToH5Pscalar:
             paths.append(p)
 
         cohort = tmp_path / 'cohort.csv'
-        _write_cohort_csv(
-            cohort, [{'scalar_name': 'FC', 'source_file': str(p)} for p in paths]
-        )
+        _write_cohort_csv(cohort, [{'scalar_name': 'FC', 'source_file': str(p)} for p in paths])
         out_h5 = tmp_path / 'out.h5'
         assert cifti_to_h5(cohort, output=out_h5) == 0
         with h5py.File(out_h5, 'r') as h5:
@@ -536,7 +531,10 @@ class TestH5ToCiftiDscalar:
         out_dir.mkdir()
         h5_to_cifti(str(example), str(h5_path), 'analysis', str(out_dir))
         p_data = (
-            nb.load(out_dir / 'analysis_p.value.dscalar.nii').get_fdata().squeeze().astype(np.float32)
+            nb.load(out_dir / 'analysis_p.value.dscalar.nii')
+            .get_fdata()
+            .squeeze()
+            .astype(np.float32)
         )
         oneminus = (
             nb.load(out_dir / 'analysis_1m.p.value.dscalar.nii')
@@ -650,9 +648,7 @@ class TestH5ToCiftiPscalar:
         n_parcels = len(parcel_axis)
 
         header = nb.cifti2.Cifti2Header.from_axes((scalar_axis, parcel_axis))
-        template = nb.Cifti2Image(
-            np.zeros((1, n_parcels), dtype=np.float32), header=header
-        )
+        template = nb.Cifti2Image(np.zeros((1, n_parcels), dtype=np.float32), header=header)
         example_path = tmp_path / 'example_real.pscalar.nii'
         template.to_filename(example_path)
 
@@ -690,9 +686,7 @@ class TestH5ToCiftiPconn:
         n = len(self.PARCELS)
         example = _make_pconn_example(tmp_path, self.PARCELS)
         h5_path = tmp_path / 'results.h5'
-        _make_h5_results(
-            h5_path, 'analysis', np.ones((1, n * n), np.float32), ['beta']
-        )
+        _make_h5_results(h5_path, 'analysis', np.ones((1, n * n), np.float32), ['beta'])
         out_dir = tmp_path / 'out'
         out_dir.mkdir()
         h5_to_cifti(str(example), str(h5_path), 'analysis', str(out_dir))
@@ -702,9 +696,7 @@ class TestH5ToCiftiPconn:
         n = len(self.PARCELS)
         example = _make_pconn_example(tmp_path, self.PARCELS)
         h5_path = tmp_path / 'results.h5'
-        _make_h5_results(
-            h5_path, 'analysis', np.ones((1, n * n), np.float32), ['beta']
-        )
+        _make_h5_results(h5_path, 'analysis', np.ones((1, n * n), np.float32), ['beta'])
         out_dir = tmp_path / 'out'
         out_dir.mkdir()
         h5_to_cifti(str(example), str(h5_path), 'analysis', str(out_dir))
@@ -716,9 +708,7 @@ class TestH5ToCiftiPconn:
         n = len(self.PARCELS)
         example = _make_pconn_example(tmp_path, self.PARCELS)
         h5_path = tmp_path / 'results.h5'
-        _make_h5_results(
-            h5_path, 'analysis', np.ones((1, n * n), np.float32), ['beta']
-        )
+        _make_h5_results(h5_path, 'analysis', np.ones((1, n * n), np.float32), ['beta'])
         out_dir = tmp_path / 'out'
         out_dir.mkdir()
         h5_to_cifti(str(example), str(h5_path), 'analysis', str(out_dir))
@@ -845,9 +835,7 @@ class TestH5ToCiftiMain:
         parcels = ['A', 'B', 'C']
         example = _make_pscalar_example(tmp_path, parcels)
         h5_path = tmp_path / 'results.h5'
-        _make_h5_results(
-            h5_path, 'analysis', np.ones((1, len(parcels)), np.float32), ['beta']
-        )
+        _make_h5_results(h5_path, 'analysis', np.ones((1, len(parcels)), np.float32), ['beta'])
         out_dir = tmp_path / 'out'
         result = h5_to_cifti_main(
             analysis_name='analysis',
