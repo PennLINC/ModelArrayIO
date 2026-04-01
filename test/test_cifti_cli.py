@@ -1,4 +1,4 @@
-"""Tests for the cifti-to-h5 and h5-to-cifti CLI commands.
+"""Tests for CIFTI conversion functions and the to-modelarray CLI command.
 
 Covers dscalar, pscalar, and pconn CIFTI types for both conversion directions,
 and includes end-to-end tests via the top-level modelarrayio CLI entry point.
@@ -16,8 +16,8 @@ import pandas as pd
 import pytest
 from utils import make_dscalar, make_parcels_axis, make_pconn, make_pscalar  # noqa: F401
 
-from modelarrayio.cli.cifti_to_h5 import cifti_to_h5, cifti_to_h5_main
-from modelarrayio.cli.h5_to_cifti import _cifti_output_ext, h5_to_cifti, h5_to_cifti_main
+from modelarrayio.cli.cifti_to_h5 import cifti_to_h5
+from modelarrayio.cli.h5_to_cifti import _cifti_output_ext, h5_to_cifti
 from modelarrayio.cli.main import main as modelarrayio_main
 from modelarrayio.utils.cifti import _get_cifti_parcel_info
 
@@ -478,27 +478,26 @@ class TestCiftiToH5Errors:
 
 
 # ===========================================================================
-# cifti_to_h5_main entry point
+# cifti_to_h5 additional entry-point smoke tests
 # ===========================================================================
 
 
-class TestCiftiToH5Main:
+class TestCiftiToH5EntryPoint:
     def test_returns_zero_on_success(self, tmp_path):
         mask = _dscalar_mask()
         paths = _write_dscalar_subjects(tmp_path, mask, n_subjects=1)
         cohort = tmp_path / 'cohort.csv'
         _write_cohort_csv(cohort, [{'scalar_name': 'THICK', 'source_file': str(p)} for p in paths])
         out_h5 = tmp_path / 'out.h5'
-        result = cifti_to_h5_main(cohort_file=str(cohort), output=out_h5)
-        assert result == 0
+        assert cifti_to_h5(cohort, output=out_h5) == 0
 
-    def test_output_file_exists_after_main(self, tmp_path):
+    def test_output_file_exists_after_call(self, tmp_path):
         mask = _dscalar_mask()
         paths = _write_dscalar_subjects(tmp_path, mask)
         cohort = tmp_path / 'cohort.csv'
         _write_cohort_csv(cohort, [{'scalar_name': 'THICK', 'source_file': str(p)} for p in paths])
         out_h5 = tmp_path / 'out.h5'
-        cifti_to_h5_main(cohort_file=str(cohort), output=out_h5)
+        cifti_to_h5(cohort, output=out_h5)
         assert out_h5.exists()
 
 
@@ -810,98 +809,40 @@ class TestH5ToCiftiPconn:
 
 
 # ===========================================================================
-# h5_to_cifti_main entry point
+# h5_to_cifti additional smoke tests
 # ===========================================================================
 
 
-class TestH5ToCiftiMain:
-    def test_main_with_example_cifti_returns_zero(self, tmp_path):
+class TestH5ToCiftiDirect:
+    def test_dscalar_returns_zero(self, tmp_path):
         example = _make_dscalar_example(tmp_path)
         h5_path = tmp_path / 'results.h5'
         _make_h5_results(h5_path, 'analysis', np.ones((2, 5), np.float32), ['beta', 'tstat'])
         out_dir = tmp_path / 'out'
-        result = h5_to_cifti_main(
-            analysis_name='analysis',
-            in_file=str(h5_path),
-            output_dir=str(out_dir),
-            example_cifti=str(example),
-        )
-        assert result == 0
-
-    def test_main_with_example_cifti_creates_files(self, tmp_path):
-        example = _make_dscalar_example(tmp_path)
-        h5_path = tmp_path / 'results.h5'
-        _make_h5_results(h5_path, 'analysis', np.ones((2, 5), np.float32), ['beta', 'tstat'])
-        out_dir = tmp_path / 'out'
-        h5_to_cifti_main(
-            analysis_name='analysis',
-            in_file=str(h5_path),
-            output_dir=str(out_dir),
-            example_cifti=str(example),
-        )
+        out_dir.mkdir()
+        h5_to_cifti(str(example), str(h5_path), 'analysis', str(out_dir))
         assert (out_dir / 'analysis_beta.dscalar.nii').exists()
         assert (out_dir / 'analysis_tstat.dscalar.nii').exists()
 
-    def test_main_with_cohort_file_returns_zero(self, tmp_path):
-        example = _make_dscalar_example(tmp_path)
-        cohort_csv = tmp_path / 'cohort.csv'
-        pd.DataFrame({'source_file': [str(example)]}).to_csv(cohort_csv, index=False)
-        h5_path = tmp_path / 'results.h5'
-        _make_h5_results(h5_path, 'analysis', np.ones((1, 5), np.float32), ['beta'])
-        out_dir = tmp_path / 'out'
-        result = h5_to_cifti_main(
-            analysis_name='analysis',
-            in_file=str(h5_path),
-            output_dir=str(out_dir),
-            cohort_file=str(cohort_csv),
-        )
-        assert result == 0
-
-    def test_main_with_cohort_file_uses_first_source(self, tmp_path):
-        """cohort_file mode picks the first source_file row as the example CIFTI."""
-        example = _make_dscalar_example(tmp_path)
-        cohort_csv = tmp_path / 'cohort.csv'
-        pd.DataFrame({'source_file': [str(example)]}).to_csv(cohort_csv, index=False)
-        h5_path = tmp_path / 'results.h5'
-        _make_h5_results(h5_path, 'analysis', np.ones((1, 5), np.float32), ['beta'])
-        out_dir = tmp_path / 'out'
-        h5_to_cifti_main(
-            analysis_name='analysis',
-            in_file=str(h5_path),
-            output_dir=str(out_dir),
-            cohort_file=str(cohort_csv),
-        )
-        assert (out_dir / 'analysis_beta.dscalar.nii').exists()
-
-    def test_main_pscalar_with_example_cifti(self, tmp_path):
+    def test_pscalar_with_example(self, tmp_path):
         parcels = ['A', 'B', 'C']
         example = _make_pscalar_example(tmp_path, parcels)
         h5_path = tmp_path / 'results.h5'
         _make_h5_results(h5_path, 'analysis', np.ones((1, len(parcels)), np.float32), ['beta'])
         out_dir = tmp_path / 'out'
-        result = h5_to_cifti_main(
-            analysis_name='analysis',
-            in_file=str(h5_path),
-            output_dir=str(out_dir),
-            example_cifti=str(example),
-        )
-        assert result == 0
+        out_dir.mkdir()
+        h5_to_cifti(str(example), str(h5_path), 'analysis', str(out_dir))
         assert (out_dir / 'analysis_beta.pscalar.nii').exists()
 
-    def test_main_pconn_with_example_cifti(self, tmp_path):
+    def test_pconn_with_example(self, tmp_path):
         parcels = ['X', 'Y']
         n = len(parcels)
         example = _make_pconn_example(tmp_path, parcels)
         h5_path = tmp_path / 'results.h5'
         _make_h5_results(h5_path, 'analysis', np.ones((1, n * n), np.float32), ['beta'])
         out_dir = tmp_path / 'out'
-        result = h5_to_cifti_main(
-            analysis_name='analysis',
-            in_file=str(h5_path),
-            output_dir=str(out_dir),
-            example_cifti=str(example),
-        )
-        assert result == 0
+        out_dir.mkdir()
+        h5_to_cifti(str(example), str(h5_path), 'analysis', str(out_dir))
         assert (out_dir / 'analysis_beta.pconn.nii').exists()
 
 
@@ -910,8 +851,8 @@ class TestH5ToCiftiMain:
 # ===========================================================================
 
 
-class TestCiftiToH5ViaCLI:
-    """End-to-end tests that exercise the cifti-to-h5 subcommand through modelarrayio_main."""
+class TestCiftiToModelarrayViaCLI:
+    """End-to-end tests that exercise CIFTI conversion through the to-modelarray subcommand."""
 
     def test_cifti_to_h5_creates_expected_hdf5(self, tmp_path, monkeypatch):
         vol_shape = (3, 3, 3)
@@ -940,7 +881,7 @@ class TestCiftiToH5ViaCLI:
         assert (
             modelarrayio_main(
                 [
-                    'cifti-to-h5',
+                    'to-modelarray',
                     '--cohort-file',
                     str(cohort_csv),
                     '--output',
@@ -1025,7 +966,7 @@ class TestCiftiToH5ViaCLI:
         assert (
             modelarrayio_main(
                 [
-                    'cifti-to-h5',
+                    'to-modelarray',
                     '--cohort-file',
                     str(cohort_csv),
                     '--scalar-columns',

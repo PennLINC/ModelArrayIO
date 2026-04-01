@@ -5,20 +5,12 @@ from __future__ import annotations
 import argparse
 from importlib.metadata import PackageNotFoundError, version
 
-from modelarrayio.cli.cifti_to_h5 import _parse_cifti_to_h5, cifti_to_h5_main
-from modelarrayio.cli.h5_to_cifti import _parse_h5_to_cifti, h5_to_cifti_main
-from modelarrayio.cli.h5_to_mif import _parse_h5_to_mif, h5_to_mif_main
-from modelarrayio.cli.h5_to_nifti import _parse_h5_to_nifti, h5_to_nifti_main
-from modelarrayio.cli.mif_to_h5 import _parse_mif_to_h5, mif_to_h5_main
-from modelarrayio.cli.nifti_to_h5 import _parse_nifti_to_h5, nifti_to_h5_main
+from modelarrayio.cli.export_results import _parse_export_results, export_results_main
+from modelarrayio.cli.to_modelarray import _parse_to_modelarray, to_modelarray_main
 
 COMMANDS = [
-    ('mif-to-h5', _parse_mif_to_h5, mif_to_h5_main),
-    ('nifti-to-h5', _parse_nifti_to_h5, nifti_to_h5_main),
-    ('cifti-to-h5', _parse_cifti_to_h5, cifti_to_h5_main),
-    ('h5-to-mif', _parse_h5_to_mif, h5_to_mif_main),
-    ('h5-to-nifti', _parse_h5_to_nifti, h5_to_nifti_main),
-    ('h5-to-cifti', _parse_h5_to_cifti, h5_to_cifti_main),
+    ('to-modelarray', _parse_to_modelarray, to_modelarray_main),
+    ('export-results', _parse_export_results, export_results_main),
 ]
 
 
