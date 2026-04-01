@@ -144,21 +144,13 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
             )
         n_col = cifti_data.shape[1]
         row_parcel_names = row_axis.name
-        # One element name per flattened entry: repeat each row parcel name n_col times
-        # XXX: For the pconn (ParcelsAxis+ParcelsAxis) case, element_names are built only from the
-        # row parcel names (repeated by n_col). This ignores the column-axis parcel names entirely,
-        # so two pconn files with different column axes could incorrectly pass
-        # reference_brain_names validation. Also, there's no explicit check that
-        # len(row_axis.name)==n_rows and len(col_axis.name)==n_cols. Consider validating both axes
-        # against the data shape and incorporating both row+col parcel names into the per-element
-        # labels (or at least validating the column axis matches across files).
-        # TODO: Add elements_from and elements_to fields to converted H5/TileDB files.
-        element_names = np.repeat(row_parcel_names, n_col)
+        # One parcel name per flattened entry: repeat each row parcel name n_col times
+        parcel_names = np.repeat(row_parcel_names, n_col)
         cifti_data_flat = cifti_data.flatten()
         if reference_brain_names is not None:
-            if not np.array_equal(element_names, reference_brain_names):
+            if not np.array_equal(parcel_names, reference_brain_names):
                 raise ValueError(f'Inconsistent parcel names in CIFTI file {cifti_file!r}.')
-        return cifti_data_flat, element_names
+        return cifti_data_flat, parcel_names
 
     else:
         raise ValueError(
