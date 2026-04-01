@@ -48,9 +48,9 @@ When ``--scalar-columns`` is provided:
 - The same prefix rule also applies to TileDB output paths.
 
 
-********************
+*******************
 cifti-to-h5 (CIFTI)
-********************
+*******************
 
 Default output name (HDF5 backend): ``greyordinatearray.h5``.
 
