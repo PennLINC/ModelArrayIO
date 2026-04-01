@@ -321,13 +321,15 @@ def _build_nifti_cohort(tmp_path):
     return group_mask_file, cohort_csv
 
 
-def test_nifti_tiledb_fails_when_output_already_exists(tmp_path, monkeypatch):
+def test_nifti_tiledb_fails_when_output_already_exists(tmp_path, monkeypatch, caplog):
     """Regression test for https://github.com/PennLINC/ModelArrayIO/issues/39.
 
-    The TileDB backend should raise an error when the output directory already
-    contains arrays from a previous run (tiledb.Array.create fails if the URI
-    already exists).
+    The TileDB backend should succeed when the output directory already contains
+    arrays from a previous run, removing and recreating them, and should emit a
+    warning for each removed array.
     """
+    import logging
+
     group_mask_file, cohort_csv = _build_nifti_cohort(tmp_path)
     out_tdb = tmp_path / 'out.tdb'
     monkeypatch.chdir(tmp_path)
@@ -346,11 +348,16 @@ def test_nifti_tiledb_fails_when_output_already_exists(tmp_path, monkeypatch):
         'gzip',
     ]
 
-    # First run should succeed
-    assert modelarrayio_main(cli_args) == 0
+    # First run should succeed without any "Removing existing array" warnings.
+    with caplog.at_level(logging.WARNING, logger='modelarrayio.storage.tiledb_storage'):
+        assert modelarrayio_main(cli_args) == 0
     assert out_tdb.exists()
     assert tiledb.object_type(str(out_tdb / 'scalars' / 'FA' / 'values')) is not None
+    assert not any('Removing existing array' in r.message for r in caplog.records)
 
-    # Second run to the same output directory should succeed now that existing
-    # arrays are removed before re-creation (regression for issue #39).
-    assert modelarrayio_main(cli_args) == 0
+    # Second run to the same output directory should succeed (regression for
+    # issue #39) and emit a warning for the pre-existing array that was removed.
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger='modelarrayio.storage.tiledb_storage'):
+        assert modelarrayio_main(cli_args) == 0
+    assert any('Removing existing array' in r.message for r in caplog.records)

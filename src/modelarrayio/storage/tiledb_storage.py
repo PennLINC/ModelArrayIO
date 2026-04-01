@@ -177,6 +177,7 @@ def create_scalar_matrix_array(
         tile_shape,
     )
     if tiledb.object_type(uri):
+        logger.warning('Removing existing array %s', uri)
         tiledb.remove(uri)
     tiledb.Array.create(uri, schema)
 
@@ -268,6 +269,7 @@ def create_empty_scalar_matrix_array(
         tile_shape,
     )
     if tiledb.object_type(uri):
+        logger.warning('Removing existing array %s', uri)
         tiledb.remove(uri)
     tiledb.Array.create(uri, schema)
 
@@ -350,6 +352,7 @@ def write_parcel_names(base_uri: str, array_path: str, names: Sequence[str]):
     schema = tiledb.ArraySchema(domain=dom, attrs=[attr_values], sparse=False)
 
     if tiledb.object_type(uri):
+        logger.warning('Removing existing array %s', uri)
         tiledb.remove(uri)
     tiledb.Array.create(uri, schema)
 
@@ -382,6 +385,7 @@ def write_column_names(base_uri: str, scalar: str, sources: Sequence[str]):
     schema = tiledb.ArraySchema(domain=dom, attrs=[attr_values], sparse=False)
 
     if tiledb.object_type(uri):
+        logger.warning('Removing existing array %s', uri)
         tiledb.remove(uri)
     tiledb.Array.create(uri, schema)
 
