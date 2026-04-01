@@ -429,7 +429,6 @@ class TestCiftiToH5Pconn:
             assert h5['scalars/FC/values'].shape == (2, n * n)
 
     def test_parcels_parcel_id_from_to_written(self, tmp_path):
-        n = len(_PCONN_PARCELS)
         paths = _write_pconn_subjects(tmp_path, _PCONN_PARCELS)
         cohort = tmp_path / 'cohort.csv'
         _write_cohort_csv(cohort, [{'scalar_name': 'FC', 'source_file': str(p)} for p in paths])

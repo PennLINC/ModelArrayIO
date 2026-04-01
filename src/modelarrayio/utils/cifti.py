@@ -178,14 +178,13 @@ def _get_cifti_parcel_info(cifti_file):
 
     Returns
     -------
-    cifti_type : str
-        ``'dscalar'``, ``'pscalar'``, or ``'pconn'``.
+    cifti_type : {'dscalar', 'pscalar', 'pconn'}
+        The type of the CIFTI file.
     parcel_arrays : dict[str, numpy.ndarray]
         For ``'dscalar'``: empty dict (greyordinate table written separately).
-        For ``'pscalar'``: ``{'parcel_id': parcel_names_array}`` — one entry per
-        parcel.
-        For ``'pconn'``: ``{'parcel_id_from': row_names, 'parcel_id_to':
-        col_names}`` — one entry per unique row/column parcel axis.
+        For ``'pscalar'``: ``{'parcel_id': parcel_names_array}`` — one entry per parcel.
+        For ``'pconn'``: ``{'parcel_id_from': row_names, 'parcel_id_to': col_names}`` —
+        one entry per unique row/column parcel axis.
     """
     cifti = cifti_file if hasattr(cifti_file, 'get_fdata') else nb.load(Path(cifti_file))
     axes = [cifti.header.get_axis(i) for i in range(cifti.ndim)]
