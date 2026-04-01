@@ -176,6 +176,8 @@ def create_scalar_matrix_array(
         storage_np_dtype,
         tile_shape,
     )
+    if tiledb.object_type(uri):
+        tiledb.remove(uri)
     tiledb.Array.create(uri, schema)
 
     logger.info('Writing full array %s to TileDB (this may take a while)...', uri)
@@ -265,6 +267,8 @@ def create_empty_scalar_matrix_array(
         storage_np_dtype,
         tile_shape,
     )
+    if tiledb.object_type(uri):
+        tiledb.remove(uri)
     tiledb.Array.create(uri, schema)
 
     if sources_list is not None:

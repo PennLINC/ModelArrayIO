@@ -351,7 +351,6 @@ def test_nifti_tiledb_fails_when_output_already_exists(tmp_path, monkeypatch):
     assert out_tdb.exists()
     assert tiledb.object_type(str(out_tdb / 'scalars' / 'FA' / 'values')) is not None
 
-    # Second run to the same output directory should fail because the TileDB
-    # arrays already exist (this is the bug reported in issue #39).
-    with pytest.raises(tiledb.TileDBError, match='already exists'):
-        modelarrayio_main(cli_args)
+    # Second run to the same output directory should succeed now that existing
+    # arrays are removed before re-creation (regression for issue #39).
+    assert modelarrayio_main(cli_args) == 0
