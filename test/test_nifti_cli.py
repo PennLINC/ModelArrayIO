@@ -77,7 +77,7 @@ def test_nifti_to_h5_creates_expected_hdf5(tmp_path, monkeypatch):
         modelarrayio_main(
             [
                 'to-modelarray',
-                '--group-mask-file',
+                '--mask',
                 str(group_mask_file),
                 '--cohort-file',
                 str(cohort_csv),
@@ -177,7 +177,7 @@ def test_h5_to_nifti_writes_results_with_dataset_column_names(tmp_path):
         modelarrayio_main(
             [
                 'export-results',
-                '--group-mask-file',
+                '--mask',
                 str(group_mask_file),
                 '--analysis-name',
                 'lm',
@@ -257,7 +257,7 @@ def test_nifti_to_h5_scalar_columns_writes_prefixed_outputs(tmp_path, monkeypatc
         modelarrayio_main(
             [
                 'to-modelarray',
-                '--group-mask-file',
+                '--mask',
                 str(group_mask_file),
                 '--cohort-file',
                 str(cohort_csv),
@@ -334,7 +334,7 @@ def test_nifti_tiledb_removes_existing_arrays_on_rerun(tmp_path, monkeypatch, ca
 
     cli_args = [
         'to-modelarray',
-        '--group-mask-file',
+        '--mask',
         str(group_mask_file),
         '--cohort-file',
         str(cohort_csv),

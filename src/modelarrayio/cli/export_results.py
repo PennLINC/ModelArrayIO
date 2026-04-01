@@ -24,7 +24,7 @@ def export_results(
     analysis_name,
     output_dir,
     group_mask_file=None,
-    output_extension='.nii.gz',
+    compress=True,
     index_file=None,
     directions_file=None,
     cohort_file=None,
@@ -48,8 +48,8 @@ def export_results(
         Directory where output files will be written.
     group_mask_file : path-like, optional
         NIfTI binary group mask. Required for NIfTI results.
-    output_extension : str, optional
-        NIfTI output extension: ``'.nii.gz'`` (default) or ``'.nii'``.
+    compress : bool, optional
+        Whether to compress output NIfTI or MIF files. Default True.
     index_file : path-like, optional
         Nifti2 index file. Required for MIF/fixel results.
     directions_file : path-like, optional
@@ -69,7 +69,7 @@ def export_results(
         modality = 'cifti'
     else:
         raise ValueError(
-            'Cannot determine modality. Provide --group-mask-file (NIfTI), '
+            'Cannot determine modality. Provide --mask (NIfTI), '
             '--index-file/--directions-file (MIF), or --cohort-file/--example-file (CIFTI).'
         )
     logger.info('Detected modality: %s', modality)
@@ -81,7 +81,7 @@ def export_results(
             in_file=in_file,
             analysis_name=analysis_name,
             group_mask_file=group_mask_file,
-            output_extension=output_extension,
+            compress=compress,
             output_dir=output_path,
         )
         return 0
@@ -102,6 +102,7 @@ def export_results(
             example_mif=example_file,
             in_file=in_file,
             analysis_name=analysis_name,
+            compress=compress,
             output_dir=output_path,
         )
         return 0
@@ -165,19 +166,11 @@ def _parse_export_results():
 
     nifti_group = parser.add_argument_group('NIfTI arguments (required for NIfTI results)')
     nifti_group.add_argument(
-        '--group-mask-file',
-        '--group_mask_file',
+        '--mask',
         help='Path to the NIfTI binary group mask file used during data preparation.',
         type=IsFile,
         default=None,
-    )
-    nifti_group.add_argument(
-        '--output-ext',
-        '--output_ext',
-        dest='output_extension',
-        help='Extension for output NIfTI files.',
-        choices=['.nii.gz', '.nii'],
-        default='.nii.gz',
+        dest='group_mask_file',
     )
 
     mif_group = parser.add_argument_group('MIF/fixel arguments (required for MIF/fixel results)')
@@ -215,6 +208,15 @@ def _parse_export_results():
         help='Path to an example source file whose header is used as a template.',
         type=IsFile,
         default=None,
+    )
+
+    output_group = parser.add_argument_group('Output arguments')
+    output_group.add_argument(
+        '--no-compress',
+        action='store_false',
+        dest='compress',
+        help='Disable compression for output NIfTI or MIF files. Does not affect CIFTI files.',
+        default=True,
     )
 
     add_log_level_arg(parser)

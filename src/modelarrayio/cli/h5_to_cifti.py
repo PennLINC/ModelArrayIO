@@ -88,7 +88,7 @@ def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
     item in ``results/has_names``.
 
     Parameters
-    ==========
+    ----------
     example_cifti: pathlike
         abspath to a scalar cifti file. Its header is used as a template
     in_file: str
@@ -99,7 +99,7 @@ def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
         abspath to where the output cifti files will go.
 
     Outputs
-    =======
+    -------
     None
     """
     # Get a template nifti image.

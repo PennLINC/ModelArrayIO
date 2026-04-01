@@ -17,7 +17,7 @@ If you want to use the most up-to-date version, you can install from the ``main`
 MRtrix (required for fixel ``.mif`` only)
 -----------------------------------------
 
-For fixel-wise ``.mif`` conversion, the ``modelarrayio mif-to-h5`` / ``modelarrayio h5-to-mif`` tools use MRtrix ``mrconvert``.
+Fixel-wise ``.mif`` conversion tools use MRtrix ``mrconvert``.
 Install MRtrix from `MRtrix's webpage <https://www.mrtrix.org/download/>`_ if needed.
 Run ``mrview`` in the terminal to verify the installation.
 

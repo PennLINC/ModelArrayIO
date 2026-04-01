@@ -104,7 +104,7 @@ def to_modelarray(
     if modality == 'nifti':
         if group_mask_file is None:
             raise ValueError(
-                'Detected NIfTI data but --group-mask-file was not provided. '
+                'Detected NIfTI data but --mask was not provided. '
                 'Please supply the path to a binary group mask NIfTI file.'
             )
         return nifti_to_h5(group_mask_file=group_mask_file, **common_kwargs)
@@ -249,11 +249,11 @@ def _parse_to_modelarray():
 
     nifti_group = parser.add_argument_group('NIfTI arguments (required for NIfTI data)')
     nifti_group.add_argument(
-        '--group-mask-file',
-        '--group_mask_file',
+        '--mask',
         help='Path to a NIfTI binary group mask file.',
         type=IsFile,
         default=None,
+        dest='group_mask_file',
     )
 
     mif_group = parser.add_argument_group('MIF/fixel arguments (required for MIF/fixel data)')
