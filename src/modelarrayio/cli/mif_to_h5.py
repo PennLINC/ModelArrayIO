@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import argparse
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from functools import partial
 from pathlib import Path
 
 import h5py
@@ -13,7 +11,6 @@ import pandas as pd
 from tqdm import tqdm
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import _is_file, add_to_modelarray_args
 from modelarrayio.utils.mif import gather_fixels, load_cohort_mif
 from modelarrayio.utils.misc import cohort_to_long_dataframe
 
@@ -162,38 +159,3 @@ def mif_to_h5(
             for future in tqdm(as_completed(futures), total=len(futures), desc='TileDB scalars'):
                 future.result()
     return 0
-
-
-def mif_to_h5_main(**kwargs):
-    """Entry point for the ``modelarrayio mif-to-h5`` command."""
-    log_level = kwargs.pop('log_level', 'INFO')
-    cli_utils.configure_logging(log_level)
-    return mif_to_h5(**kwargs)
-
-
-def _parse_mif_to_h5():
-    parser = argparse.ArgumentParser(
-        description='Create a hdf5 file of fixel data',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    IsFile = partial(_is_file, parser=parser)
-
-    # MIF-specific arguments
-    parser.add_argument(
-        '--index-file',
-        '--index_file',
-        help='Index File',
-        required=True,
-        type=IsFile,
-    )
-    parser.add_argument(
-        '--directions-file',
-        '--directions_file',
-        help='Directions File',
-        required=True,
-        type=IsFile,
-    )
-
-    # Common arguments
-    add_to_modelarray_args(parser, default_output='fixelarray.h5')
-    return parser

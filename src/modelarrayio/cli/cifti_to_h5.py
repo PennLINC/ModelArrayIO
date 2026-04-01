@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -12,7 +11,6 @@ import pandas as pd
 from tqdm import tqdm
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import add_to_modelarray_args
 from modelarrayio.utils.cifti import (
     _get_cifti_parcel_info,
     brain_names_to_dataframe,
@@ -206,19 +204,3 @@ def cifti_to_h5(
         else:
             cli_utils.write_tiledb_parcel_arrays(output, parcel_arrays)
     return 0
-
-
-def cifti_to_h5_main(**kwargs):
-    """Entry point for the ``modelarrayio cifti-to-h5`` command."""
-    log_level = kwargs.pop('log_level', 'INFO')
-    cli_utils.configure_logging(log_level)
-    return cifti_to_h5(**kwargs)
-
-
-def _parse_cifti_to_h5():
-    parser = argparse.ArgumentParser(
-        description='Create a hdf5 file of CIFTI2 dscalar data',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    add_to_modelarray_args(parser, default_output='greyordinatearray.h5')
-    return parser

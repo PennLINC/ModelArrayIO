@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import argparse
 import logging
-from functools import partial
 from pathlib import Path
 
 import h5py
@@ -12,14 +10,30 @@ import nibabel as nb
 import numpy as np
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import _is_file, add_from_modelarray_args, add_log_level_arg
 
 logger = logging.getLogger(__name__)
 
 
-def h5_to_nifti(in_file, analysis_name, group_mask_file, output_extension, output_dir):
-    """Convert stat results in .h5 file to a list of volume (.nii or .nii.gz) files."""
+def h5_to_nifti(in_file, analysis_name, group_mask_file, compress, output_dir):
+    """Convert stat results in .h5 file to a list of volume (.nii or .nii.gz) files.
 
+    Parameters
+    ----------
+    in_file: str
+        abspath to an h5 file that contains statistical results and their metadata.
+    analysis_name: str
+        the name for the analysis results to be saved
+    group_mask_file: str
+        abspath to a NIfTI-1 binary group mask file.
+    compress: bool
+        whether to compress output NIfTI files
+    output_dir: str
+        abspath to where the output NIfTI files will go.
+
+    Outputs
+    -------
+    None
+    """
     data_type_tosave = np.float32
 
     # group-level mask:
@@ -31,6 +45,8 @@ def h5_to_nifti(in_file, analysis_name, group_mask_file, output_extension, outpu
     # modify the data type (mask's data type could be uint8...)
     header_tosave.set_data_dtype(data_type_tosave)
 
+    ext = '.nii.gz' if compress else '.nii'
+
     output_path = Path(output_dir)
     with h5py.File(in_file, 'r') as h5_data:
         results_matrix = h5_data[f'results/{analysis_name}/results_matrix']
@@ -40,7 +56,7 @@ def h5_to_nifti(in_file, analysis_name, group_mask_file, output_extension, outpu
 
         for result_col, result_name in enumerate(results_names):
             valid_result_name = cli_utils.sanitize_result_name(result_name)
-            out_file = output_path / f'{analysis_name}_{valid_result_name}{output_extension}'
+            out_file = output_path / f'{analysis_name}_{valid_result_name}{ext}'
             output = np.zeros(group_mask_matrix.shape)
             data_tosave = results_matrix[result_col, :].astype(data_type_tosave)
             output[group_mask_matrix] = data_tosave
@@ -51,9 +67,7 @@ def h5_to_nifti(in_file, analysis_name, group_mask_file, output_extension, outpu
                 continue
 
             valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
-            out_file_1mpvalue = (
-                output_path / f'{analysis_name}_{valid_result_name_1mpvalue}{output_extension}'
-            )
+            out_file_1mpvalue = output_path / f'{analysis_name}_{valid_result_name_1mpvalue}{ext}'
             output_1mpvalue = np.zeros(group_mask_matrix.shape)
             output_1mpvalue[group_mask_matrix] = (1 - results_matrix[result_col, :]).astype(
                 data_type_tosave
@@ -62,56 +76,3 @@ def h5_to_nifti(in_file, analysis_name, group_mask_file, output_extension, outpu
                 output_1mpvalue, affine=group_mask_img.affine, header=header_tosave
             )
             output_img_1mpvalue.to_filename(out_file_1mpvalue)
-
-
-def h5_to_nifti_main(
-    group_mask_file,
-    analysis_name,
-    in_file,
-    output_dir,
-    output_extension='.nii.gz',
-    log_level='INFO',
-):
-    """Entry point for the ``modelarrayio h5-to-nifti`` command."""
-    cli_utils.configure_logging(log_level)
-    output_path = cli_utils.prepare_output_directory(output_dir, logger)
-
-    h5_to_nifti(
-        in_file=in_file,
-        analysis_name=analysis_name,
-        group_mask_file=group_mask_file,
-        output_extension=output_extension,
-        output_dir=output_path,
-    )
-    return 0
-
-
-def _parse_h5_to_nifti():
-    parser = argparse.ArgumentParser(
-        description='Convert statistical results from an hdf5 file to a volume data (NIfTI file)',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    IsFile = partial(_is_file, parser=parser)
-    parser.add_argument(
-        '--group-mask-file',
-        '--group_mask_file',
-        help='Path to a group mask file',
-        required=True,
-        type=IsFile,
-    )
-
-    add_from_modelarray_args(parser)
-
-    parser.add_argument(
-        '--output-ext',
-        '--output_ext',
-        dest='output_extension',
-        help=(
-            'The extension for output volume data. '
-            'Options are .nii.gz (default) and .nii. Please provide the prefix dot.'
-        ),
-        choices=['.nii.gz', '.nii'],
-        default='.nii.gz',
-    )
-    add_log_level_arg(parser)
-    return parser

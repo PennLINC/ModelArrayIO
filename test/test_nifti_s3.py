@@ -82,8 +82,8 @@ def test_nifti_s3_parallel(tmp_path, group_mask_path, monkeypatch):
     assert (
         modelarrayio_main(
             [
-                'nifti-to-h5',
-                '--group-mask-file',
+                'to-modelarray',
+                '--mask',
                 'group_mask.nii.gz',
                 '--cohort-file',
                 str(cohort_csv),
@@ -143,8 +143,8 @@ def test_nifti_s3_serial_matches_parallel(tmp_path, group_mask_path, monkeypatch
             )
 
     base_argv = [
-        'nifti-to-h5',
-        '--group-mask-file',
+        'to-modelarray',
+        '--mask',
         str(group_mask_path),
         '--cohort-file',
         str(cohort_csv),
@@ -160,7 +160,7 @@ def test_nifti_s3_serial_matches_parallel(tmp_path, group_mask_path, monkeypatch
     monkeypatch.setenv('MODELARRAYIO_S3_ANON', '1')
     for workers, name in [('1', 'serial.h5'), ('4', 'parallel.h5')]:
         assert modelarrayio_main(base_argv + ['--output', name, '--s3-workers', workers]) == 0, (
-            f'modelarrayio nifti-to-h5 failed (workers={workers})'
+            f'modelarrayio to-modelarray failed (workers={workers})'
         )
 
     with (

@@ -12,17 +12,23 @@ Commands Overview
 
 The commands fall into two groups:
 
-- ``*-to-h5`` commands: convert input neuroimaging data into either:
+- ``to-modelarray``: convert input neuroimaging data into either:
   - one or more HDF5 files (``--backend hdf5``), or
   - one or more TileDB directories (``--backend tiledb``).
-- ``h5-to-*`` commands: convert analysis results stored in an HDF5 file into image files.
+  The modality (NIfTI, CIFTI, or MIF/fixel) is autodetected from the source file
+  extensions in the cohort file.
+- ``export-results``: convert analysis results stored in an HDF5 file into image files.
+  The modality is inferred from which arguments are provided (``--mask`` for NIfTI,
+  ``--index-file``/``--directions-file`` for MIF, ``--cohort-file``/``--example-file``
+  for CIFTI).
 
 
-*********************
-nifti-to-h5 (volumes)
-*********************
+***********************
+to-modelarray (volumes)
+***********************
 
-Default output name (HDF5 backend): ``voxelarray.h5``.
+Triggered when source files in the cohort have ``.nii`` or ``.nii.gz`` extensions.
+Requires ``--mask``.
 
 HDF5 output contents:
 
@@ -42,24 +48,27 @@ TileDB output contents:
 When ``--scalar-columns`` is provided:
 
 - Output is split by scalar column name.
-- Example: ``--scalar-columns alpha beta --output voxelarray.h5`` writes:
-  - ``alpha_voxelarray.h5``
-  - ``beta_voxelarray.h5``
+- Example: ``--scalar-columns alpha beta --output modelarray.h5`` writes:
+  - ``alpha_modelarray.h5``
+  - ``beta_modelarray.h5``
 - The same prefix rule also applies to TileDB output paths.
 
 
-*******************
-cifti-to-h5 (CIFTI)
-*******************
+*********************
+to-modelarray (CIFTI)
+*********************
 
-Default output name (HDF5 backend): ``greyordinatearray.h5``.
+Triggered when source files in the cohort have a CIFTI compound extension
+(e.g. ``.dscalar.nii``, ``.pscalar.nii``, ``.pconn.nii``).
 
 HDF5 output contents:
 
-- ``greyordinates`` dataset:
+- ``greyordinates`` dataset (dscalar):
   - transposed table with rows for ``vertex_id`` and ``structure_id``.
   - attribute ``column_names = ['vertex_id', 'structure_id']``.
   - attribute ``structure_names`` listing CIFTI brain structures.
+- ``parcels/parcel_id`` string dataset (pscalar), or
+  ``parcels/parcel_id_from`` and ``parcels/parcel_id_to`` (pconn).
 - Per scalar:
   - ``scalars/<scalar_name>/values`` with shape ``(n_subjects, n_greyordinates)``.
   - ``scalars/<scalar_name>/column_names`` listing source file names.
@@ -74,17 +83,18 @@ TileDB output contents:
 When ``--scalar-columns`` is provided:
 
 - Output is split by scalar column name.
-- Example: ``--scalar-columns alpha beta --output greyordinatearray.h5`` writes:
-  - ``alpha_greyordinatearray.h5``
-  - ``beta_greyordinatearray.h5``
+- Example: ``--scalar-columns alpha beta --output modelarray.h5`` writes:
+  - ``alpha_modelarray.h5``
+  - ``beta_modelarray.h5``
 - The same prefix rule also applies to TileDB output paths.
 
 
-******************
-mif-to-h5 (fixels)
-******************
+**************************
+to-modelarray (MIF/fixels)
+**************************
 
-Default output name (HDF5 backend): ``fixelarray.h5``.
+Triggered when source files in the cohort have a ``.mif`` extension.
+Requires ``--index-file`` and ``--directions-file``.
 
 HDF5 output contents:
 
@@ -107,17 +117,17 @@ TileDB output contents:
 When ``--scalar-columns`` is provided:
 
 - Output is split by scalar column name.
-- Example: ``--scalar-columns alpha beta --output fixelarray.h5`` writes:
-  - ``alpha_fixelarray.h5``
-  - ``beta_fixelarray.h5``
+- Example: ``--scalar-columns alpha beta --output modelarray.h5`` writes:
+  - ``alpha_modelarray.h5``
+  - ``beta_modelarray.h5``
 - The same prefix rule also applies to TileDB output paths.
 
 
-***********************************
-h5-to-* commands (result exporters)
-***********************************
+*********************************
+export-results (result exporters)
+*********************************
 
-These commands read statistical results from:
+This command reads statistical results from:
 
 - ``results/<analysis_name>/results_matrix`` (shape: ``(n_results, n_elements)``).
 
@@ -131,34 +141,43 @@ Result names are read in this order:
 Any spaces or ``/`` in result names are replaced with ``_`` in filenames.
 
 
-h5-to-nifti
-===========
+export-results (NIfTI)
+======================
+
+Triggered by providing ``--mask``.
 
 Writes one file per result to ``--output-dir``:
 
-- ``<analysis_name>_<result_name><output_ext>`` (default extension ``.nii.gz``).
+- ``<analysis_name>_<result_name>.nii.gz``.
 - If a result name contains ``p.value``, an additional file is written:
-  ``<analysis_name>_<result_name_with_1m.p.value><output_ext>``,
+  ``<analysis_name>_<result_name_with_1m.p.value>.nii.gz``,
   containing ``1 - p.value``.
 
-Each output volume uses ``--group-mask-file`` to map vectorized results back into 3D space.
+Each output volume uses ``--mask`` to map vectorized results back into 3D space.
+Pass ``--no-compress`` to write uncompressed ``.nii`` files instead.
 
 
-h5-to-cifti
-===========
+export-results (CIFTI)
+======================
 
-Writes one CIFTI dscalar file per result to ``--output-dir``:
+Triggered by providing ``--cohort-file`` or ``--example-file`` (without
+``--mask`` or ``--index-file``/``--directions-file``).
 
-- ``<analysis_name>_<result_name>.dscalar.nii``.
+Writes one CIFTI file per result to ``--output-dir``, using the extension that
+matches the example file (e.g. ``.dscalar.nii``, ``.pscalar.nii``, ``.pconn.nii``):
+
+- ``<analysis_name>_<result_name>.<ext>``.
 - If a result name contains ``p.value``, also writes the ``1 - p.value`` companion file
   with ``1m.p.value`` in its name.
 
-The header is taken from ``--example-cifti`` (or from the first cohort ``source_file`` if
+The header is taken from ``--example-file`` (or from the first cohort ``source_file`` if
 ``--cohort-file`` is used instead).
 
 
-h5-to-mif
-=========
+export-results (MIF/fixels)
+===========================
+
+Triggered by providing ``--index-file`` and ``--directions-file``.
 
 Writes one MIF file per result to ``--output-dir``:
 
@@ -171,5 +190,6 @@ Also copies these files into ``--output-dir``:
 - ``--index-file``
 - ``--directions-file``
 
-The output MIF geometry/header template is taken from ``--example-mif`` (or from the first
+The output MIF geometry/header template is taken from ``--example-file`` (or from the first
 cohort ``source_file`` if ``--cohort-file`` is used instead).
+Pass ``--no-compress`` to write uncompressed output where applicable.

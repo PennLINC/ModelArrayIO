@@ -48,20 +48,10 @@ ModelArrayIO provides three converter areas, each with import and export command
 
 Once ModelArrayIO is installed, these commands are available in your terminal:
 
-* **Fixel-wise** data (MRtrix ``.mif``):
+* Neuroimaging data (CIFTI, NIfTI, or MRtrix ``.mif``):
 
-  * ``.mif`` → ``.h5``: ``modelarrayio mif-to-h5``
-  * ``.h5`` → ``.mif``: ``modelarrayio h5-to-mif``
-
-* **Voxel-wise** data (NIfTI):
-
-  * NIfTI → ``.h5``: ``modelarrayio nifti-to-h5``
-  * ``.h5`` → NIfTI: ``modelarrayio h5-to-nifti``
-
-* **Greyordinate-wise** data (CIFTI-2):
-
-  * CIFTI-2 → ``.h5``: ``modelarrayio cifti-to-h5``
-  * ``.h5`` → CIFTI-2: ``modelarrayio h5-to-cifti``
+  * Neuroimaging → ``.h5``: ``modelarrayio to-modelarray``
+  * ``.h5`` → Neuroimaging: ``modelarrayio export-results``
 
 
 Storage backends: HDF5 and TileDB
