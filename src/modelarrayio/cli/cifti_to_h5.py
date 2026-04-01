@@ -17,6 +17,7 @@ from modelarrayio.cli.parser_utils import add_scalar_columns_arg, add_to_modelar
 from modelarrayio.utils.cifti import (
     _build_scalar_sources,
     _cohort_to_long_dataframe,
+    _get_cifti_parcel_info,
     _load_cohort_cifti,
     brain_names_to_dataframe,
     extract_cifti_scalar_data,
@@ -85,17 +86,24 @@ def cifti_to_h5(
     if not scalar_sources:
         raise ValueError('Unable to derive scalar sources from cohort file.')
 
+    _first_scalar, first_sources = next(iter(scalar_sources.items()))
+    first_path = first_sources[0]
+    cifti_type, parcel_arrays = _get_cifti_parcel_info(first_path)
+
     if backend == 'hdf5':
         scalars, last_brain_names = _load_cohort_cifti(cohort_long, s3_workers)
-        greyordinate_table, structure_names = brain_names_to_dataframe(last_brain_names)
         output_path = cli_utils.prepare_output_parent(output_path)
         with h5py.File(output_path, 'w') as h5_file:
-            cli_utils.write_table_dataset(
-                h5_file,
-                'greyordinates',
-                greyordinate_table,
-                extra_attrs={'structure_names': structure_names},
-            )
+            if cifti_type == 'dscalar':
+                greyordinate_table, structure_names = brain_names_to_dataframe(last_brain_names)
+                cli_utils.write_table_dataset(
+                    h5_file,
+                    'greyordinates',
+                    greyordinate_table,
+                    extra_attrs={'structure_names': structure_names},
+                )
+            else:
+                cli_utils.write_hdf5_parcel_arrays(h5_file, parcel_arrays)
             cli_utils.write_hdf5_scalar_matrices(
                 h5_file,
                 scalars,
@@ -110,11 +118,7 @@ def cifti_to_h5(
         return int(not output_path.exists())
 
     output_path.mkdir(parents=True, exist_ok=True)
-    if not scalar_sources:
-        return 0
 
-    _first_scalar, first_sources = next(iter(scalar_sources.items()))
-    first_path = first_sources[0]
     _, reference_brain_names = extract_cifti_scalar_data(first_path)
 
     def _process_scalar_job(scalar_name, source_files):
@@ -162,6 +166,8 @@ def cifti_to_h5(
             }
             for future in tqdm(as_completed(futures), total=len(futures), desc=desc):
                 future.result()
+    if parcel_arrays:
+        cli_utils.write_tiledb_parcel_arrays(output_path, parcel_arrays)
     return 0
 
 

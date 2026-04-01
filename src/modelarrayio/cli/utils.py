@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -127,6 +128,54 @@ def write_tiledb_scalar_matrices(
                 str(output_path), scalar_name, sources_by_scalar[scalar_name]
             )
         tiledb_storage.write_rows_in_column_stripes(str(output_path / dataset_path), rows)
+
+
+def write_hdf5_parcel_arrays(
+    h5_file: h5py.File,
+    parcel_arrays: Mapping[str, np.ndarray],
+) -> None:
+    """Write parcellated CIFTI parcel name arrays as HDF5 string datasets.
+
+    Creates one dataset per entry under the ``parcels/`` group.
+
+    Parameters
+    ----------
+    h5_file : h5py.File
+        Open, writable HDF5 file.
+    parcel_arrays : mapping
+        Keys are dataset names (e.g. ``'parcel_id'``, ``'parcel_id_from'``,
+        ``'parcel_id_to'``); values are arrays of parcel name strings.
+    """
+    for name, values in parcel_arrays.items():
+        h5_file.create_dataset(
+            f'parcels/{name}',
+            data=np.array(values, dtype=object),
+            dtype=h5py.string_dtype(),
+        )
+
+
+def write_tiledb_parcel_arrays(
+    base_uri: str | Path,
+    parcel_arrays: Mapping[str, np.ndarray],
+) -> None:
+    """Write parcellated CIFTI parcel name arrays as TileDB string arrays.
+
+    Creates one TileDB array per entry under the ``parcels/`` sub-path.
+
+    Parameters
+    ----------
+    base_uri : str or Path
+        Root directory of the TileDB store.
+    parcel_arrays : mapping
+        Keys are array names (e.g. ``'parcel_id'``); values are arrays of
+        parcel name strings.
+    """
+    for name, values in parcel_arrays.items():
+        tiledb_storage.write_parcel_names(
+            str(base_uri),
+            os.path.join('parcels', name),
+            [str(v) for v in values],
+        )
 
 
 def sanitize_result_name(result_name: str) -> str:

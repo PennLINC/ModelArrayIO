@@ -17,6 +17,7 @@ from nibabel.cifti2.cifti2_axes import BrainModelAxis, ParcelsAxis, ScalarAxis
 
 from modelarrayio.cli.cifti_to_h5 import cifti_to_h5, cifti_to_h5_main
 from modelarrayio.cli.h5_to_cifti import _cifti_output_ext, h5_to_cifti, h5_to_cifti_main
+from modelarrayio.utils.cifti import _get_cifti_parcel_info
 
 DATA_DIR = Path(__file__).parent / 'data_cifti_toy'
 EXAMPLE_DSCALAR = DATA_DIR / 'example.dscalar.nii'
@@ -77,6 +78,63 @@ def _make_h5_results(
         grp = h5.require_group(f'results/{analysis_name}')
         ds = grp.create_dataset('results_matrix', data=results_matrix)
         ds.attrs['colnames'] = [n.encode('utf-8') for n in result_names]
+
+
+# ===========================================================================
+# _get_cifti_parcel_info
+# ===========================================================================
+
+
+class TestGetCiftiElementInfo:
+    def test_dscalar_returns_empty_arrays(self):
+        mask = np.zeros((2, 2, 2), dtype=bool)
+        mask[0, 0, 0] = True
+        img = _make_dscalar(mask, np.array([1.0], dtype=np.float32))
+        cifti_type, element_arrays = _get_cifti_parcel_info(img)
+        assert cifti_type == 'dscalar'
+        assert element_arrays == {}
+
+    def test_pscalar_returns_parcel_id(self):
+        parcel_names = ['A', 'B', 'C']
+        img = _make_pscalar(parcel_names, np.zeros(3, dtype=np.float32))
+        cifti_type, element_arrays = _get_cifti_parcel_info(img)
+        assert cifti_type == 'pscalar'
+        assert list(element_arrays.keys()) == ['parcel_id']
+        assert list(element_arrays['parcel_id']) == parcel_names
+
+    def test_pconn_returns_parcel_id_from_and_to(self):
+        parcel_names = ['X', 'Y']
+        img = _make_pconn(parcel_names, np.eye(2, dtype=np.float32))
+        cifti_type, element_arrays = _get_cifti_parcel_info(img)
+        assert cifti_type == 'pconn'
+        assert set(element_arrays.keys()) == {'parcel_id_from', 'parcel_id_to'}
+        assert list(element_arrays['parcel_id_from']) == parcel_names
+        assert list(element_arrays['parcel_id_to']) == parcel_names
+
+    def test_dscalar_from_file(self, tmp_path):
+        mask = np.zeros((2, 2, 2), dtype=bool)
+        mask[0, 0, 0] = True
+        p = tmp_path / 'img.dscalar.nii'
+        _make_dscalar(mask, np.array([1.0], dtype=np.float32)).to_filename(p)
+        cifti_type, element_arrays = _get_cifti_parcel_info(str(p))
+        assert cifti_type == 'dscalar'
+        assert element_arrays == {}
+
+    def test_pscalar_from_file(self, tmp_path):
+        parcel_names = ['parcel_A', 'parcel_B']
+        p = tmp_path / 'img.pscalar.nii'
+        _make_pscalar(parcel_names, np.zeros(2, dtype=np.float32)).to_filename(p)
+        cifti_type, element_arrays = _get_cifti_parcel_info(str(p))
+        assert cifti_type == 'pscalar'
+        assert list(element_arrays['parcel_id']) == parcel_names
+
+    def test_pconn_from_toy_data(self):
+        cifti_type, element_arrays = _get_cifti_parcel_info(str(EXAMPLE_PCONN))
+        assert cifti_type == 'pconn'
+        assert 'parcel_id_from' in element_arrays
+        assert 'parcel_id_to' in element_arrays
+        # Row and column axes should have the same length for this symmetric file
+        assert len(element_arrays['parcel_id_from']) == len(element_arrays['parcel_id_to'])
 
 
 # ===========================================================================
@@ -272,7 +330,7 @@ class TestCiftiToH5Pscalar:
         with h5py.File(out_h5, 'r') as h5:
             assert h5['scalars/MYELIN/values'].shape == (3, n)
 
-    def test_greyordinates_size_equals_n_parcels(self, tmp_path):
+    def test_parcels_parcel_id_written(self, tmp_path):
         n = len(_PSCALAR_PARCELS)
         paths = _write_pscalar_subjects(tmp_path, _PSCALAR_PARCELS)
         cohort = tmp_path / 'cohort.csv'
@@ -282,8 +340,10 @@ class TestCiftiToH5Pscalar:
         out_h5 = tmp_path / 'out.h5'
         cifti_to_h5(cohort, output=out_h5)
         with h5py.File(out_h5, 'r') as h5:
-            grey = h5['greyordinates'][...]
-            assert grey.shape[1] == n
+            assert 'parcels/parcel_id' in h5
+            names = h5['parcels/parcel_id'][...].astype(str)
+            assert len(names) == n
+            assert list(names) == _PSCALAR_PARCELS
 
     def test_scalars_values_correct(self, tmp_path):
         n = len(_PSCALAR_PARCELS)
@@ -368,7 +428,7 @@ class TestCiftiToH5Pconn:
             # pconn matrix is row-major flattened: n_subjects x (n_parcels * n_parcels)
             assert h5['scalars/FC/values'].shape == (2, n * n)
 
-    def test_greyordinates_size_equals_flattened_matrix(self, tmp_path):
+    def test_parcels_parcel_id_from_to_written(self, tmp_path):
         n = len(_PCONN_PARCELS)
         paths = _write_pconn_subjects(tmp_path, _PCONN_PARCELS)
         cohort = tmp_path / 'cohort.csv'
@@ -376,8 +436,12 @@ class TestCiftiToH5Pconn:
         out_h5 = tmp_path / 'out.h5'
         cifti_to_h5(cohort, output=out_h5)
         with h5py.File(out_h5, 'r') as h5:
-            grey = h5['greyordinates'][...]
-            assert grey.shape[1] == n * n
+            assert 'parcels/parcel_id_from' in h5
+            assert 'parcels/parcel_id_to' in h5
+            from_names = h5['parcels/parcel_id_from'][...].astype(str)
+            to_names = h5['parcels/parcel_id_to'][...].astype(str)
+            assert list(from_names) == _PCONN_PARCELS
+            assert list(to_names) == _PCONN_PARCELS
 
     def test_scalars_values_flattened_row_major(self, tmp_path):
         n = len(_PCONN_PARCELS)

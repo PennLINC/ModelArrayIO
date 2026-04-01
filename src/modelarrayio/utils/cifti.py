@@ -168,6 +168,48 @@ def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
         )
 
 
+def _get_cifti_parcel_info(cifti_file):
+    """Detect CIFTI type and return parcel name arrays for parcellated files.
+
+    Parameters
+    ----------
+    cifti_file : str or :obj:`nibabel.Cifti2Image`
+        Path to a CIFTI2 file, or an already-loaded image.
+
+    Returns
+    -------
+    cifti_type : str
+        ``'dscalar'``, ``'pscalar'``, or ``'pconn'``.
+    parcel_arrays : dict[str, numpy.ndarray]
+        For ``'dscalar'``: empty dict (greyordinate table written separately).
+        For ``'pscalar'``: ``{'parcel_id': parcel_names_array}`` — one entry per
+        parcel.
+        For ``'pconn'``: ``{'parcel_id_from': row_names, 'parcel_id_to':
+        col_names}`` — one entry per unique row/column parcel axis.
+    """
+    cifti = cifti_file if hasattr(cifti_file, 'get_fdata') else nb.load(Path(cifti_file))
+    axes = [cifti.header.get_axis(i) for i in range(cifti.ndim)]
+
+    scalar_axes = [ax for ax in axes if isinstance(ax, nb.cifti2.cifti2_axes.ScalarAxis)]
+    brain_axes = [ax for ax in axes if isinstance(ax, nb.cifti2.cifti2_axes.BrainModelAxis)]
+    parcel_axes = [ax for ax in axes if isinstance(ax, nb.cifti2.cifti2_axes.ParcelsAxis)]
+
+    if len(scalar_axes) == 1 and len(brain_axes) == 1:
+        return 'dscalar', {}
+    elif len(scalar_axes) == 1 and len(parcel_axes) == 1:
+        return 'pscalar', {'parcel_id': parcel_axes[0].name}
+    elif len(parcel_axes) == 2:
+        return 'pconn', {
+            'parcel_id_from': parcel_axes[0].name,
+            'parcel_id_to': parcel_axes[1].name,
+        }
+    else:
+        raise ValueError(
+            f'Unsupported CIFTI axis combination in {cifti_file!r}. '
+            'Supported types: dscalar, pscalar, pconn.'
+        )
+
+
 def brain_names_to_dataframe(brain_names):
     """Convert brain names to a dataframe.
 
