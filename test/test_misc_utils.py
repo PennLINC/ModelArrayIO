@@ -1,12 +1,10 @@
-"""Tests for CIFTI cohort normalization and greyordinate helpers."""
+"""Unit tests for modelarrayio.utils.misc cohort and scalar-source helpers."""
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 import pytest
 
-from modelarrayio.utils.cifti import brain_names_to_dataframe
 from modelarrayio.utils.misc import build_scalar_sources, cohort_to_long_dataframe
 
 
@@ -74,13 +72,3 @@ def test_build_scalar_sources_ordering() -> None:
     assert list(src.keys()) == ['A', 'B']
     assert src['A'] == ['x1', 'x2']
     assert src['B'] == ['y1']
-
-
-def test_brain_names_to_dataframe() -> None:
-    names = np.array(['CORTEX_LEFT', 'CORTEX_LEFT', 'CORTEX_RIGHT'])
-    gdf, struct_strings = brain_names_to_dataframe(names)
-    assert len(gdf) == 3
-    assert 'vertex_id' in gdf.columns
-    assert 'structure_id' in gdf.columns
-    assert gdf['vertex_id'].tolist() == [0, 1, 2]
-    assert len(struct_strings) == 2  # factorize unique structures

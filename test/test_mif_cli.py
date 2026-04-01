@@ -1,3 +1,7 @@
+"""Tests for the mif-to-h5 CLI command."""
+
+from __future__ import annotations
+
 import csv
 
 import h5py

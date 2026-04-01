@@ -1,4 +1,9 @@
+"""Tests for the nifti-to-h5 and h5-to-nifti CLI commands."""
+
+from __future__ import annotations
+
 import csv
+import logging
 import os.path as op
 
 import h5py
@@ -6,21 +11,16 @@ import nibabel as nb
 import numpy as np
 import pytest
 import tiledb
+from utils import make_nifti
 
 from modelarrayio.cli.main import main as modelarrayio_main
-
-
-def _make_nifti(data, affine=None):
-    if affine is None:
-        affine = np.eye(4)
-    return nb.Nifti1Image(data.astype(np.float32), affine)
 
 
 def _ijk_value(i, j, k):
     return i * 100.0 + j * 10.0 + k * 1.0
 
 
-def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
+def test_nifti_to_h5_creates_expected_hdf5(tmp_path, monkeypatch):
     # Small synthetic volume
     shape = (5, 6, 7)
     group_mask = np.zeros(shape, dtype=bool)
@@ -30,7 +30,7 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
         group_mask[i, j, k] = True
 
     # Save group mask
-    group_mask_img = _make_nifti(group_mask.astype(np.uint8))
+    group_mask_img = make_nifti(group_mask.astype(np.uint8))
     group_mask_file = tmp_path / 'group_mask.nii.gz'
     group_mask_img.to_filename(group_mask_file)
 
@@ -48,8 +48,8 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
             omit = true_coords[1]
             indiv_mask[omit] = False
 
-        scalar_img = _make_nifti(scalar)
-        mask_img = _make_nifti(indiv_mask.astype(np.uint8))
+        scalar_img = make_nifti(scalar)
+        mask_img = make_nifti(indiv_mask.astype(np.uint8))
 
         scalar_path = tmp_path / f'sub-{sidx + 1}_scalar.nii.gz'
         mask_path = tmp_path / f'sub-{sidx + 1}_mask.nii.gz'
@@ -144,7 +144,7 @@ def test_convoxel_cli_creates_expected_hdf5(tmp_path, monkeypatch):
             assert np.isclose(v1, expected_s1, equal_nan=True)
 
 
-def test_h5_to_nifti_cli_writes_results_with_dataset_column_names(tmp_path):
+def test_h5_to_nifti_writes_results_with_dataset_column_names(tmp_path):
     shape = (3, 3, 3)
     group_mask = np.zeros(shape, dtype=bool)
     true_coords = [(0, 0, 0), (1, 1, 1), (2, 2, 2)]
@@ -152,7 +152,7 @@ def test_h5_to_nifti_cli_writes_results_with_dataset_column_names(tmp_path):
         group_mask[coord] = True
 
     group_mask_file = tmp_path / 'group_mask.nii.gz'
-    _make_nifti(group_mask.astype(np.uint8)).to_filename(group_mask_file)
+    make_nifti(group_mask.astype(np.uint8)).to_filename(group_mask_file)
 
     in_file = tmp_path / 'results.h5'
     with h5py.File(in_file, 'w') as h5:
@@ -215,12 +215,12 @@ def test_nifti_to_h5_scalar_columns_writes_prefixed_outputs(tmp_path, monkeypatc
         group_mask[i, j, k] = True
 
     group_mask_file = tmp_path / 'group_mask.nii.gz'
-    _make_nifti(group_mask.astype(np.uint8)).to_filename(group_mask_file)
+    make_nifti(group_mask.astype(np.uint8)).to_filename(group_mask_file)
 
     rows = []
     for sidx in range(2):
         subj_mask_file = tmp_path / f'sub-{sidx + 1}_mask.nii.gz'
-        _make_nifti(group_mask.astype(np.uint8)).to_filename(subj_mask_file)
+        make_nifti(group_mask.astype(np.uint8)).to_filename(subj_mask_file)
 
         alpha_data = np.zeros(shape, dtype=np.float32)
         beta_data = np.zeros(shape, dtype=np.float32)
@@ -230,8 +230,8 @@ def test_nifti_to_h5_scalar_columns_writes_prefixed_outputs(tmp_path, monkeypatc
 
         alpha_file = tmp_path / f'sub-{sidx + 1}_alpha.nii.gz'
         beta_file = tmp_path / f'sub-{sidx + 1}_beta.nii.gz'
-        _make_nifti(alpha_data).to_filename(alpha_file)
-        _make_nifti(beta_data).to_filename(beta_file)
+        make_nifti(alpha_data).to_filename(alpha_file)
+        make_nifti(beta_data).to_filename(beta_file)
 
         rows.append(
             {
@@ -293,7 +293,7 @@ def _build_nifti_cohort(tmp_path):
     for coord in true_coords:
         group_mask[coord] = 1
     group_mask_file = tmp_path / 'group_mask.nii.gz'
-    _make_nifti(group_mask).to_filename(group_mask_file)
+    make_nifti(group_mask).to_filename(group_mask_file)
 
     rows = []
     for sidx in range(2):
@@ -302,8 +302,8 @@ def _build_nifti_cohort(tmp_path):
             scalar[i, j, k] = float(i + j + k + sidx)
         scalar_file = tmp_path / f'sub-{sidx + 1}_scalar.nii.gz'
         mask_file = tmp_path / f'sub-{sidx + 1}_mask.nii.gz'
-        _make_nifti(scalar).to_filename(scalar_file)
-        _make_nifti(group_mask).to_filename(mask_file)
+        make_nifti(scalar).to_filename(scalar_file)
+        make_nifti(group_mask).to_filename(mask_file)
         rows.append(
             {
                 'scalar_name': 'FA',
@@ -321,15 +321,13 @@ def _build_nifti_cohort(tmp_path):
     return group_mask_file, cohort_csv
 
 
-def test_nifti_tiledb_fails_when_output_already_exists(tmp_path, monkeypatch, caplog):
+def test_nifti_tiledb_removes_existing_arrays_on_rerun(tmp_path, monkeypatch, caplog):
     """Regression test for https://github.com/PennLINC/ModelArrayIO/issues/39.
 
     The TileDB backend should succeed when the output directory already contains
     arrays from a previous run, removing and recreating them, and should emit a
     warning for each removed array.
     """
-    import logging
-
     group_mask_file, cohort_csv = _build_nifti_cohort(tmp_path)
     out_tdb = tmp_path / 'out.tdb'
     monkeypatch.chdir(tmp_path)
