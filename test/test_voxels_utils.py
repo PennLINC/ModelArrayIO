@@ -6,7 +6,7 @@ import nibabel as nb
 import numpy as np
 import pytest
 
-from modelarrayio.utils.voxels import flattened_image
+from modelarrayio.utils.nifti import flattened_image
 
 
 def _eye_affine():

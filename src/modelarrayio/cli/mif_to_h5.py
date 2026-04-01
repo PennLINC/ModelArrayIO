@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
-from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from pathlib import Path
 
@@ -14,7 +14,8 @@ from tqdm import tqdm
 
 from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.parser_utils import _is_file, add_to_modelarray_args
-from modelarrayio.utils.fixels import gather_fixels, mif_to_nifti2
+from modelarrayio.utils.mif import gather_fixels, load_cohort_mif
+from modelarrayio.utils.misc import cohort_to_long_dataframe
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +32,9 @@ def mif_to_h5(
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
-    workers=None,
+    workers=1,
     s3_workers=1,
+    scalar_columns=None,
 ):
     """Load all fixeldb data and write to an HDF5 or TileDB file.
 
@@ -63,7 +65,7 @@ def mif_to_h5(
     target_chunk_mb : :obj:`float`
         Target chunk/tile size in MiB when auto-computing the spatial axis length
     workers : :obj:`int`
-        Maximum number of parallel TileDB write workers. Default 0 (auto).
+        Maximum number of parallel TileDB write workers. Default 1.
         Has no effect when ``backend='hdf5'``.
     s3_workers : :obj:`int`
         Number of parallel workers for S3 downloads. Default 1.
@@ -75,25 +77,46 @@ def mif_to_h5(
     """
     # gather fixel data
     fixel_table, voxel_table = gather_fixels(index_file, directions_file)
-    output_path = Path(output)
 
-    # gather cohort data
     cohort_df = pd.read_csv(cohort_file)
+    cohort_long = cohort_to_long_dataframe(cohort_df, scalar_columns=scalar_columns)
+    if cohort_long.empty:
+        raise ValueError('Cohort file does not contain any scalar entries after normalization.')
 
-    # upload each cohort's data
-    scalars = defaultdict(list)
-    sources_lists = defaultdict(list)
     logger.info('Extracting .mif data...')
-    for row in tqdm(cohort_df.itertuples(index=False), total=cohort_df.shape[0]):
-        scalar_file = row.source_file
-        _scalar_img, scalar_data = mif_to_nifti2(scalar_file)
-        scalars[row.scalar_name].append(scalar_data)
-        sources_lists[row.scalar_name].append(row.source_file)
+    scalars, sources_lists = load_cohort_mif(cohort_long, s3_workers)
+    if not sources_lists:
+        raise ValueError('Unable to derive scalar sources from cohort file.')
 
-    # Write the output
+    scalar_names = list(sources_lists.keys())
+    split_scalar_outputs = bool(scalar_columns)
+
     if backend == 'hdf5':
-        output_path = cli_utils.prepare_output_parent(output_path)
-        with h5py.File(output_path, 'w') as h5_file:
+        if split_scalar_outputs:
+            outputs: list[Path] = []
+            for scalar_name in scalar_names:
+                scalar_output = cli_utils.prepare_output_parent(
+                    cli_utils.prefixed_output_path(output, scalar_name)
+                )
+                with h5py.File(scalar_output, 'w') as h5_file:
+                    cli_utils.write_table_dataset(h5_file, 'fixels', fixel_table)
+                    cli_utils.write_table_dataset(h5_file, 'voxels', voxel_table)
+                    cli_utils.write_hdf5_scalar_matrices(
+                        h5_file,
+                        {scalar_name: scalars[scalar_name]},
+                        {scalar_name: sources_lists[scalar_name]},
+                        storage_dtype=storage_dtype,
+                        compression=compression,
+                        compression_level=compression_level,
+                        shuffle=shuffle,
+                        chunk_voxels=chunk_voxels,
+                        target_chunk_mb=target_chunk_mb,
+                    )
+                outputs.append(scalar_output)
+            return int(not all(path.exists() for path in outputs))
+
+        output = cli_utils.prepare_output_parent(output)
+        with h5py.File(output, 'w') as h5_file:
             cli_utils.write_table_dataset(h5_file, 'fixels', fixel_table)
             cli_utils.write_table_dataset(h5_file, 'voxels', voxel_table)
             cli_utils.write_hdf5_scalar_matrices(
@@ -107,19 +130,37 @@ def mif_to_h5(
                 chunk_voxels=chunk_voxels,
                 target_chunk_mb=target_chunk_mb,
             )
-        return int(not output_path.exists())
+        return int(not output.exists())
 
-    cli_utils.write_tiledb_scalar_matrices(
-        output_path,
-        scalars,
-        sources_lists,
-        storage_dtype=storage_dtype,
-        compression=compression,
-        compression_level=compression_level,
-        shuffle=shuffle,
-        chunk_voxels=chunk_voxels,
-        target_chunk_mb=target_chunk_mb,
-    )
+    worker_count = min(len(scalar_names), workers)
+
+    def _write_scalar_job(scalar_name):
+        scalar_output = (
+            cli_utils.prefixed_output_path(output, scalar_name) if split_scalar_outputs else output
+        )
+        cli_utils.write_tiledb_scalar_matrices(
+            scalar_output,
+            {scalar_name: scalars[scalar_name]},
+            {scalar_name: sources_lists[scalar_name]},
+            storage_dtype=storage_dtype,
+            compression=compression,
+            compression_level=compression_level,
+            shuffle=shuffle,
+            chunk_voxels=chunk_voxels,
+            target_chunk_mb=target_chunk_mb,
+        )
+
+    if worker_count <= 1:
+        for scalar_name in scalar_names:
+            _write_scalar_job(scalar_name)
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = {
+                executor.submit(_write_scalar_job, scalar_name): scalar_name
+                for scalar_name in scalar_names
+            }
+            for future in tqdm(as_completed(futures), total=len(futures), desc='TileDB scalars'):
+                future.result()
     return 0
 
 

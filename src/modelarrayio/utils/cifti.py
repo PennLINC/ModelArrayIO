@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -12,51 +12,6 @@ import pandas as pd
 from tqdm import tqdm
 
 from modelarrayio.utils.s3_utils import load_nibabel
-
-
-def _cohort_to_long_dataframe(cohort_df, scalar_columns=None):
-    scalar_columns = [col for col in (scalar_columns or []) if col]
-    if scalar_columns:
-        missing = [col for col in scalar_columns if col not in cohort_df.columns]
-        if missing:
-            raise ValueError(f'Wide-format cohort is missing scalar columns: {missing}')
-        records = []
-        selected_columns = cohort_df[scalar_columns]
-        for row_values in selected_columns.itertuples(index=False, name=None):
-            for scalar_col, source_val in zip(scalar_columns, row_values, strict=True):
-                if pd.isna(source_val) or source_val is None:
-                    continue
-                source_str = str(source_val).strip()
-                if not source_str:
-                    continue
-                records.append({'scalar_name': scalar_col, 'source_file': source_str})
-        return pd.DataFrame.from_records(records, columns=['scalar_name', 'source_file'])
-
-    required = {'scalar_name', 'source_file'}
-    missing = required - set(cohort_df.columns)
-    if missing:
-        raise ValueError(
-            f'Cohort file must contain columns {sorted(required)} when '
-            '--scalar-columns is not used.'
-        )
-
-    long_df = cohort_df[list(required)].copy()
-    long_df = long_df.dropna(subset=['scalar_name', 'source_file'])
-    long_df['scalar_name'] = long_df['scalar_name'].astype(str).str.strip()
-    long_df['source_file'] = long_df['source_file'].astype(str).str.strip()
-    long_df = long_df[(long_df['scalar_name'] != '') & (long_df['source_file'] != '')]
-    return long_df.reset_index(drop=True)
-
-
-def _build_scalar_sources(long_df):
-    scalar_sources = OrderedDict()
-    for row in long_df.itertuples(index=False):
-        scalar = str(row.scalar_name)
-        source = str(row.source_file)
-        if not scalar or not source:
-            continue
-        scalar_sources.setdefault(scalar, []).append(source)
-    return scalar_sources
 
 
 def extract_cifti_scalar_data(cifti_file, reference_brain_names=None):
@@ -254,7 +209,7 @@ def brain_names_to_dataframe(brain_names):
     return greyordinate_df, structure_name_strings
 
 
-def _load_cohort_cifti(cohort_long, s3_workers):
+def load_cohort_cifti(cohort_long, s3_workers):
     """Load all CIFTI scalar rows from the cohort, optionally in parallel.
 
     The first file is always loaded serially to obtain the reference brain
