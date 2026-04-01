@@ -98,7 +98,11 @@ def compute_tile_shape_full_subjects(
 
 def _ensure_parent_group(uri: str):
     parent = os.path.dirname(uri.rstrip('/'))
-    if parent and not tiledb.object_type(parent):
+    if not parent or parent == uri:
+        return
+    if not tiledb.object_type(parent):
+        if not os.path.exists(parent):
+            _ensure_parent_group(parent)
         tiledb.group_create(parent)
 
 
