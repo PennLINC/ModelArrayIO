@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import argparse
 import logging
-from functools import partial
 from pathlib import Path
 
 import h5py
 import nibabel as nb
-import pandas as pd
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.cli.parser_utils import _is_file, add_from_modelarray_args, add_log_level_arg
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +88,7 @@ def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
     item in ``results/has_names``.
 
     Parameters
-    ==========
+    ----------
     example_cifti: pathlike
         abspath to a scalar cifti file. Its header is used as a template
     in_file: str
@@ -103,7 +99,7 @@ def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
         abspath to where the output cifti files will go.
 
     Outputs
-    =======
+    -------
     None
     """
     # Get a template nifti image.
@@ -152,63 +148,3 @@ def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
                 nifti_header=cifti.nifti_header,
             )
             temp_nifti2_1mpvalue.to_filename(out_cifti_1mpvalue)
-
-
-def h5_to_cifti_main(
-    analysis_name,
-    in_file,
-    output_dir,
-    cohort_file=None,
-    example_cifti=None,
-    log_level='INFO',
-):
-    """Entry point for the ``modelarrayio h5-to-cifti`` command."""
-    cli_utils.configure_logging(log_level)
-    output_path = cli_utils.prepare_output_directory(output_dir, logger)
-
-    if example_cifti is None:
-        logger.warning(
-            'No example cifti file provided, using the first cifti file from the cohort file'
-        )
-        cohort_df = pd.read_csv(cohort_file)
-        example_cifti = cohort_df['source_file'].iloc[0]
-
-    h5_to_cifti(
-        example_cifti=example_cifti,
-        in_file=in_file,
-        analysis_name=analysis_name,
-        output_dir=output_path,
-    )
-    return 0
-
-
-def _parse_h5_to_cifti():
-    parser = argparse.ArgumentParser(
-        description='Create a directory with cifti results from an hdf5 file',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    IsFile = partial(_is_file, parser=parser)
-
-    add_from_modelarray_args(parser)
-
-    example_cifti_group = parser.add_mutually_exclusive_group(required=True)
-    example_cifti_group.add_argument(
-        '--cohort-file',
-        '--cohort_file',
-        help=(
-            'Path to a csv with demographic info and paths to data. '
-            'Used to select an example CIFTI file if no example CIFTI file is provided.'
-        ),
-        type=IsFile,
-        default=None,
-    )
-    example_cifti_group.add_argument(
-        '--example-cifti',
-        '--example_cifti',
-        help='Path to an example cifti file.',
-        type=IsFile,
-        default=None,
-    )
-
-    add_log_level_arg(parser)
-    return parser

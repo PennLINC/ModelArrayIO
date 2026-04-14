@@ -1,4 +1,4 @@
-"""Tests for the mif-to-h5 CLI command."""
+"""Tests for the to-modelarray CLI command (MIF/fixel modality)."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def test_mif_to_h5_scalar_columns_writes_prefixed_outputs(tmp_path, monkeypatch)
     assert (
         modelarrayio_main(
             [
-                'mif-to-h5',
+                'to-modelarray',
                 '--index-file',
                 str(index_file),
                 '--directions-file',
