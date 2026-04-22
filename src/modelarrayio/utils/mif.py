@@ -5,6 +5,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from pathlib import Path
+from typing import Self
 
 import numpy as np
 import pandas as pd
@@ -277,7 +278,7 @@ class MifHeader(FileBasedHeader):
         raise NotImplementedError(f'Cannot convert {type(header)} to {cls}')
 
     @classmethod
-    def from_fileobj(cls, fileobj) -> MifHeader:
+    def from_fileobj(cls, fileobj) -> Self:
         """Read a MIF header from a binary file-like object.
 
         Uses only ``read(1)`` internally so it works with nibabel's
@@ -426,7 +427,7 @@ class MifHeader(FileBasedHeader):
 
         return data_offset
 
-    def copy(self) -> MifHeader:
+    def copy(self) -> Self:
         return deepcopy(self)
 
     # ------------------------------------------------------------------

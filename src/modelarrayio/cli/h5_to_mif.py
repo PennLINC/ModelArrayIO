@@ -14,7 +14,7 @@ import pandas as pd
 
 from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.parser_utils import _is_file, add_from_modelarray_args, add_log_level_arg
-from modelarrayio.utils.fixels import MifImage, image_to_mif, mif_to_image
+from modelarrayio.utils.mif import MifImage, image_to_mif, mif_to_image
 
 logger = logging.getLogger(__name__)
 
