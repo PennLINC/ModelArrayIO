@@ -15,7 +15,7 @@ mif-to-h5
 
 ***********
 nifti-to-h5
-************
+***********
 
 .. argparse::
    :ref: modelarrayio.cli.nifti_to_h5._parse_nifti_to_h5
