@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -37,6 +38,13 @@ def prepare_output_parent(output_file: str | Path) -> Path:
     return output_path
 
 
+def prefixed_output_path(output_path: str | Path, prefix: str) -> Path:
+    """Return output path with a sanitized prefix added to its filename."""
+    path = Path(output_path)
+    safe_prefix = sanitize_result_name(prefix)
+    return path.with_name(f'{safe_prefix}_{path.name}')
+
+
 def write_table_dataset(
     h5_file: h5py.File,
     dataset_name: str,
@@ -66,15 +74,15 @@ def write_hdf5_scalar_matrices(
 ) -> None:
     """Write per-scalar matrices into an open HDF5 file."""
     for scalar_name, rows in scalars.items():
-        num_subjects = len(rows)
-        if num_subjects == 0:
+        n_files = len(rows)
+        if n_files == 0:
             continue
-        num_items = rows[0].shape[0]
+        n_elements = rows[0].shape[0]
         dataset = h5_storage.create_empty_scalar_matrix_dataset(
             h5_file,
             f'scalars/{scalar_name}/values',
-            num_subjects,
-            num_items,
+            n_files,
+            n_elements,
             storage_dtype=storage_dtype,
             compression=compression,
             compression_level=compression_level,
@@ -104,16 +112,16 @@ def write_tiledb_scalar_matrices(
     output_path.mkdir(parents=True, exist_ok=True)
 
     for scalar_name, rows in scalars.items():
-        num_subjects = len(rows)
-        if num_subjects == 0:
+        n_files = len(rows)
+        if n_files == 0:
             continue
-        num_items = rows[0].shape[0]
+        n_elements = rows[0].shape[0]
         dataset_path = f'scalars/{scalar_name}/values'
         tiledb_storage.create_empty_scalar_matrix_array(
             str(output_path),
             dataset_path,
-            num_subjects,
-            num_items,
+            n_files,
+            n_elements,
             storage_dtype=storage_dtype,
             compression=compression,
             compression_level=compression_level,
@@ -127,6 +135,55 @@ def write_tiledb_scalar_matrices(
                 str(output_path), scalar_name, sources_by_scalar[scalar_name]
             )
         tiledb_storage.write_rows_in_column_stripes(str(output_path / dataset_path), rows)
+
+
+def write_hdf5_parcel_arrays(
+    h5_file: h5py.File,
+    parcel_arrays: Mapping[str, np.ndarray],
+) -> None:
+    """Write parcellated CIFTI parcel name arrays as HDF5 string datasets.
+
+    Creates one dataset per entry under the ``parcels/`` group.
+
+    Parameters
+    ----------
+    h5_file : h5py.File
+        Open, writable HDF5 file.
+    parcel_arrays : mapping
+        Keys are dataset names (e.g. ``'parcel_id'``, ``'parcel_id_from'``,
+        ``'parcel_id_to'``); values are arrays of parcel name strings.
+    """
+    grp = h5_file.require_group('parcels')
+    for name, values in parcel_arrays.items():
+        grp.create_dataset(
+            name,
+            data=np.array(values, dtype=object),
+            dtype=h5py.string_dtype(),
+        )
+
+
+def write_tiledb_parcel_arrays(
+    base_uri: str | Path,
+    parcel_arrays: Mapping[str, np.ndarray],
+) -> None:
+    """Write parcellated CIFTI parcel name arrays as TileDB string arrays.
+
+    Creates one TileDB array per entry under the ``parcels/`` sub-path.
+
+    Parameters
+    ----------
+    base_uri : str or Path
+        Root directory of the TileDB store.
+    parcel_arrays : mapping
+        Keys are array names (e.g. ``'parcel_id'``); values are arrays of
+        parcel name strings.
+    """
+    for name, values in parcel_arrays.items():
+        tiledb_storage.write_parcel_names(
+            str(base_uri),
+            os.path.join('parcels', name),
+            [str(v) for v in values],
+        )
 
 
 def sanitize_result_name(result_name: str) -> str:

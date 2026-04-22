@@ -6,11 +6,7 @@ import nibabel as nb
 import numpy as np
 import pytest
 
-from modelarrayio.utils.voxels import flattened_image
-
-
-def _eye_affine():
-    return np.eye(4)
+from modelarrayio.utils.nifti import flattened_image
 
 
 def test_flattened_image_extracts_group_masked_values() -> None:
@@ -24,8 +20,8 @@ def test_flattened_image_extracts_group_masked_values() -> None:
     scalar[2, 0, 1] = 2.5
 
     indiv_mask = group_mask.copy()
-    scalar_img = nb.Nifti1Image(scalar, _eye_affine())
-    mask_img = nb.Nifti1Image(indiv_mask.astype(np.float32), _eye_affine())
+    scalar_img = nb.Nifti1Image(scalar, np.eye(4))
+    mask_img = nb.Nifti1Image(indiv_mask.astype(np.float32), np.eye(4))
 
     flat = flattened_image(scalar_img, mask_img, group_mask)
     assert flat.shape == (2,)
@@ -43,8 +39,8 @@ def test_flattened_image_nan_outside_individual_mask() -> None:
     indiv = group_mask.copy()
     indiv[1, 1, 1] = False
 
-    scalar_img = nb.Nifti1Image(scalar, _eye_affine())
-    mask_img = nb.Nifti1Image(indiv.astype(np.float32), _eye_affine())
+    scalar_img = nb.Nifti1Image(scalar, np.eye(4))
+    mask_img = nb.Nifti1Image(indiv.astype(np.float32), np.eye(4))
 
     flat = flattened_image(scalar_img, mask_img, group_mask)
     assert flat.shape == (2,)

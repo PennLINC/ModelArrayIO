@@ -1,4 +1,4 @@
-"""Unit tests for fixel utility conversions."""
+"""Unit tests for MIF/fixel utility helpers."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import pytest
 
 from modelarrayio.cli.h5_to_mif import h5_to_mif_main
 from modelarrayio.cli.mif_to_h5 import mif_to_h5
-from modelarrayio.utils import fixels
+from modelarrayio.utils import mif
 
 
 def _make_nifti2(shape=(2, 1, 1), affine=None) -> nb.Nifti2Image:
@@ -33,11 +33,11 @@ def test_nifti2_to_mif_round_trip_uses_direct_mif_io(tmp_path) -> None:
     nifti_img.dataobj[:] = np.arange(4, dtype=np.float32).reshape(4, 1, 1)
 
     out_file = tmp_path / 'out.mif'
-    fixels.nifti2_to_mif(nifti_img, out_file)
+    mif.nifti2_to_mif(nifti_img, out_file)
 
-    mif_img, mif_data = fixels.mif_to_image(out_file)
+    mif_img, mif_data = mif.mif_to_image(out_file)
 
-    assert isinstance(mif_img, fixels.MifImage)
+    assert isinstance(mif_img, mif.MifImage)
     np.testing.assert_allclose(mif_img.affine, affine)
     np.testing.assert_allclose(mif_data, np.arange(4, dtype=np.float32))
 
@@ -104,7 +104,7 @@ def test_mif_to_h5_results(
 
     # Step 5: Calculate mean directly from MIF files
     source_arrays = [
-        fixels.mif_to_image(source_file)[1].astype(np.float32)
+        mif.mif_to_image(source_file)[1].astype(np.float32)
         for source_file in cohort_df['source_file']
     ]
     direct_mean = np.mean(np.stack(source_arrays, axis=0), axis=0, dtype=np.float32)
@@ -113,9 +113,9 @@ def test_mif_to_h5_results(
     output_mif = output_dir / 'lm_mean.mif'
     assert output_mif.exists()
 
-    result_img, result_data = fixels.mif_to_image(output_mif)
-    template_img, _ = fixels.mif_to_image(cohort_df['source_file'].iloc[0])
+    result_img, result_data = mif.mif_to_image(output_mif)
+    template_img, _ = mif.mif_to_image(cohort_df['source_file'].iloc[0])
 
-    assert isinstance(result_img, fixels.MifImage)
+    assert isinstance(result_img, mif.MifImage)
     np.testing.assert_allclose(result_img.affine, template_img.affine)
     np.testing.assert_allclose(result_data, direct_mean)

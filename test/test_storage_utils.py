@@ -18,8 +18,8 @@ def test_resolve_dtype_rejects_unknown_values() -> None:
 
 def test_compute_full_subject_chunk_shape_auto() -> None:
     chunk = storage_utils.compute_full_subject_chunk_shape(
-        num_subjects=4,
-        num_items=128,
+        n_files=4,
+        n_elements=128,
         item_chunk=0,
         target_chunk_mb=1.0,
         storage_np_dtype='float32',

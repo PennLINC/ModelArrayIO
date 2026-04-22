@@ -1,4 +1,4 @@
-"""Integration test for s3:// path support in convoxel.
+"""Integration test for s3:// path support in nifti.
 
 Requires network access and boto3. Run with:
     pytest test/test_voxels_s3.py -v
@@ -56,8 +56,8 @@ def group_mask_path(tmp_path_factory):
 
 
 @pytest.mark.s3
-def test_convoxel_s3_parallel(tmp_path, group_mask_path, monkeypatch):
-    """convoxel downloads s3:// paths in parallel and produces a valid HDF5."""
+def test_nifti_s3_parallel(tmp_path, group_mask_path, monkeypatch):
+    """nifti downloads s3:// paths in parallel and produces a valid HDF5."""
     pytest.importorskip('boto3')
 
     shutil.copy(group_mask_path, tmp_path / 'group_mask.nii.gz')
@@ -107,13 +107,13 @@ def test_convoxel_s3_parallel(tmp_path, group_mask_path, monkeypatch):
 
     with h5py.File(out_h5, 'r') as h5:
         dset = h5['scalars/alff/values']
-        num_subjects, num_voxels = dset.shape
+        n_files, n_voxels = dset.shape
 
-        assert num_subjects == len(OHSU_SUBJECTS)
-        assert num_voxels > 0
+        assert n_files == len(OHSU_SUBJECTS)
+        assert n_voxels > 0
 
         # Each subject should have at least some non-NaN values
-        for i in range(num_subjects):
+        for i in range(n_files):
             assert not np.all(np.isnan(dset[i, :]))
 
         # Column names recorded in the file
@@ -123,7 +123,7 @@ def test_convoxel_s3_parallel(tmp_path, group_mask_path, monkeypatch):
 
 
 @pytest.mark.s3
-def test_convoxel_s3_serial_matches_parallel(tmp_path, group_mask_path, monkeypatch):
+def test_nifti_s3_serial_matches_parallel(tmp_path, group_mask_path, monkeypatch):
     """Serial (s3-workers=1) and parallel (s3-workers=4) produce identical data."""
     pytest.importorskip('boto3')
 
