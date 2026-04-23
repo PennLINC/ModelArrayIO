@@ -33,7 +33,7 @@ def _detect_modality_from_path(path: str) -> str:
     path = str(path)
     if any(path.endswith(ext) for ext in _CIFTI_EXTENSIONS):
         return 'cifti'
-    if path.endswith(('.nii.gz', '.mif')):
+    if path.endswith(('.mif.gz', '.mif')):
         return 'mif'
     if path.endswith(('.nii.gz', '.nii')):
         return 'nifti'
