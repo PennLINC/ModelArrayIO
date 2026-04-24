@@ -22,9 +22,6 @@ _CIFTI_EXTENSIONS = (
     '.dscalar.nii',
     '.pscalar.nii',
     '.pconn.nii',
-    '.dtseries.nii',
-    '.ptseries.nii',
-    '.dlabel.nii',
 )
 
 
