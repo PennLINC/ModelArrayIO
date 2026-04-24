@@ -249,41 +249,22 @@ class MifHeader(FileBasedHeader):
         return self._transform.copy()
 
     def get_best_affine(self) -> np.ndarray:
-        """Return the 4x4 affine mapping *disk* voxel indices to scanner space (mm).
+        """Return the 4x4 affine mapping canonical voxel indices to scanner space (mm).
 
-        This follows mrconvert's NIfTI output convention: data is kept in the
-        on-disk byte order (no axis flips are applied), and the affine is
-        adjusted so that voxel ``(0, 0, 0, …)`` maps to the scanner position
-        of the first element on disk.
+        The image data returned by :meth:`MifImage.get_fdata` is always in
+        mrtrix-canonical (positive-stride) order, so the affine is simply
+        built from the MIF ``transform`` and ``vox`` fields:
 
-        For axes with a positive layout stride the column equals::
-
-            transform_col * vox
-
-        For axes with a **negative** layout stride (stored reversed on disk) the
-        column is **negated** and the origin is shifted by
-        ``(dim - 1) * transform_col * vox`` so that disk voxel ``(0, …)``
-        maps to the scanner position of the last mrtrix voxel along that axis::
-
-            new_col    = -transform_col * vox
-            new_origin  = origin + transform_col * vox * (dim - 1)
+            affine[:3, :3] = transform[:, :3] * vox   # column-wise scale
+            affine[:3,  3] = transform[:,  3]
         """
         affine = np.eye(4, dtype=np.float64)
         n_spatial = min(3, len(self._zooms), len(self._shape))
         zooms = np.ones(3, dtype=np.float64)
         zooms[:n_spatial] = self._zooms[:n_spatial]
 
-        rotation_cols = self._transform[:, :3] * zooms  # shape (3, 3)
-        origin = self._transform[:, 3].copy()
-
-        for i, s in enumerate(self._layout):
-            if i < 3 and s < 0 and self._shape[i] > 1:
-                # disk voxel 0 on this axis = mrtrix voxel (dim_i - 1)
-                origin += rotation_cols[:, i] * (self._shape[i] - 1)
-                rotation_cols[:, i] = -rotation_cols[:, i]
-
-        affine[:3, :3] = rotation_cols
-        affine[:3, 3] = origin
+        affine[:3, :3] = self._transform[:, :3] * zooms
+        affine[:3, 3] = self._transform[:, 3]
         return affine
 
     def get_intensity_scaling(self) -> tuple[float, float]:

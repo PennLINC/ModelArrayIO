@@ -122,15 +122,15 @@ def _mif_layout_to_str(layout: list[int]) -> str:
 
 
 def _mif_apply_layout(raw_flat: np.ndarray, shape: tuple, layout: list[int]) -> np.ndarray:
-    """Reorder flat MIF disk data into a numpy array matching mrconvert's convention.
+    """Reorder flat MIF disk data into a canonical (positive-stride) numpy array.
 
     MIF stores data with the axis whose ``|layout[i]|`` equals 1 varying
-    fastest on disk.  This function reorders axes only — it does **not** flip
-    axes for negative strides.  Instead, negative strides are encoded in the
-    affine returned by :meth:`MifHeader.get_best_affine`, exactly as mrconvert
-    does when writing NIfTI output.  This ensures that ``MifImage.get_fdata()``
-    matches the data you would get from ``mrconvert file.mif file.nii`` followed
-    by ``nibabel.load(file.nii).get_fdata()``.
+    fastest on disk, and axes with a negative ``layout[i]`` stored reversed.
+    This function returns the array in the logical (mrtrix-canonical) order:
+    output index ``(i, j, k, ...)`` corresponds to mrtrix image coordinate
+    ``(i, j, k, ...)``, matching what ``mrconvert <in> <out> -strides 1,2,3,...``
+    would produce and what MRtrix tools (``fixelcfestats``, ``mrstats``, ...)
+    see when they access the image via the ``Image`` API.
     """
     ndim = len(shape)
     # Sort axes from fastest (|layout|=1) to slowest
@@ -147,12 +147,26 @@ def _mif_apply_layout(raw_flat: np.ndarray, shape: tuple, layout: list[int]) -> 
         inv_perm[orig_axis] = disk_pos
     data = data.transpose(inv_perm)
 
+    # Flip any axis with a negative symbolic stride so the result is in
+    # mrtrix-canonical positive-stride order.
+    slicer = tuple(slice(None, None, -1) if layout[i] < 0 else slice(None) for i in range(ndim))
+    data = data[slicer]
+
     return np.ascontiguousarray(data)
 
 
 def _mif_apply_layout_for_write(data: np.ndarray, layout: list[int]) -> np.ndarray:
-    """Reorder a numpy array into MIF disk layout for writing (axis ordering only)."""
+    """Reorder a canonical numpy array into MIF disk layout for writing.
+
+    Inverse of :func:`_mif_apply_layout`: first flip each axis whose
+    symbolic stride is negative, then transpose to the disk axis order
+    (``[slowest, ..., fastest]`` in C-order).
+    """
     ndim = len(data.shape)
+
+    # Flip axes that will be stored reversed on disk
+    slicer = tuple(slice(None, None, -1) if layout[i] < 0 else slice(None) for i in range(ndim))
+    data = data[slicer]
 
     # Transpose to disk order: [slowest, ..., fastest] in C-order
     order = sorted(range(ndim), key=lambda i: abs(layout[i]))
