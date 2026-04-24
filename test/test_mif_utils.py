@@ -9,9 +9,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from modelarrayio.cli.h5_to_mif import h5_to_mif_main
+from modelarrayio.cli.h5_to_mif import h5_to_mif
 from modelarrayio.cli.mif_to_h5 import mif_to_h5
 from modelarrayio.utils import mif
+from modelarrayio.utils.misc import load_and_normalize_cohort
 
 
 @pytest.mark.downloaded_data
@@ -35,6 +36,7 @@ def test_mif_to_h5_results(
     cohort_df['source_file'] = cohort_df['source_file'].map(lambda path: str(in_dir / path))
     temp_cohort_file = out_dir / 'stat-alpha_cohort.csv'
     cohort_df.to_csv(temp_cohort_file, index=False)
+    cohort_long, _ = load_and_normalize_cohort(temp_cohort_file)
 
     # Step 2: Convert MIF to HDF5
     h5_file = out_dir / 'stat-alpha.h5'
@@ -42,7 +44,7 @@ def test_mif_to_h5_results(
         mif_to_h5(
             index_file=index_file,
             directions_file=directions_file,
-            cohort_file=temp_cohort_file,
+            cohort_long=cohort_long,
             output=h5_file,
         )
         == 0
@@ -62,14 +64,12 @@ def test_mif_to_h5_results(
     # Step 4: Convert HDF5 to MIF
     output_dir = out_dir / 'mif_results'
     assert (
-        h5_to_mif_main(
-            index_file=index_file,
-            directions_file=directions_file,
-            analysis_name='lm',
-            in_file=h5_file,
-            output_dir=output_dir,
+        h5_to_mif(
             example_mif=cohort_df['source_file'].iloc[0],
-            log_level='INFO',
+            in_file=h5_file,
+            analysis_name='lm',
+            compress=False,
+            output_dir=output_dir,
         )
         == 0
     )

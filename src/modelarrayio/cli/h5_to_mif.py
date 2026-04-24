@@ -49,6 +49,7 @@ def h5_to_mif(example_mif, in_file, analysis_name, compress, output_dir):
     # Use the example MIF as the template so layout and metadata stay native to MIF.
     template_img, _ = mif_to_image(example_mif)
     output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
     ext = '.mif.gz' if compress else '.mif'
     with h5py.File(in_file, 'r') as h5_data:
         results_matrix = h5_data[f'results/{analysis_name}/results_matrix']
@@ -79,6 +80,8 @@ def h5_to_mif(example_mif, in_file, analysis_name, compress, output_dir):
                 template_img=template_img,
                 out_file=out_mif_1mpvalue,
             )
+
+    return 0
 
 
 def write_mif(arr, template_img, out_file):
