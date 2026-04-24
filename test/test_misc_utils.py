@@ -139,9 +139,9 @@ class TestLoadAndNormalizeCohort:
 
     def test_detects_mif(self, tmp_path) -> None:
         cohort = tmp_path / 'cohort.csv'
-        pd.DataFrame(
-            {'scalar_name': ['FD', 'FD'], 'source_file': ['a.mif', 'b.mif']}
-        ).to_csv(cohort, index=False)
+        pd.DataFrame({'scalar_name': ['FD', 'FD'], 'source_file': ['a.mif', 'b.mif']}).to_csv(
+            cohort, index=False
+        )
         _, modality = load_and_normalize_cohort(cohort)
         assert modality == 'mif'
 
@@ -155,9 +155,9 @@ class TestLoadAndNormalizeCohort:
 
     def test_wide_format_detects_modality(self, tmp_path) -> None:
         cohort = tmp_path / 'cohort_wide.csv'
-        pd.DataFrame(
-            {'id': ['sub-01', 'sub-02'], 'FA': ['a.nii.gz', 'b.nii.gz']}
-        ).to_csv(cohort, index=False)
+        pd.DataFrame({'id': ['sub-01', 'sub-02'], 'FA': ['a.nii.gz', 'b.nii.gz']}).to_csv(
+            cohort, index=False
+        )
         df, modality = load_and_normalize_cohort(cohort, scalar_columns=['FA'])
         assert modality == 'nifti'
         assert len(df) == 2
@@ -175,7 +175,7 @@ class TestLoadAndNormalizeCohort:
         pd.DataFrame(
             {'scalar_name': ['FA', 'THICK'], 'source_file': ['a.nii.gz', 'b.dscalar.nii']}
         ).to_csv(cohort, index=False)
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(ValueError, match='mixed modalities') as exc_info:
             load_and_normalize_cohort(cohort)
         message = str(exc_info.value)
         assert 'nifti' in message
@@ -183,9 +183,9 @@ class TestLoadAndNormalizeCohort:
 
     def test_mixed_mif_and_nifti_raises(self, tmp_path) -> None:
         cohort = tmp_path / 'cohort.csv'
-        pd.DataFrame(
-            {'scalar_name': ['FD', 'FA'], 'source_file': ['a.mif', 'b.nii.gz']}
-        ).to_csv(cohort, index=False)
+        pd.DataFrame({'scalar_name': ['FD', 'FA'], 'source_file': ['a.mif', 'b.nii.gz']}).to_csv(
+            cohort, index=False
+        )
         with pytest.raises(ValueError, match='mixed modalities'):
             load_and_normalize_cohort(cohort)
 
@@ -203,9 +203,9 @@ class TestLoadAndNormalizeCohort:
 
     def test_unknown_extension_raises(self, tmp_path) -> None:
         cohort = tmp_path / 'cohort.csv'
-        pd.DataFrame(
-            {'scalar_name': ['WEIRD'], 'source_file': ['sub-01.unknown_ext']}
-        ).to_csv(cohort, index=False)
+        pd.DataFrame({'scalar_name': ['WEIRD'], 'source_file': ['sub-01.unknown_ext']}).to_csv(
+            cohort, index=False
+        )
         with pytest.raises(ValueError, match='Cannot detect modality'):
             load_and_normalize_cohort(cohort)
 

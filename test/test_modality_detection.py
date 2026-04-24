@@ -22,7 +22,6 @@ import modelarrayio.cli.to_modelarray as _to_modelarray_mod
 from modelarrayio.cli.export_results import export_results
 from modelarrayio.cli.to_modelarray import to_modelarray
 
-
 # ---------------------------------------------------------------------------
 # Shared fixtures / helpers
 # ---------------------------------------------------------------------------
@@ -88,9 +87,7 @@ class TestToModelarrayRouting:
     def test_nifti_gz_cohort_with_mask_calls_nifti_to_h5(self, tmp_path, monkeypatch):
         mask = tmp_path / 'mask.nii.gz'
         mask.touch()
-        cohort = _write_cohort(
-            tmp_path, [{'scalar_name': 'FA', 'source_file': 'sub-01.nii.gz'}]
-        )
+        cohort = _write_cohort(tmp_path, [{'scalar_name': 'FA', 'source_file': 'sub-01.nii.gz'}])
         mock = MagicMock(return_value=0)
         monkeypatch.setattr(_to_modelarray_mod, 'nifti_to_h5', mock)
         to_modelarray(cohort, output=tmp_path / 'out.h5', group_mask_file=mask)
@@ -99,9 +96,7 @@ class TestToModelarrayRouting:
     def test_uncompressed_nifti_cohort_with_mask_calls_nifti_to_h5(self, tmp_path, monkeypatch):
         mask = tmp_path / 'mask.nii.gz'
         mask.touch()
-        cohort = _write_cohort(
-            tmp_path, [{'scalar_name': 'FA', 'source_file': 'sub-01.nii'}]
-        )
+        cohort = _write_cohort(tmp_path, [{'scalar_name': 'FA', 'source_file': 'sub-01.nii'}])
         mock = MagicMock(return_value=0)
         monkeypatch.setattr(_to_modelarray_mod, 'nifti_to_h5', mock)
         to_modelarray(cohort, output=tmp_path / 'out.h5', group_mask_file=mask)
@@ -112,12 +107,12 @@ class TestToModelarrayRouting:
         directions = tmp_path / 'directions.mif'
         index.touch()
         directions.touch()
-        cohort = _write_cohort(
-            tmp_path, [{'scalar_name': 'FD', 'source_file': 'sub-01.mif'}]
-        )
+        cohort = _write_cohort(tmp_path, [{'scalar_name': 'FD', 'source_file': 'sub-01.mif'}])
         mock = MagicMock(return_value=0)
         monkeypatch.setattr(_to_modelarray_mod, 'mif_to_h5', mock)
-        to_modelarray(cohort, output=tmp_path / 'out.h5', index_file=index, directions_file=directions)
+        to_modelarray(
+            cohort, output=tmp_path / 'out.h5', index_file=index, directions_file=directions
+        )
         mock.assert_called_once()
 
     def test_mif_gz_cohort_with_both_mif_args_calls_mif_to_h5(self, tmp_path, monkeypatch):
@@ -125,12 +120,12 @@ class TestToModelarrayRouting:
         directions = tmp_path / 'directions.mif'
         index.touch()
         directions.touch()
-        cohort = _write_cohort(
-            tmp_path, [{'scalar_name': 'FD', 'source_file': 'sub-01.mif.gz'}]
-        )
+        cohort = _write_cohort(tmp_path, [{'scalar_name': 'FD', 'source_file': 'sub-01.mif.gz'}])
         mock = MagicMock(return_value=0)
         monkeypatch.setattr(_to_modelarray_mod, 'mif_to_h5', mock)
-        to_modelarray(cohort, output=tmp_path / 'out.h5', index_file=index, directions_file=directions)
+        to_modelarray(
+            cohort, output=tmp_path / 'out.h5', index_file=index, directions_file=directions
+        )
         mock.assert_called_once()
 
     def test_cohort_long_dataframe_is_passed_not_file_path(self, tmp_path, monkeypatch):
@@ -155,41 +150,31 @@ class TestToModelarrayUserErrors:
     """Errors raised when required flags are missing for the detected modality."""
 
     def test_nifti_cohort_without_mask_raises(self, tmp_path):
-        cohort = _write_cohort(
-            tmp_path, [{'scalar_name': 'FA', 'source_file': 'sub-01.nii.gz'}]
-        )
+        cohort = _write_cohort(tmp_path, [{'scalar_name': 'FA', 'source_file': 'sub-01.nii.gz'}])
         with pytest.raises(ValueError, match='--mask'):
             to_modelarray(cohort, output=tmp_path / 'out.h5')
 
     def test_nifti_cohort_without_mask_error_names_nifti(self, tmp_path):
-        cohort = _write_cohort(
-            tmp_path, [{'scalar_name': 'FA', 'source_file': 'sub-01.nii.gz'}]
-        )
+        cohort = _write_cohort(tmp_path, [{'scalar_name': 'FA', 'source_file': 'sub-01.nii.gz'}])
         with pytest.raises(ValueError, match='Detected NIfTI'):
             to_modelarray(cohort, output=tmp_path / 'out.h5')
 
     def test_mif_cohort_without_index_file_raises(self, tmp_path):
         directions = tmp_path / 'directions.mif'
         directions.touch()
-        cohort = _write_cohort(
-            tmp_path, [{'scalar_name': 'FD', 'source_file': 'sub-01.mif'}]
-        )
+        cohort = _write_cohort(tmp_path, [{'scalar_name': 'FD', 'source_file': 'sub-01.mif'}])
         with pytest.raises(ValueError, match='--index-file'):
             to_modelarray(cohort, output=tmp_path / 'out.h5', directions_file=directions)
 
     def test_mif_cohort_without_directions_file_raises(self, tmp_path):
         index = tmp_path / 'index.mif'
         index.touch()
-        cohort = _write_cohort(
-            tmp_path, [{'scalar_name': 'FD', 'source_file': 'sub-01.mif'}]
-        )
+        cohort = _write_cohort(tmp_path, [{'scalar_name': 'FD', 'source_file': 'sub-01.mif'}])
         with pytest.raises(ValueError, match='--directions-file'):
             to_modelarray(cohort, output=tmp_path / 'out.h5', index_file=index)
 
     def test_mif_cohort_without_any_mif_args_raises(self, tmp_path):
-        cohort = _write_cohort(
-            tmp_path, [{'scalar_name': 'FD', 'source_file': 'sub-01.mif'}]
-        )
+        cohort = _write_cohort(tmp_path, [{'scalar_name': 'FD', 'source_file': 'sub-01.mif'}])
         with pytest.raises(ValueError, match='MIF'):
             to_modelarray(cohort, output=tmp_path / 'out.h5')
 
@@ -262,7 +247,9 @@ class TestExportResultsRouting:
         mock = MagicMock(return_value=None)
         monkeypatch.setattr(_export_results_mod, 'h5_to_nifti', mock)
         result = export_results(
-            in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+            in_file=h5,
+            analysis_name='lm',
+            output_dir=tmp_path / 'out',
             group_mask_file=mask,
         )
         assert result == 0
@@ -280,8 +267,12 @@ class TestExportResultsRouting:
         monkeypatch.setattr(_export_results_mod, 'h5_to_mif', mock)
         monkeypatch.setattr(_export_results_mod.shutil, 'copyfile', MagicMock())
         result = export_results(
-            in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
-            index_file=index, directions_file=directions, example_file=example,
+            in_file=h5,
+            analysis_name='lm',
+            output_dir=tmp_path / 'out',
+            index_file=index,
+            directions_file=directions,
+            example_file=example,
         )
         assert result == 0
         mock.assert_called_once()
@@ -300,8 +291,12 @@ class TestExportResultsRouting:
         monkeypatch.setattr(_export_results_mod, 'h5_to_mif', mock)
         monkeypatch.setattr(_export_results_mod.shutil, 'copyfile', MagicMock())
         result = export_results(
-            in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
-            index_file=index, directions_file=directions, cohort_file=cohort,
+            in_file=h5,
+            analysis_name='lm',
+            output_dir=tmp_path / 'out',
+            index_file=index,
+            directions_file=directions,
+            cohort_file=cohort,
         )
         assert result == 0
         mock.assert_called_once()
@@ -313,7 +308,9 @@ class TestExportResultsRouting:
         mock = MagicMock(return_value=None)
         monkeypatch.setattr(_export_results_mod, 'h5_to_cifti', mock)
         result = export_results(
-            in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+            in_file=h5,
+            analysis_name='lm',
+            output_dir=tmp_path / 'out',
             example_file=example,
         )
         assert result == 0
@@ -326,7 +323,9 @@ class TestExportResultsRouting:
         mock = MagicMock(return_value=None)
         monkeypatch.setattr(_export_results_mod, 'h5_to_cifti', mock)
         result = export_results(
-            in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+            in_file=h5,
+            analysis_name='lm',
+            output_dir=tmp_path / 'out',
             example_file=example,
         )
         assert result == 0
@@ -339,7 +338,9 @@ class TestExportResultsRouting:
         mock = MagicMock(return_value=None)
         monkeypatch.setattr(_export_results_mod, 'h5_to_cifti', mock)
         result = export_results(
-            in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+            in_file=h5,
+            analysis_name='lm',
+            output_dir=tmp_path / 'out',
             example_file=example,
         )
         assert result == 0
@@ -355,7 +356,9 @@ class TestExportResultsRouting:
         mock = MagicMock(return_value=None)
         monkeypatch.setattr(_export_results_mod, 'h5_to_cifti', mock)
         result = export_results(
-            in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+            in_file=h5,
+            analysis_name='lm',
+            output_dir=tmp_path / 'out',
             cohort_file=cohort,
         )
         assert result == 0
@@ -375,8 +378,11 @@ class TestExportResultsRouting:
         monkeypatch.setattr(_export_results_mod, 'h5_to_nifti', nifti_mock)
         monkeypatch.setattr(_export_results_mod, 'h5_to_cifti', cifti_mock)
         export_results(
-            in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
-            group_mask_file=mask, cohort_file=cohort,
+            in_file=h5,
+            analysis_name='lm',
+            output_dir=tmp_path / 'out',
+            group_mask_file=mask,
+            cohort_file=cohort,
         )
         nifti_mock.assert_called_once()
         cifti_mock.assert_not_called()
@@ -404,7 +410,9 @@ class TestExportResultsUserErrors:
         example.touch()
         with pytest.raises(ValueError, match='appears to be NIfTI'):
             export_results(
-                in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+                in_file=h5,
+                analysis_name='lm',
+                output_dir=tmp_path / 'out',
                 example_file=example,
             )
 
@@ -414,7 +422,9 @@ class TestExportResultsUserErrors:
         example.touch()
         with pytest.raises(ValueError, match='--mask'):
             export_results(
-                in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+                in_file=h5,
+                analysis_name='lm',
+                output_dir=tmp_path / 'out',
                 example_file=example,
             )
 
@@ -424,7 +434,9 @@ class TestExportResultsUserErrors:
         example.touch()
         with pytest.raises(ValueError, match='appears to be NIfTI'):
             export_results(
-                in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+                in_file=h5,
+                analysis_name='lm',
+                output_dir=tmp_path / 'out',
                 example_file=example,
             )
 
@@ -436,7 +448,9 @@ class TestExportResultsUserErrors:
         )
         with pytest.raises(ValueError, match='appears to be NIfTI'):
             export_results(
-                in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+                in_file=h5,
+                analysis_name='lm',
+                output_dir=tmp_path / 'out',
                 cohort_file=cohort,
             )
 
@@ -449,7 +463,9 @@ class TestExportResultsUserErrors:
         example.touch()
         with pytest.raises(ValueError, match='appears to be MIF'):
             export_results(
-                in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+                in_file=h5,
+                analysis_name='lm',
+                output_dir=tmp_path / 'out',
                 example_file=example,
             )
 
@@ -459,7 +475,9 @@ class TestExportResultsUserErrors:
         example.touch()
         with pytest.raises(ValueError, match='--index-file'):
             export_results(
-                in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+                in_file=h5,
+                analysis_name='lm',
+                output_dir=tmp_path / 'out',
                 example_file=example,
             )
 
@@ -469,7 +487,9 @@ class TestExportResultsUserErrors:
         example.touch()
         with pytest.raises(ValueError, match='appears to be MIF'):
             export_results(
-                in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+                in_file=h5,
+                analysis_name='lm',
+                output_dir=tmp_path / 'out',
                 example_file=example,
             )
 
@@ -481,7 +501,9 @@ class TestExportResultsUserErrors:
         )
         with pytest.raises(ValueError, match='appears to be MIF'):
             export_results(
-                in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+                in_file=h5,
+                analysis_name='lm',
+                output_dir=tmp_path / 'out',
                 cohort_file=cohort,
             )
 
@@ -494,7 +516,9 @@ class TestExportResultsUserErrors:
         index.touch()
         with pytest.raises(ValueError, match='Both --index-file and --directions-file'):
             export_results(
-                in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+                in_file=h5,
+                analysis_name='lm',
+                output_dir=tmp_path / 'out',
                 index_file=index,
             )
 
@@ -505,7 +529,9 @@ class TestExportResultsUserErrors:
         directions.touch()
         with pytest.raises(ValueError, match='Both --index-file and --directions-file'):
             export_results(
-                in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+                in_file=h5,
+                analysis_name='lm',
+                output_dir=tmp_path / 'out',
                 directions_file=directions,
             )
 
@@ -518,8 +544,11 @@ class TestExportResultsUserErrors:
         directions.touch()
         with pytest.raises(ValueError, match='--cohort-file or --example-file'):
             export_results(
-                in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
-                index_file=index, directions_file=directions,
+                in_file=h5,
+                analysis_name='lm',
+                output_dir=tmp_path / 'out',
+                index_file=index,
+                directions_file=directions,
             )
 
     # -- Completely unrecognised file type --
@@ -532,6 +561,8 @@ class TestExportResultsUserErrors:
         example.touch()
         with pytest.raises(ValueError, match='Cannot detect modality'):
             export_results(
-                in_file=h5, analysis_name='lm', output_dir=tmp_path / 'out',
+                in_file=h5,
+                analysis_name='lm',
+                output_dir=tmp_path / 'out',
                 example_file=example,
             )
