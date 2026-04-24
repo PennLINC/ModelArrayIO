@@ -123,15 +123,14 @@ The voxel workflow is very similar to the fixel workflow
 # .. code-block:: console
 #
 #     modelarrayio export-results \
-#         --mask /home/username/myProject/data/group_mask.nii.gz \
-#         --cohort-file     /home/username/myProject/data/cohort_FA.csv \
+#         --mask            /home/username/myProject/data/group_mask.nii.gz \
 #         --analysis-name   mylm \
 #         --input-hdf5      /home/username/myProject/data/FA.h5 \
-#         --output-dir      /home/username/myProject/data/FA_stats \
-#         --output-ext      .nii.gz
+#         --output-dir      /home/username/myProject/data/FA_stats
 #
-# All converted volume data are saved as ``float32``.  Results in ``FA_stats`` can be viewed
-# with any NIfTI image viewer.
+# All converted volume data are saved as ``float32`` and compressed (``.nii.gz``) by default.
+# Pass ``--no-compress`` to write uncompressed ``.nii`` files instead.
+# Results in ``FA_stats`` can be viewed with any NIfTI image viewer.
 #
 # .. warning::
 #

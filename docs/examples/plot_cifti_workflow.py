@@ -103,7 +103,8 @@ The CIFTI workflow is very similar to the MIF workflow
 # After running **ModelArray** and obtaining statistical results inside ``FA.h5`` (suppose the
 # analysis name is ``"mylm"``), use ``modelarrayio export-results`` to export them as CIFTI files.
 #
-# You must also provide an example CIFTI file to use as a template for the output.
+# Supply either ``--cohort-file`` (the first ``source_file`` entry is used as a header template)
+# or ``--example-file`` (an explicit template path) — these two flags are mutually exclusive.
 #
 # .. code-block:: console
 #
@@ -111,8 +112,7 @@ The CIFTI workflow is very similar to the MIF workflow
 #         --cohort-file     /home/username/myProject/data/cohort_FA.csv \
 #         --analysis-name   mylm \
 #         --input-hdf5      /home/username/myProject/data/FA.h5 \
-#         --output-dir      /home/username/myProject/data/FA_stats \
-#         --example-cifti   /home/username/myProject/data/FA/sub-01_FA.dscalar.nii
+#         --output-dir      /home/username/myProject/data/FA_stats
 #
 # All converted volume data are saved as ``float32``.  Results in ``FA_stats`` can be viewed
 # with any CIFTI image viewer.
