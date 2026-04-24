@@ -15,6 +15,7 @@ from modelarrayio.cli.h5_to_cifti import h5_to_cifti
 from modelarrayio.cli.h5_to_mif import h5_to_mif
 from modelarrayio.cli.h5_to_nifti import h5_to_nifti
 from modelarrayio.cli.parser_utils import _is_file, add_log_level_arg
+from modelarrayio.cli.utils import detect_modality_from_path
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,26 @@ def export_results(
     elif index_file is not None or directions_file is not None:
         modality = 'mif'
     elif cohort_file is not None or example_file is not None:
+        # Resolve the template path and confirm the file is actually CIFTI.
+        # If the user passed a NIfTI or MIF file here without the modality-specific
+        # flags, catch it now with a clear message rather than failing deep inside
+        # the CIFTI export code with a cryptic AttributeError.
+        template_path = (
+            example_file
+            if example_file is not None
+            else pd.read_csv(cohort_file)['source_file'].iloc[0]
+        )
+        detected = detect_modality_from_path(str(template_path))
+        if detected == 'nifti':
+            raise ValueError(
+                f'The template file appears to be NIfTI ({template_path!r}). '
+                'For NIfTI results, supply a binary group mask with --mask.'
+            )
+        if detected == 'mif':
+            raise ValueError(
+                f'The template file appears to be MIF/fixel ({template_path!r}). '
+                'For MIF/fixel results, supply --index-file and --directions-file.'
+            )
         modality = 'cifti'
     else:
         raise ValueError(

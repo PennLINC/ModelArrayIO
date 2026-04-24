@@ -14,31 +14,10 @@ from modelarrayio.cli.cifti_to_h5 import cifti_to_h5
 from modelarrayio.cli.mif_to_h5 import mif_to_h5
 from modelarrayio.cli.nifti_to_h5 import nifti_to_h5
 from modelarrayio.cli.parser_utils import _is_file, add_log_level_arg
+from modelarrayio.cli.utils import detect_modality_from_path
 from modelarrayio.utils.misc import cohort_to_long_dataframe
 
 logger = logging.getLogger(__name__)
-
-_CIFTI_EXTENSIONS = (
-    '.dscalar.nii',
-    '.pscalar.nii',
-    '.pconn.nii',
-)
-
-
-def _detect_modality_from_path(path: str) -> str:
-    """Return ``'cifti'``, ``'mif'``, or ``'nifti'`` based on file extension."""
-    path = str(path)
-    if any(path.endswith(ext) for ext in _CIFTI_EXTENSIONS):
-        return 'cifti'
-    if path.endswith(('.mif.gz', '.mif')):
-        return 'mif'
-    if path.endswith(('.nii.gz', '.nii')):
-        return 'nifti'
-    raise ValueError(
-        f'Cannot detect modality from file extension: {path!r}. '
-        'Expected .mif, .nii, .nii.gz, or a CIFTI compound extension '
-        '(e.g. .dscalar.nii, .pscalar.nii).'
-    )
 
 
 def to_modelarray(
@@ -80,7 +59,7 @@ def to_modelarray(
         raise ValueError('Cohort file does not contain any scalar entries after normalization.')
 
     first_path = cohort_long['source_file'].iloc[0]
-    modality = _detect_modality_from_path(str(first_path))
+    modality = detect_modality_from_path(str(first_path))
     logger.info('Detected modality: %s', modality)
 
     common_kwargs = {
