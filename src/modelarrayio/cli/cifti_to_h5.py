@@ -7,7 +7,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import h5py
-import pandas as pd
 from tqdm import tqdm
 
 from modelarrayio.cli import utils as cli_utils
@@ -17,13 +16,13 @@ from modelarrayio.utils.cifti import (
     extract_cifti_scalar_data,
     load_cohort_cifti,
 )
-from modelarrayio.utils.misc import build_scalar_sources, cohort_to_long_dataframe
+from modelarrayio.utils.misc import build_scalar_sources
 
 logger = logging.getLogger(__name__)
 
 
 def cifti_to_h5(
-    cohort_file,
+    cohort_long,
     backend='hdf5',
     output=Path('greyordinatearray.h5'),
     storage_dtype='float32',
@@ -34,14 +33,15 @@ def cifti_to_h5(
     target_chunk_mb=2.0,
     workers=1,
     s3_workers=1,
-    scalar_columns=None,
+    split_outputs=False,
 ):
     """Load all CIFTI data and write to an HDF5 or TileDB file.
 
     Parameters
     ----------
-    cohort_file : :obj:`str`
-        Path to a csv with demographic info and paths to data
+    cohort_long : :obj:`pandas.DataFrame`
+        Normalised long-format cohort dataframe (from
+        :func:`~modelarrayio.utils.misc.load_and_normalize_cohort`).
     backend : :obj:`str`
         Backend to use for storage (``'hdf5'`` or ``'tiledb'``)
     output : :obj:`pathlib.Path`
@@ -65,23 +65,19 @@ def cifti_to_h5(
         Has no effect when ``backend='hdf5'``.
     s3_workers : :obj:`int`
         Number of workers for parallel S3 downloads
-    scalar_columns : :obj:`list`
-        List of scalar columns to use
+    split_outputs : :obj:`bool`
+        If True, write one output file per scalar. Default False.
 
     Returns
     -------
     status : :obj:`int`
         0 if successful, 1 if failed.
     """
-    cohort_df = pd.read_csv(cohort_file)
-    cohort_long = cohort_to_long_dataframe(cohort_df, scalar_columns=scalar_columns)
-    if cohort_long.empty:
-        raise ValueError('Cohort file does not contain any scalar entries after normalization.')
     scalar_sources = build_scalar_sources(cohort_long)
     if not scalar_sources:
         raise ValueError('Unable to derive scalar sources from cohort file.')
     scalar_names = list(scalar_sources.keys())
-    split_scalar_outputs = bool(scalar_columns)
+    split_scalar_outputs = split_outputs
 
     _first_scalar, first_sources = next(iter(scalar_sources.items()))
     first_path = first_sources[0]

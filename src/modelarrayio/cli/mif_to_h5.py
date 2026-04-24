@@ -7,12 +7,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import h5py
-import pandas as pd
 from tqdm import tqdm
 
 from modelarrayio.cli import utils as cli_utils
 from modelarrayio.utils.mif import gather_fixels, load_cohort_mif
-from modelarrayio.utils.misc import cohort_to_long_dataframe
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +18,7 @@ logger = logging.getLogger(__name__)
 def mif_to_h5(
     index_file,
     directions_file,
-    cohort_file,
+    cohort_long,
     backend='hdf5',
     output=Path('fixelarray.h5'),
     storage_dtype='float32',
@@ -31,7 +29,7 @@ def mif_to_h5(
     target_chunk_mb=2.0,
     workers=1,
     s3_workers=1,
-    scalar_columns=None,
+    split_outputs=False,
 ):
     """Load all fixeldb data and write to an HDF5 or TileDB file.
 
@@ -41,8 +39,9 @@ def mif_to_h5(
         Path to a Nifti2 index file
     directions_file : :obj:`pathlib.Path`
         Path to a Nifti2 directions file
-    cohort_file : :obj:`pathlib.Path`
-        Path to a csv with demographic info and paths to data
+    cohort_long : :obj:`pandas.DataFrame`
+        Normalised long-format cohort dataframe (from
+        :func:`~modelarrayio.utils.misc.load_and_normalize_cohort`).
     backend : :obj:`str`
         Backend to use for storage (``'hdf5'`` or ``'tiledb'``)
     output : :obj:`pathlib.Path`
@@ -66,6 +65,8 @@ def mif_to_h5(
         Has no effect when ``backend='hdf5'``.
     s3_workers : :obj:`int`
         Number of parallel workers for S3 downloads. Default 1.
+    split_outputs : :obj:`bool`
+        If True, write one output file per scalar. Default False.
 
     Returns
     -------
@@ -75,18 +76,13 @@ def mif_to_h5(
     # gather fixel data
     fixel_table, voxel_table = gather_fixels(index_file, directions_file)
 
-    cohort_df = pd.read_csv(cohort_file)
-    cohort_long = cohort_to_long_dataframe(cohort_df, scalar_columns=scalar_columns)
-    if cohort_long.empty:
-        raise ValueError('Cohort file does not contain any scalar entries after normalization.')
-
     logger.info('Extracting .mif data...')
     scalars, sources_lists = load_cohort_mif(cohort_long, s3_workers)
     if not sources_lists:
         raise ValueError('Unable to derive scalar sources from cohort file.')
 
     scalar_names = list(sources_lists.keys())
-    split_scalar_outputs = bool(scalar_columns)
+    split_scalar_outputs = split_outputs
 
     if backend == 'hdf5':
         if split_scalar_outputs:

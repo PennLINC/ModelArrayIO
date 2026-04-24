@@ -7,15 +7,12 @@ import logging
 from functools import partial
 from pathlib import Path
 
-import pandas as pd
-
 from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.cifti_to_h5 import cifti_to_h5
 from modelarrayio.cli.mif_to_h5 import mif_to_h5
 from modelarrayio.cli.nifti_to_h5 import nifti_to_h5
 from modelarrayio.cli.parser_utils import _is_file, add_log_level_arg
-from modelarrayio.cli.utils import detect_modality_from_path
-from modelarrayio.utils.misc import cohort_to_long_dataframe
+from modelarrayio.utils.misc import load_and_normalize_cohort
 
 logger = logging.getLogger(__name__)
 
@@ -53,17 +50,11 @@ def to_modelarray(
     directions_file : path-like, optional
         Nifti2 directions file. Required for MIF/fixel data.
     """
-    cohort_df = pd.read_csv(cohort_file)
-    cohort_long = cohort_to_long_dataframe(cohort_df, scalar_columns=scalar_columns)
-    if cohort_long.empty:
-        raise ValueError('Cohort file does not contain any scalar entries after normalization.')
-
-    first_path = cohort_long['source_file'].iloc[0]
-    modality = detect_modality_from_path(str(first_path))
+    cohort_long, modality = load_and_normalize_cohort(cohort_file, scalar_columns=scalar_columns)
     logger.info('Detected modality: %s', modality)
 
     common_kwargs = {
-        'cohort_file': cohort_file,
+        'cohort_long': cohort_long,
         'backend': backend,
         'output': output,
         'storage_dtype': storage_dtype,
@@ -74,7 +65,7 @@ def to_modelarray(
         'target_chunk_mb': target_chunk_mb,
         'workers': workers,
         's3_workers': s3_workers,
-        'scalar_columns': scalar_columns,
+        'split_outputs': bool(scalar_columns),
     }
 
     if modality == 'nifti':

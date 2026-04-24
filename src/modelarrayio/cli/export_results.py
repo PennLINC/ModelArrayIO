@@ -15,7 +15,7 @@ from modelarrayio.cli.h5_to_cifti import h5_to_cifti
 from modelarrayio.cli.h5_to_mif import h5_to_mif
 from modelarrayio.cli.h5_to_nifti import h5_to_nifti
 from modelarrayio.cli.parser_utils import _is_file, add_log_level_arg
-from modelarrayio.cli.utils import detect_modality_from_path
+from modelarrayio.utils.misc import detect_modality_from_path
 
 logger = logging.getLogger(__name__)
 

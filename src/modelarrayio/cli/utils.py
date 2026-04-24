@@ -186,45 +186,6 @@ def write_tiledb_parcel_arrays(
         )
 
 
-_CIFTI_EXTENSIONS = (
-    '.dscalar.nii',
-    '.pscalar.nii',
-    '.pconn.nii',
-)
-
-
-def detect_modality_from_path(path: str) -> str:
-    """Return ``'cifti'``, ``'mif'``, or ``'nifti'`` based on file extension.
-
-    Parameters
-    ----------
-    path : str
-        File path whose extension is used to identify the neuroimaging modality.
-
-    Returns
-    -------
-    str
-        One of ``'cifti'``, ``'mif'``, or ``'nifti'``.
-
-    Raises
-    ------
-    ValueError
-        If the extension is not recognised.
-    """
-    path = str(path)
-    if any(path.endswith(ext) for ext in _CIFTI_EXTENSIONS):
-        return 'cifti'
-    if path.endswith(('.mif.gz', '.mif')):
-        return 'mif'
-    if path.endswith(('.nii.gz', '.nii')):
-        return 'nifti'
-    raise ValueError(
-        f'Cannot detect modality from file extension: {path!r}. '
-        'Expected .mif, .nii, .nii.gz, or a CIFTI compound extension '
-        '(e.g. .dscalar.nii, .pscalar.nii).'
-    )
-
-
 def sanitize_result_name(result_name: str) -> str:
     """Normalize an analysis result name for use in filenames."""
     return str(result_name).replace(' ', '_').replace('/', '_')

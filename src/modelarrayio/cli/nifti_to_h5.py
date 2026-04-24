@@ -13,7 +13,6 @@ import pandas as pd
 from tqdm import tqdm
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.utils.misc import cohort_to_long_dataframe
 from modelarrayio.utils.nifti import load_cohort_voxels
 
 logger = logging.getLogger(__name__)
@@ -21,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def nifti_to_h5(
     group_mask_file,
-    cohort_file,
+    cohort_long,
     backend='hdf5',
     output=Path('voxelarray.h5'),
     storage_dtype='float32',
@@ -32,7 +31,7 @@ def nifti_to_h5(
     target_chunk_mb=2.0,
     workers=1,
     s3_workers=1,
-    scalar_columns=None,
+    split_outputs=False,
 ):
     """Load all volume data and write to an HDF5 or TileDB file.
 
@@ -40,8 +39,9 @@ def nifti_to_h5(
     ----------
     group_mask_file : :obj:`str`
         Path to a NIfTI-1 binary group mask file.
-    cohort_file : :obj:`str`
-        Path to a CSV with demographic info and paths to data.
+    cohort_long : :obj:`pandas.DataFrame`
+        Normalised long-format cohort dataframe (from
+        :func:`~modelarrayio.utils.misc.load_and_normalize_cohort`).
     backend : :obj:`str`
         Storage backend (``'hdf5'`` or ``'tiledb'``).
     output : :obj:`pathlib.Path`
@@ -65,15 +65,13 @@ def nifti_to_h5(
         Has no effect when ``backend='hdf5'``.
     s3_workers : :obj:`int`
         Number of parallel workers for S3 downloads. Default 1.
+    split_outputs : :obj:`bool`
+        If True, write one output file per scalar. Default False.
     """
     group_mask_img = nb.load(group_mask_file)
     group_mask_matrix = group_mask_img.get_fdata() > 0
     voxel_coords = np.column_stack(np.nonzero(group_mask_matrix))
 
-    cohort_df = pd.read_csv(cohort_file)
-    cohort_long = cohort_to_long_dataframe(cohort_df, scalar_columns=scalar_columns)
-    if cohort_long.empty:
-        raise ValueError('Cohort file does not contain any scalar entries after normalization.')
     voxel_table = pd.DataFrame(
         {
             'voxel_id': np.arange(voxel_coords.shape[0]),
@@ -89,7 +87,7 @@ def nifti_to_h5(
         raise ValueError('Unable to derive scalar sources from cohort file.')
 
     scalar_names = list(sources_lists.keys())
-    split_scalar_outputs = bool(scalar_columns)
+    split_scalar_outputs = split_outputs
 
     if backend == 'hdf5':
         if split_scalar_outputs:
