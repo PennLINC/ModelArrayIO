@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import h5py
-import nibabel as nb
 import numpy as np
 import pandas as pd
 import pytest
@@ -13,33 +12,6 @@ import pytest
 from modelarrayio.cli.h5_to_mif import h5_to_mif_main
 from modelarrayio.cli.mif_to_h5 import mif_to_h5
 from modelarrayio.utils import mif
-
-
-def _make_nifti2(shape=(2, 1, 1), affine=None) -> nb.Nifti2Image:
-    data = np.zeros(shape, dtype=np.float32)
-    return nb.Nifti2Image(data, affine=np.eye(4) if affine is None else affine)
-
-
-def test_nifti2_to_mif_round_trip_uses_direct_mif_io(tmp_path) -> None:
-    affine = np.array(
-        [
-            [1.5, 0.0, 0.0, 10.0],
-            [0.0, 2.0, 0.0, -5.0],
-            [0.0, 0.0, 2.5, 3.0],
-            [0.0, 0.0, 0.0, 1.0],
-        ]
-    )
-    nifti_img = _make_nifti2(shape=(4, 1, 1), affine=affine)
-    nifti_img.dataobj[:] = np.arange(4, dtype=np.float32).reshape(4, 1, 1)
-
-    out_file = tmp_path / 'out.mif'
-    mif.nifti2_to_mif(nifti_img, out_file)
-
-    mif_img, mif_data = mif.mif_to_image(out_file)
-
-    assert isinstance(mif_img, mif.MifImage)
-    np.testing.assert_allclose(mif_img.affine, affine)
-    np.testing.assert_allclose(mif_data, np.arange(4, dtype=np.float32))
 
 
 @pytest.mark.downloaded_data

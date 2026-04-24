@@ -14,7 +14,7 @@ import pandas as pd
 
 from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.parser_utils import _is_file, add_from_modelarray_args, add_log_level_arg
-from modelarrayio.utils.mif import MifImage, image_to_mif, mif_to_image
+from modelarrayio.utils.mif import MifImage, mif_to_image
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ def h5_to_mif(example_mif, in_file, analysis_name, output_dir):
             result_header.set_data_shape(result_data.shape)
             result_header.set_data_dtype(result_data.dtype)
             result_img = MifImage(result_data, template_img.affine, header=result_header)
-            image_to_mif(result_img, out_mif)
+            result_img.to_filename(out_mif)
 
             if 'p.value' not in valid_result_name:
                 continue
@@ -88,7 +88,7 @@ def h5_to_mif(example_mif, in_file, analysis_name, output_dir):
                 template_img.affine,
                 header=output_header_1mpvalue,
             )
-            image_to_mif(output_img_1mpvalue, out_mif_1mpvalue)
+            output_img_1mpvalue.to_filename(out_mif_1mpvalue)
 
 
 def h5_to_mif_main(

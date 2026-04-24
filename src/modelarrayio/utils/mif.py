@@ -14,39 +14,6 @@ from nibabel.spatialimages import SpatialImage
 from tqdm import tqdm
 
 
-def image_to_mif(image: SpatialImage, mif_file):
-    """Write a nibabel image to a `.mif` file.
-
-    Parameters
-    ----------
-    image : :obj:`nibabel.spatialimages.SpatialImage`
-        In-memory image to write.
-    mif_file : :obj:`str`
-        Path to a .mif file
-    """
-    output_path = Path(mif_file)
-    if isinstance(image, MifImage):
-        mif_image = image
-    else:
-        source_header = image.header if isinstance(image.header, MifHeader) else None
-        header = source_header.copy() if source_header is not None else None
-        mif_image = MifImage(np.asanyarray(image.dataobj), image.affine, header=header)
-
-    mif_image.to_filename(output_path)
-
-    if not output_path.exists():
-        raise RuntimeError(f'Failed to create expected output file: {output_path}')
-
-
-def nifti2_to_mif(nifti2_image, mif_file):
-    """Convert an in-memory nibabel image to a `.mif` file.
-
-    This compatibility wrapper now writes the data directly with
-    :class:`MifImage` instead of shelling out through a temporary NIfTI file.
-    """
-    image_to_mif(nifti2_image, mif_file)
-
-
 def mif_to_image(mif_file):
     """Load a `.mif` file into a :class:`MifImage`.
 
