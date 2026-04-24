@@ -62,6 +62,10 @@ def h5_to_mif(example_mif, in_file, analysis_name, output_dir):
         for result_col, result_name in enumerate(results_names):
             valid_result_name = cli_utils.sanitize_result_name(result_name)
             out_mif = output_path / f'{analysis_name}_{valid_result_name}.mif'
+            if out_mif.exists():
+                logger.warning('Output file already exists. Not overwriting. %s', out_mif)
+                continue
+
             result_data = np.asarray(results_matrix[result_col, :], dtype=np.float32).reshape(
                 template_shape
             )
@@ -76,6 +80,10 @@ def h5_to_mif(example_mif, in_file, analysis_name, output_dir):
 
             valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
             out_mif_1mpvalue = output_path / f'{analysis_name}_{valid_result_name_1mpvalue}.mif'
+            if out_mif_1mpvalue.exists():
+                logger.warning('Output file already exists. Not overwriting. %s', out_mif_1mpvalue)
+                continue
+
             output_mifvalues_1mpvalue = np.asarray(
                 1 - results_matrix[result_col, :],
                 dtype=np.float32,
