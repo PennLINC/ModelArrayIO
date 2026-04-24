@@ -2,9 +2,9 @@
 CIFTI (Greyordinate-wise) Data Conversion
 =========================================
 
-For imaging data in CIFTI format, use the ``modelarrayio cifti-to-h5`` command to convert
+For imaging data in CIFTI format, use the ``modelarrayio to-modelarray`` command to convert
 the CIFTI files to the HDF5 format (``.h5``) used by **ModelArray**,
-and ``modelarrayio h5-to-cifti`` to export results back to CIFTI.
+and ``modelarrayio export-results`` to export results back to CIFTI.
 The CIFTI workflow is very similar to the MIF workflow
 (:ref:`sphx_glr_auto_examples_plot_mif_workflow.py`).
 """
@@ -89,7 +89,7 @@ The CIFTI workflow is very similar to the MIF workflow
 #     # activate your conda environment first
 #     conda activate <env_name>
 #
-#     modelarrayio cifti-to-h5 \
+#     modelarrayio to-modelarray \
 #         --cohort-file     /home/username/myProject/data/cohort_FA.csv \
 #         --output          /home/username/myProject/data/FA.h5
 #
@@ -101,29 +101,29 @@ The CIFTI workflow is very similar to the MIF workflow
 # --------------------------------
 #
 # After running **ModelArray** and obtaining statistical results inside ``FA.h5`` (suppose the
-# analysis name is ``"mylm"``), use ``modelarrayio h5-to-cifti`` to export them as CIFTI files.
+# analysis name is ``"mylm"``), use ``modelarrayio export-results`` to export them as CIFTI files.
 #
-# You must also provide an example CIFTI file to use as a template for the output.
+# Supply either ``--cohort-file`` (the first ``source_file`` entry is used as a header template)
+# or ``--example-file`` (an explicit template path) — these two flags are mutually exclusive.
 #
 # .. code-block:: console
 #
-#     modelarrayio h5-to-cifti \
+#     modelarrayio export-results \
 #         --cohort-file     /home/username/myProject/data/cohort_FA.csv \
 #         --analysis-name   mylm \
 #         --input-hdf5      /home/username/myProject/data/FA.h5 \
-#         --output-dir      /home/username/myProject/data/FA_stats \
-#         --example-cifti   /home/username/myProject/data/FA/sub-01_FA.dscalar.nii
+#         --output-dir      /home/username/myProject/data/FA_stats
 #
 # All converted volume data are saved as ``float32``.  Results in ``FA_stats`` can be viewed
 # with any CIFTI image viewer.
 #
 # .. warning::
 #
-#    If ``--output-dir`` already exists, ``modelarrayio h5-to-cifti`` will not delete it — you will
+#    If ``--output-dir`` already exists, ``modelarrayio export-results`` will not delete it — you will
 #    see ``WARNING: Output directory exists``.  Existing files that are **not** part of the
 #    current output list are left unchanged.  Existing files that **are** part of the current
 #    output list will be overwritten.  To avoid confusion, consider manually deleting the output
-#    directory before re-running ``modelarrayio h5-to-cifti``.
+#    directory before re-running ``modelarrayio export-results``.
 
 # %%
 # Number-of-observations image
@@ -161,7 +161,7 @@ The CIFTI workflow is very similar to the MIF workflow
 #
 # .. code-block:: console
 #
-#     modelarrayio cifti-to-h5 --help
-#     modelarrayio h5-to-cifti --help
+#     modelarrayio to-modelarray --help
+#     modelarrayio export-results --help
 #
 # or in the :doc:`/usage` page of this documentation.

@@ -3,9 +3,9 @@ MIF (Fixel-wise) Data Conversion
 ================================
 
 To convert fixel-wise data in MIF format to HDF5 format,
-use the ``modelarrayio mif-to-h5`` command to convert the MIF files to the HDF5 format
+use the ``modelarrayio to-modelarray`` command to convert the MIF files to the HDF5 format
 (``.h5``) used by **ModelArray**,
-and ``modelarrayio h5-to-mif`` to export results back to MIF.
+and ``modelarrayio export-results`` to export results back to MIF.
 This guide assumes **ModelArrayIO** and **MRtrix** are already installed.
 """
 
@@ -100,7 +100,7 @@ This guide assumes **ModelArrayIO** and **MRtrix** are already installed.
 #     # activate your conda environment first
 #     conda activate <env_name>
 #
-#     modelarrayio mif-to-h5 \
+#     modelarrayio to-modelarray \
 #         --index-file      /home/username/myProject/data/FD/index.mif \
 #         --directions-file /home/username/myProject/data/FD/directions.mif \
 #         --cohort-file     /home/username/myProject/data/cohort_FD.csv \
@@ -114,13 +114,13 @@ This guide assumes **ModelArrayIO** and **MRtrix** are already installed.
 # --------------------------------------
 #
 # After running ModelArray and obtaining statistical results inside ``FD.h5`` (suppose the
-# analysis name is ``"mylm"``), use ``modelarrayio h5-to-mif`` to export them as ``.mif`` files.
+# analysis name is ``"mylm"``), use ``modelarrayio export-results`` to export them as ``.mif`` files.
 # The command also copies the original ``index.mif`` and ``directions.mif`` into the output
 # folder.
 #
 # .. code-block:: console
 #
-#     modelarrayio h5-to-mif \
+#     modelarrayio export-results \
 #         --index-file      /home/username/myProject/data/FD/index.mif \
 #         --directions-file /home/username/myProject/data/FD/directions.mif \
 #         --cohort-file     /home/username/myProject/data/cohort_FD.csv \
@@ -132,11 +132,11 @@ This guide assumes **ModelArrayIO** and **MRtrix** are already installed.
 #
 # .. warning::
 #
-#    **Existing files are not overwritten.**  ``modelarrayio h5-to-mif`` calls ``mrconvert`` without
+#    **Existing files are not overwritten.**  ``modelarrayio export-results`` calls ``mrconvert`` without
 #    ``-force``, so any ``.mif`` file already present in ``--output-dir`` with the same name
 #    will be left unchanged.  If ``--output-dir`` itself already exists you will see a
 #    ``WARNING: Output directory exists`` message, but no files will be deleted.  To start
-#    fresh, manually remove the output directory before re-running ``modelarrayio h5-to-mif``.
+#    fresh, manually remove the output directory before re-running ``modelarrayio export-results``.
 
 # %%
 # Additional help
@@ -146,7 +146,7 @@ This guide assumes **ModelArrayIO** and **MRtrix** are already installed.
 #
 # .. code-block:: console
 #
-#     modelarrayio mif-to-h5 --help
-#     modelarrayio h5-to-mif --help
+#     modelarrayio to-modelarray --help
+#     modelarrayio export-results --help
 #
 # or in the :doc:`/usage` page of this documentation.
