@@ -14,16 +14,6 @@ If you want to use the most up-to-date version, you can install from the ``main`
     pip install git+https://github.com/PennLINC/ModelArrayIO.git
 
 
-MRtrix (required for fixel ``.mif`` only)
------------------------------------------
-
-For fixel-wise ``.mif`` conversion, the ``modelarrayio mif-to-h5`` / ``modelarrayio h5-to-mif`` tools use MRtrix ``mrconvert``.
-Install MRtrix from `MRtrix's webpage <https://www.mrtrix.org/download/>`_ if needed.
-Run ``mrview`` in the terminal to verify the installation.
-
-If your data are in NIfTI or CIFTI format only, you can skip this step.
-
-
 What Next?
 ----------
 

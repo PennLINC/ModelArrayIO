@@ -132,8 +132,8 @@ This guide assumes **ModelArrayIO** and **MRtrix** are already installed.
 #
 # .. warning::
 #
-#    **Existing files are not overwritten.**  ``modelarrayio h5-to-mif`` calls ``mrconvert`` without
-#    ``-force``, so any ``.mif`` file already present in ``--output-dir`` with the same name
+#    **Existing files are not overwritten.**  with ``modelarrayio h5-to-mif``, any ``.mif`` file
+#    already present in ``--output-dir`` with the same name
 #    will be left unchanged.  If ``--output-dir`` itself already exists you will see a
 #    ``WARNING: Output directory exists`` message, but no files will be deleted.  To start
 #    fresh, manually remove the output directory before re-running ``modelarrayio h5-to-mif``.
