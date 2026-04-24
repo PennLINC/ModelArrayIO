@@ -6,10 +6,10 @@ import logging
 from pathlib import Path
 
 import h5py
-import nibabel as nb
+import numpy as np
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.utils.mif import mif_to_nifti2, nifti2_to_mif
+from modelarrayio.utils.mif import MifImage, mif_to_image
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +24,9 @@ def h5_to_mif(example_mif, in_file, analysis_name, compress, output_dir):
     named ``results/has_names``. This data can be of any type and does not need to contain
     more than a single row of data. Instead, its attributes are read to get column names
     for the data represented in ``results/results_matrix``.
-    The function takes the example mif file and converts it to Nifti2 to get a header.
-    Then each column in ``results/results_matrix`` is extracted to fill the data of a
-    new Nifti2 file that gets converted to mif and named according to the corresponding
-    item in ``results/has_names``.
+    The function takes the example mif file as a template header. Then each column in
+    ``results/results_matrix`` is extracted to fill the data of a new ``MifImage`` and
+    named according to the corresponding item in ``results/has_names``.
 
     Parameters
     ----------
@@ -47,9 +46,10 @@ def h5_to_mif(example_mif, in_file, analysis_name, compress, output_dir):
     -------
     None
     """
-    # Get a template nifti image.
-    nifti2_img, _ = mif_to_nifti2(example_mif)
+    # Use the example MIF as the template so layout and metadata stay native to MIF.
+    template_img, _ = mif_to_image(example_mif)
     output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
     ext = '.mif.gz' if compress else '.mif'
     with h5py.File(in_file, 'r') as h5_data:
         results_matrix = h5_data[f'results/{analysis_name}/results_matrix']
@@ -60,22 +60,50 @@ def h5_to_mif(example_mif, in_file, analysis_name, compress, output_dir):
         for result_col, result_name in enumerate(results_names):
             valid_result_name = cli_utils.sanitize_result_name(result_name)
             out_mif = output_path / f'{analysis_name}_{valid_result_name}{ext}'
-            temp_nifti2 = nb.Nifti2Image(
-                results_matrix[result_col, :].reshape(-1, 1, 1),
-                nifti2_img.affine,
-                header=nifti2_img.header,
+            write_mif(
+                arr=np.asarray(results_matrix[result_col, :], dtype=np.float32),
+                template_img=template_img,
+                out_file=out_mif,
             )
-            nifti2_to_mif(temp_nifti2, out_mif)
 
             if 'p.value' not in valid_result_name:
                 continue
 
             valid_result_name_1mpvalue = valid_result_name.replace('p.value', '1m.p.value')
             out_mif_1mpvalue = output_path / f'{analysis_name}_{valid_result_name_1mpvalue}{ext}'
-            output_mifvalues_1mpvalue = 1 - results_matrix[result_col, :]
-            temp_nifti2_1mpvalue = nb.Nifti2Image(
-                output_mifvalues_1mpvalue.reshape(-1, 1, 1),
-                nifti2_img.affine,
-                header=nifti2_img.header,
+            output_mifvalues_1mpvalue = np.asarray(
+                1 - results_matrix[result_col, :],
+                dtype=np.float32,
             )
-            nifti2_to_mif(temp_nifti2_1mpvalue, out_mif_1mpvalue)
+            write_mif(
+                arr=output_mifvalues_1mpvalue,
+                template_img=template_img,
+                out_file=out_mif_1mpvalue,
+            )
+
+    return 0
+
+
+def write_mif(arr, template_img, out_file):
+    """Write array to MIF file.
+
+    Parameters
+    ----------
+    arr : :obj:`numpy.ndarray`
+        Array to write to file.
+    template_img : :obj:`MifImage`
+        Template MIF image.
+    out_file : :obj:`pathlib.Path`
+        Output file to write.
+        If it already exists, this function will raise a warning and not overwrite.
+    """
+    if out_file.exists():
+        logger.warning('Output file already exists. Not overwriting. %s', out_file)
+        return
+
+    result_data = arr.reshape(template_img.shape)
+    result_header = template_img.header.copy()
+    result_header.set_data_shape(result_data.shape)
+    result_header.set_data_dtype(result_data.dtype)
+    result_img = MifImage(result_data, template_img.affine, header=result_header)
+    result_img.to_filename(out_file)

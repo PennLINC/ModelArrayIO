@@ -44,6 +44,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install mrtrix3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mrtrix3
+          mrconvert -version | head -1
+
       - name: Install the latest version of uv
         uses: astral-sh/setup-uv@v8.0.0
 
