@@ -181,7 +181,7 @@ Triggered by providing ``--index-file`` and ``--directions-file``.
 
 Writes one MIF file per result to ``--output-dir``:
 
-- ``<analysis_name>_<result_name>.mif``.
+- ``<analysis_name>_<result_name>.mif.gz``.
 - If a result name contains ``p.value``, also writes the ``1 - p.value`` companion file
   with ``1m.p.value`` in its name.
 
