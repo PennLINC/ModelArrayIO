@@ -142,8 +142,7 @@ def load_and_normalize_cohort(
         raise ValueError('Cohort file does not contain any scalar entries after normalization.')
 
     modalities = {
-        detect_modality_from_path(str(path))
-        for path in cohort_long['source_file'].unique()
+        detect_modality_from_path(str(path)) for path in cohort_long['source_file'].unique()
     }
     if len(modalities) > 1:
         raise ValueError(
