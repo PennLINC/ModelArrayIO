@@ -6,7 +6,7 @@ To convert fixel-wise data in MIF format to HDF5 format,
 use the ``modelarrayio mif-to-h5`` command to convert the MIF files to the HDF5 format
 (``.h5``) used by **ModelArray**,
 and ``modelarrayio h5-to-mif`` to export results back to MIF.
-This guide assumes **ModelArrayIO** and **MRtrix** are already installed.
+This guide assumes **ModelArrayIO** is already installed.
 """
 
 # %%
