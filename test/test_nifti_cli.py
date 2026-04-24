@@ -1,4 +1,4 @@
-"""Tests for the nifti-to-h5 and h5-to-nifti CLI commands."""
+"""Tests for the to-modelarray and export-results CLI commands (NIfTI modality)."""
 
 from __future__ import annotations
 
@@ -76,8 +76,8 @@ def test_nifti_to_h5_creates_expected_hdf5(tmp_path, monkeypatch):
     assert (
         modelarrayio_main(
             [
-                'nifti-to-h5',
-                '--group-mask-file',
+                'to-modelarray',
+                '--mask',
                 str(group_mask_file),
                 '--cohort-file',
                 str(cohort_csv),
@@ -176,8 +176,8 @@ def test_h5_to_nifti_writes_results_with_dataset_column_names(tmp_path):
     assert (
         modelarrayio_main(
             [
-                'h5-to-nifti',
-                '--group-mask-file',
+                'export-results',
+                '--mask',
                 str(group_mask_file),
                 '--analysis-name',
                 'lm',
@@ -256,8 +256,8 @@ def test_nifti_to_h5_scalar_columns_writes_prefixed_outputs(tmp_path, monkeypatc
     assert (
         modelarrayio_main(
             [
-                'nifti-to-h5',
-                '--group-mask-file',
+                'to-modelarray',
+                '--mask',
                 str(group_mask_file),
                 '--cohort-file',
                 str(cohort_csv),
@@ -333,8 +333,8 @@ def test_nifti_tiledb_removes_existing_arrays_on_rerun(tmp_path, monkeypatch, ca
     monkeypatch.chdir(tmp_path)
 
     cli_args = [
-        'nifti-to-h5',
-        '--group-mask-file',
+        'to-modelarray',
+        '--mask',
         str(group_mask_file),
         '--cohort-file',
         str(cohort_csv),

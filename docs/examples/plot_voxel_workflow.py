@@ -2,9 +2,9 @@
 NIfTI (Voxel-wise) Data Conversion
 ==================================
 
-For imaging data in NIfTI format, use the ``modelarrayio nifti-to-h5`` command to convert
+For imaging data in NIfTI format, use the ``modelarrayio to-modelarray`` command to convert
 the NIfTI files to the HDF5 format (``.h5``) used by **ModelArray**,
-and ``modelarrayio h5-to-nifti`` to export results back to NIfTI.
+and ``modelarrayio export-results`` to export results back to NIfTI.
 The voxel workflow is very similar to the fixel workflow
 (:ref:`sphx_glr_auto_examples_plot_mif_workflow.py`).
 """
@@ -105,8 +105,8 @@ The voxel workflow is very similar to the fixel workflow
 #     # activate your conda environment first
 #     conda activate <env_name>
 #
-#     modelarrayio nifti-to-h5 \
-#         --group-mask-file /home/username/myProject/data/group_mask.nii.gz \
+#     modelarrayio to-modelarray \
+#         --mask /home/username/myProject/data/group_mask.nii.gz \
 #         --cohort-file     /home/username/myProject/data/cohort_FA.csv \
 #         --output          /home/username/myProject/data/FA.h5
 #
@@ -118,28 +118,27 @@ The voxel workflow is very similar to the fixel workflow
 # --------------------------------
 #
 # After running **ModelArray** and obtaining statistical results inside ``FA.h5`` (suppose the
-# analysis name is ``"mylm"``), use ``modelarrayio h5-to-nifti`` to export them as NIfTI files.
+# analysis name is ``"mylm"``), use ``modelarrayio export-results`` to export them as NIfTI files.
 #
 # .. code-block:: console
 #
-#     modelarrayio h5-to-nifti \
-#         --group-mask-file /home/username/myProject/data/group_mask.nii.gz \
-#         --cohort-file     /home/username/myProject/data/cohort_FA.csv \
+#     modelarrayio export-results \
+#         --mask            /home/username/myProject/data/group_mask.nii.gz \
 #         --analysis-name   mylm \
 #         --input-hdf5      /home/username/myProject/data/FA.h5 \
-#         --output-dir      /home/username/myProject/data/FA_stats \
-#         --output-ext      .nii.gz
+#         --output-dir      /home/username/myProject/data/FA_stats
 #
-# All converted volume data are saved as ``float32``.  Results in ``FA_stats`` can be viewed
-# with any NIfTI image viewer.
+# All converted volume data are saved as ``float32`` and compressed (``.nii.gz``) by default.
+# Pass ``--no-compress`` to write uncompressed ``.nii`` files instead.
+# Results in ``FA_stats`` can be viewed with any NIfTI image viewer.
 #
 # .. warning::
 #
-#    If ``--output-dir`` already exists, ``modelarrayio h5-to-nifti`` will not delete it — you will
+#    If ``--output-dir`` already exists, ``modelarrayio export-results`` will not delete it — you will
 #    see ``WARNING: Output directory exists``.  Existing files that are **not** part of the
 #    current output list are left unchanged.  Existing files that **are** part of the current
 #    output list will be overwritten.  To avoid confusion, consider manually deleting the output
-#    directory before re-running ``modelarrayio h5-to-nifti``.
+#    directory before re-running ``modelarrayio export-results``.
 
 # %%
 # Number-of-observations image
@@ -177,7 +176,7 @@ The voxel workflow is very similar to the fixel workflow
 #
 # .. code-block:: console
 #
-#     modelarrayio nifti-to-h5 --help
-#     modelarrayio h5-to-nifti --help
+#     modelarrayio to-modelarray --help
+#     modelarrayio export-results --help
 #
 # or in the :doc:`/usage` page of this documentation.

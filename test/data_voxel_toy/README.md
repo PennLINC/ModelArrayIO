@@ -1,4 +1,4 @@
-This is a toy voxel-wise dataset for testing ModelArrayIO’s voxel pipeline (`modelarrayio nifti-to-h5` / `modelarrayio h5-to-nifti`).
+This is a toy voxel-wise dataset for testing ModelArrayIO’s voxel pipeline (`modelarrayio to-modelarray` / `modelarrayio export-results`).
 
 * It was generated using scripts in [ModelArray_tests](https://github.com/PennLINC/ModelArray_tests) GitHub repository.
   * Using scripts in folder `testdata_ConFixel` there (historical folder name from the ConFixel era).

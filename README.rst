@@ -30,7 +30,7 @@ ModelArrayIO
    :target: https://github.com/astral-sh/ruff
    :alt: Code style: ruff
 
-**ModelArrayIO** is a Python package that converts between neuroimaging formats (fixel ``.mif``, voxel NIfTI, CIFTI-2 dscalar) and the HDF5 (``.h5``) layout used by the R package `ModelArray <https://pennlinc.github.io/ModelArray/>`_. It can also write ModelArray statistical results back to imaging formats.
+**ModelArrayIO** is a Python package that converts between neuroimaging formats (fixel ``.mif``, voxel NIfTI, CIFTI-2 dscalar/pscalar/pconn) and the HDF5 (``.h5``) layout used by the R package `ModelArray <https://pennlinc.github.io/ModelArray/>`_. It can also write ModelArray statistical results back to imaging formats.
 
 **Relationship to ConFixel:** The earlier project `ConFixel <https://github.com/PennLINC/ConFixel>`_ is superseded by ModelArrayIO. The ConFixel repository is retained for history (including links from publications) and will be archived; new work should use this repository.
 
@@ -48,20 +48,10 @@ ModelArrayIO provides three converter areas, each with import and export command
 
 Once ModelArrayIO is installed, these commands are available in your terminal:
 
-* **Fixel-wise** data (MRtrix ``.mif``):
+* Neuroimaging data (CIFTI, NIfTI, or MRtrix ``.mif``):
 
-  * ``.mif`` → ``.h5``: ``modelarrayio mif-to-h5``
-  * ``.h5`` → ``.mif``: ``modelarrayio h5-to-mif``
-
-* **Voxel-wise** data (NIfTI):
-
-  * NIfTI → ``.h5``: ``modelarrayio nifti-to-h5``
-  * ``.h5`` → NIfTI: ``modelarrayio h5-to-nifti``
-
-* **Greyordinate-wise** data (CIFTI-2):
-
-  * CIFTI-2 → ``.h5``: ``modelarrayio cifti-to-h5``
-  * ``.h5`` → CIFTI-2: ``modelarrayio h5-to-cifti``
+  * Neuroimaging → ``.h5``: ``modelarrayio to-modelarray``
+  * ``.h5`` → Neuroimaging: ``modelarrayio export-results``
 
 
 Storage backends: HDF5 and TileDB
