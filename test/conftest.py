@@ -51,4 +51,4 @@ def downloaded_fixel_data_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     try:
         return _download_and_extract_fixel_test_data(destination_dir)
     except (FileNotFoundError, OSError, URLError, tarfile.TarError) as exc:
-        raise RuntimeError(f'Downloaded fixel test data unavailable: {exc}') from exc
+        pytest.skip(f'Downloaded fixel test data unavailable: {exc}')
