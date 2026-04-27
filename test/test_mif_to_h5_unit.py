@@ -35,10 +35,15 @@ def test_mif_to_h5_raises_when_sources_missing(monkeypatch, tmp_path: Path) -> N
 def test_mif_to_h5_hdf5_split_outputs(monkeypatch, tmp_path: Path) -> None:
     fixel_table = pd.DataFrame({'fixel_id': [0], 'voxel_id': [0], 'x': [1], 'y': [0], 'z': [0]})
     voxel_table = pd.DataFrame({'voxel_id': [0], 'i': [0], 'j': [0], 'k': [0]})
-    scalars = {'FA': [np.array([1.0], dtype=np.float32)], 'MD': [np.array([2.0], dtype=np.float32)]}
+    scalars = {
+        'FA': [np.array([1.0], dtype=np.float32)],
+        'MD': [np.array([2.0], dtype=np.float32)],
+    }
     sources = {'FA': ['fa.mif'], 'MD': ['md.mif']}
 
-    monkeypatch.setattr(mif_to_h5, 'gather_fixels', lambda *_args, **_kwargs: (fixel_table, voxel_table))
+    monkeypatch.setattr(
+        mif_to_h5, 'gather_fixels', lambda *_args, **_kwargs: (fixel_table, voxel_table)
+    )
     monkeypatch.setattr(mif_to_h5, 'load_cohort_mif', lambda *_args, **_kwargs: (scalars, sources))
 
     status = mif_to_h5.mif_to_h5(
@@ -57,11 +62,16 @@ def test_mif_to_h5_hdf5_split_outputs(monkeypatch, tmp_path: Path) -> None:
 def test_mif_to_h5_tiledb_parallel_and_split(monkeypatch, tmp_path: Path) -> None:
     fixel_table = pd.DataFrame({'fixel_id': [0], 'voxel_id': [0], 'x': [1], 'y': [0], 'z': [0]})
     voxel_table = pd.DataFrame({'voxel_id': [0], 'i': [0], 'j': [0], 'k': [0]})
-    scalars = {'FA': [np.array([1.0], dtype=np.float32)], 'MD': [np.array([2.0], dtype=np.float32)]}
+    scalars = {
+        'FA': [np.array([1.0], dtype=np.float32)],
+        'MD': [np.array([2.0], dtype=np.float32)],
+    }
     sources = {'FA': ['fa.mif'], 'MD': ['md.mif']}
     calls = []
 
-    monkeypatch.setattr(mif_to_h5, 'gather_fixels', lambda *_args, **_kwargs: (fixel_table, voxel_table))
+    monkeypatch.setattr(
+        mif_to_h5, 'gather_fixels', lambda *_args, **_kwargs: (fixel_table, voxel_table)
+    )
     monkeypatch.setattr(mif_to_h5, 'load_cohort_mif', lambda *_args, **_kwargs: (scalars, sources))
     monkeypatch.setattr(
         mif_to_h5.cli_utils,

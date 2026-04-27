@@ -54,7 +54,7 @@ def test_mif_header_write_to_and_from_fileobj_round_trip() -> None:
     ],
 )
 def test_mif_header_missing_required_fields_raise(header_text: bytes) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r'Missing "(dim|vox|datatype|layout)" in MIF header'):
         MifHeader.from_fileobj(io.BytesIO(header_text))
 
 

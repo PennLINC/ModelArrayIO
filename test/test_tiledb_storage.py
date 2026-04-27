@@ -98,6 +98,8 @@ def test_write_parcel_names_and_column_names(tmp_path: Path) -> None:
     with tiledb.open(str(parcel_uri), 'r') as array:
         np.testing.assert_array_equal(array[:]['values'], np.array(['P1', 'P2'], dtype=object))
 
+    # Some TileDB builds do not implicitly create missing parent directories.
+    (base / 'scalars').mkdir(parents=True, exist_ok=True)
     tiledb.group_create(str(base / 'scalars' / 'FA'))
     tiledb_storage.write_column_names(str(base), 'FA', ['sub-1', 'sub-2'])
     column_uri = base / 'scalars' / 'FA' / 'column_names'

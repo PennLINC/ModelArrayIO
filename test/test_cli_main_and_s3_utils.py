@@ -113,6 +113,9 @@ def test_load_nibabel_from_s3_bytes(monkeypatch, tmp_path) -> None:
             assert kwargs['Key'] == 'key.nii.gz'
             return {'Body': _FakeBody()}
 
-    monkeypatch.setattr(s3_utils, '_make_s3_client', lambda: _FakeClient())
+    def _fake_make_s3_client():
+        return _FakeClient()
+
+    monkeypatch.setattr(s3_utils, '_make_s3_client', _fake_make_s3_client)
     loaded = s3_utils.load_nibabel('s3://bucket/key.nii.gz')
     np.testing.assert_array_equal(loaded.get_fdata(), data)

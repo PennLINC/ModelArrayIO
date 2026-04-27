@@ -122,7 +122,9 @@ def test_h5_to_mif_writes_pvalue_and_inverse(monkeypatch, tmp_path: Path) -> Non
         )
 
     template_img = SimpleNamespace(shape=(2,), header=mif.MifHeader(shape=(2,)), affine=np.eye(4))
-    monkeypatch.setattr(h5_to_mif_module, 'mif_to_image', lambda _: (template_img, np.array([0, 0])))
+    monkeypatch.setattr(
+        h5_to_mif_module, 'mif_to_image', lambda _: (template_img, np.array([0, 0]))
+    )
 
     calls: list[tuple[np.ndarray, Path]] = []
 

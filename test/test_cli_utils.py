@@ -8,7 +8,6 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
-import pytest
 
 from modelarrayio.cli import utils as cli_utils
 
@@ -54,7 +53,10 @@ def test_write_hdf5_scalar_matrices_skips_empty_rows_and_writes_values(tmp_path:
         cli_utils.write_hdf5_scalar_matrices(
             h5_file,
             scalars={
-                'FA': [np.array([1.0, 2.0], dtype=np.float32), np.array([3.0, 4.0], dtype=np.float32)],
+                'FA': [
+                    np.array([1.0, 2.0], dtype=np.float32),
+                    np.array([3.0, 4.0], dtype=np.float32),
+                ],
                 'MD': [],
             },
             sources_by_scalar={'FA': ['sub-1', 'sub-2'], 'MD': []},
@@ -73,7 +75,9 @@ def test_write_hdf5_scalar_matrices_skips_empty_rows_and_writes_values(tmp_path:
         np.testing.assert_array_equal(values, np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32))
 
 
-def test_write_tiledb_scalar_matrices_calls_column_name_writer(monkeypatch, tmp_path: Path) -> None:
+def test_write_tiledb_scalar_matrices_calls_column_name_writer(
+    monkeypatch, tmp_path: Path
+) -> None:
     called = {'create': [], 'columns': [], 'write': []}
 
     def _fake_create(*args, **kwargs):
@@ -114,7 +118,9 @@ def test_write_hdf5_and_tiledb_parcel_arrays(monkeypatch, tmp_path: Path) -> Non
         cli_utils.write_hdf5_parcel_arrays(h5_file, parcel_arrays)
 
     with h5py.File(h5_path, 'r') as h5_file:
-        np.testing.assert_array_equal(h5_file['parcels/parcel_id'][...].astype(str), np.array(['A', 'B']))
+        np.testing.assert_array_equal(
+            h5_file['parcels/parcel_id'][...].astype(str), np.array(['A', 'B'])
+        )
 
     calls = []
 
@@ -144,14 +150,20 @@ def test_read_result_names_prefers_attrs_then_fallback_paths(tmp_path: Path, cap
         )
 
         matrix.attrs['colnames'] = np.array([b'first', b'second'])
-        assert cli_utils.read_result_names(h5_file, 'lm', matrix, logger=logger) == ['first', 'second']
+        assert cli_utils.read_result_names(h5_file, 'lm', matrix, logger=logger) == [
+            'first',
+            'second',
+        ]
 
         del matrix.attrs['colnames']
         group.create_dataset(
             'column_names',
             data=np.array(['alpha', 'beta'], dtype=h5py.string_dtype('utf-8')),
         )
-        assert cli_utils.read_result_names(h5_file, 'lm', matrix, logger=logger) == ['alpha', 'beta']
+        assert cli_utils.read_result_names(h5_file, 'lm', matrix, logger=logger) == [
+            'alpha',
+            'beta',
+        ]
 
     with h5py.File(h5_path, 'a') as h5_file:
         group = h5_file.require_group('results/lm_nested')
@@ -163,7 +175,9 @@ def test_read_result_names_prefers_attrs_then_fallback_paths(tmp_path: Path, cap
             'column_names',
             data=np.array(['gamma'], dtype=h5py.string_dtype('utf-8')),
         )
-        assert cli_utils.read_result_names(h5_file, 'lm_nested', matrix, logger=logger) == ['gamma']
+        assert cli_utils.read_result_names(h5_file, 'lm_nested', matrix, logger=logger) == [
+            'gamma'
+        ]
 
         del h5_file['results/lm_nested/results_matrix/column_names']
         with caplog.at_level(logging.WARNING):

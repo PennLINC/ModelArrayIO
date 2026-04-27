@@ -24,7 +24,9 @@ def test_cifti_to_h5_tiledb_split_outputs_and_parcels(monkeypatch, tmp_path: Pat
 
     monkeypatch.setattr(cifti_to_h5, 'build_scalar_sources', lambda _cohort: scalar_sources)
     monkeypatch.setattr(
-        cifti_to_h5, '_get_cifti_parcel_info', lambda _first: ('pscalar', {'parcel_id': np.array(['P1'])})
+        cifti_to_h5,
+        '_get_cifti_parcel_info',
+        lambda _first: ('pscalar', {'parcel_id': np.array(['P1'])}),
     )
     monkeypatch.setattr(
         cifti_to_h5,
@@ -37,7 +39,9 @@ def test_cifti_to_h5_tiledb_split_outputs_and_parcels(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(
         cifti_to_h5.cli_utils,
         'write_tiledb_scalar_matrices',
-        lambda output, scalars, sources, **kwargs: write_calls.append((Path(output), scalars, sources)),
+        lambda output, scalars, sources, **kwargs: write_calls.append(
+            (Path(output), scalars, sources)
+        ),
     )
     monkeypatch.setattr(
         cifti_to_h5.cli_utils,
@@ -46,7 +50,9 @@ def test_cifti_to_h5_tiledb_split_outputs_and_parcels(monkeypatch, tmp_path: Pat
     )
 
     status = cifti_to_h5.cifti_to_h5(
-        cohort_long=pd.DataFrame({'scalar_name': ['FA', 'MD'], 'source_file': ['fa1.nii', 'md1.nii']}),
+        cohort_long=pd.DataFrame(
+            {'scalar_name': ['FA', 'MD'], 'source_file': ['fa1.nii', 'md1.nii']}
+        ),
         backend='tiledb',
         output=tmp_path / 'store.tdb',
         workers=2,
@@ -66,7 +72,9 @@ def test_cifti_to_h5_hdf5_split_outputs_for_dscalar(monkeypatch, tmp_path: Path)
 
     monkeypatch.setattr(cifti_to_h5, 'build_scalar_sources', lambda _cohort: scalar_sources)
     monkeypatch.setattr(cifti_to_h5, '_get_cifti_parcel_info', lambda _first: ('dscalar', {}))
-    monkeypatch.setattr(cifti_to_h5, 'load_cohort_cifti', lambda _cohort, _workers: (scalars, ['Left', 'Right']))
+    monkeypatch.setattr(
+        cifti_to_h5, 'load_cohort_cifti', lambda _cohort, _workers: (scalars, ['Left', 'Right'])
+    )
     monkeypatch.setattr(
         cifti_to_h5,
         'brain_names_to_dataframe',
