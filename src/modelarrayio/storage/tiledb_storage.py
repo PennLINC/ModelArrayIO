@@ -352,7 +352,8 @@ def write_parcel_names(base_uri: str, array_path: str, names: Sequence[str]):
         name='idx', domain=(0, max(n - 1, 0)), tile=max(1, min(n, 1024)), dtype=np.int64
     )
     dom = tiledb.Domain(dim_idx)
-    attr_values = tiledb.Attr(name='values', dtype=np.unicode_)
+    # np.unicode_ was removed in NumPy 2.0; np.str_ is the compatible string scalar.
+    attr_values = tiledb.Attr(name='values', dtype=np.str_)
     schema = tiledb.ArraySchema(domain=dom, attrs=[attr_values], sparse=False)
 
     if tiledb.object_type(uri):
