@@ -14,7 +14,7 @@ _CIFTI_EXTENSIONS = (
 
 
 def detect_modality_from_path(path: str) -> str:
-    """Return ``'cifti'``, ``'mif'``, or ``'nifti'`` based on file extension.
+    """Return ``'cifti'``, ``'mif'``, ``'odx'``, or ``'nifti'`` based on file extension.
 
     Parameters
     ----------
@@ -36,11 +36,13 @@ def detect_modality_from_path(path: str) -> str:
         return 'cifti'
     if path.endswith(('.mif.gz', '.mif')):
         return 'mif'
+    if path.rstrip('/').endswith('.odx'):
+        return 'odx'
     if path.endswith(('.nii.gz', '.nii')):
         return 'nifti'
     raise ValueError(
         f'Cannot detect modality from file extension: {path!r}. '
-        'Expected .mif, .nii, .nii.gz, or a CIFTI compound extension '
+        'Expected .mif, .odx, .nii, .nii.gz, or a CIFTI compound extension '
         '(e.g. .dscalar.nii, .pscalar.nii).'
     )
 

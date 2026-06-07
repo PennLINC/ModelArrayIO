@@ -11,6 +11,7 @@ from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.cifti_to_h5 import cifti_to_h5
 from modelarrayio.cli.mif_to_h5 import mif_to_h5
 from modelarrayio.cli.nifti_to_h5 import nifti_to_h5
+from modelarrayio.cli.odx_to_h5 import odx_to_h5
 from modelarrayio.cli.parser_utils import _is_file, add_log_level_arg
 from modelarrayio.utils.misc import load_and_normalize_cohort
 
@@ -36,7 +37,7 @@ def to_modelarray(
 ):
     """Load neuroimaging data and write to an HDF5 or TileDB modelarray file.
 
-    The modality (NIfTI, CIFTI, or MIF/fixel) is autodetected from the source
+    The modality (NIfTI, CIFTI, MIF/fixel, or ODX) is autodetected from the source
     file extensions listed in the cohort file.
 
     Parameters
@@ -84,6 +85,10 @@ def to_modelarray(
             )
         return mif_to_h5(index_file=index_file, directions_file=directions_file, **common_kwargs)
 
+    if modality == 'odx':
+        # ODX carries its own group-fixel geometry, so no index/directions files.
+        return odx_to_h5(**common_kwargs)
+
     # cifti
     return cifti_to_h5(**common_kwargs)
 
@@ -99,7 +104,7 @@ def _parse_to_modelarray():
     parser = argparse.ArgumentParser(
         description=(
             'Convert neuroimaging data to a modelarray HDF5 file. '
-            'The modality (NIfTI, CIFTI, or MIF/fixel) is autodetected from '
+            'The modality (NIfTI, CIFTI, MIF/fixel, or ODX) is autodetected from '
             'the source file extensions in the cohort file.'
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,

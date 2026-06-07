@@ -14,6 +14,7 @@ from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.h5_to_cifti import h5_to_cifti
 from modelarrayio.cli.h5_to_mif import h5_to_mif
 from modelarrayio.cli.h5_to_nifti import h5_to_nifti
+from modelarrayio.cli.h5_to_odx import h5_to_odx
 from modelarrayio.cli.parser_utils import _is_file, add_log_level_arg
 from modelarrayio.utils.misc import detect_modality_from_path
 
@@ -87,7 +88,7 @@ def export_results(
                 f'The template file appears to be MIF/fixel ({template_path!r}). '
                 'For MIF/fixel results, supply --index-file and --directions-file.'
             )
-        modality = 'cifti'
+        modality = 'odx' if detected == 'odx' else 'cifti'
     else:
         raise ValueError(
             'Cannot determine modality. Provide --mask (NIfTI), '
@@ -121,6 +122,21 @@ def export_results(
             example_file = pd.read_csv(cohort_file)['source_file'].iloc[0]
         h5_to_mif(
             example_mif=example_file,
+            in_file=in_file,
+            analysis_name=analysis_name,
+            compress=compress,
+            output_dir=output_path,
+        )
+        return 0
+
+    if modality == 'odx':
+        if cohort_file is None and example_file is None:
+            raise ValueError('One of --cohort-file or --example-file is required for ODX results.')
+        if example_file is None:
+            logger.warning('No example ODX provided; using first source_file from cohort.')
+            example_file = pd.read_csv(cohort_file)['source_file'].iloc[0]
+        h5_to_odx(
+            example_odx=example_file,
             in_file=in_file,
             analysis_name=analysis_name,
             compress=compress,
