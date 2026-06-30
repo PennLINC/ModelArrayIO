@@ -144,9 +144,7 @@ def test_parse_to_modelarray_split_output_flags_are_mutually_exclusive(tmp_path)
     cohort.touch()
     parser = _parse_to_modelarray()
     with pytest.raises(SystemExit):
-        parser.parse_args(
-            ['--cohort-file', str(cohort), '--split-files', '--no-split-files']
-        )
+        parser.parse_args(['--cohort-file', str(cohort), '--split-files', '--no-split-files'])
 
 
 def test_parse_to_modelarray_requires_cohort_file(tmp_path):
