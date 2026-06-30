@@ -30,6 +30,7 @@ def to_modelarray(
     workers=1,
     s3_workers=1,
     scalar_columns=None,
+    split_outputs=None,
     group_mask_file=None,
     index_file=None,
     directions_file=None,
@@ -43,6 +44,9 @@ def to_modelarray(
     ----------
     cohort_file : path-like
         Path to a CSV with demographic info and paths to data.
+    split_outputs : bool, optional
+        Write one output per scalar when True, or combine all scalars when False.
+        When omitted, wide cohorts split and long-format cohorts combine.
     group_mask_file : path-like, optional
         Path to a NIfTI binary group mask file. Required for NIfTI data.
     index_file : path-like, optional
@@ -52,6 +56,9 @@ def to_modelarray(
     """
     cohort_long, modality = load_and_normalize_cohort(cohort_file, scalar_columns=scalar_columns)
     logger.info('Detected modality: %s', modality)
+
+    if split_outputs is None:
+        split_outputs = bool(scalar_columns)
 
     common_kwargs = {
         'cohort_long': cohort_long,
@@ -65,7 +72,7 @@ def to_modelarray(
         'target_chunk_mb': target_chunk_mb,
         'workers': workers,
         's3_workers': s3_workers,
-        'split_outputs': bool(scalar_columns),
+        'split_outputs': split_outputs,
     }
 
     if modality == 'nifti':
@@ -131,6 +138,22 @@ def _parse_to_modelarray():
             'If omitted, the cohort file must include "scalar_name" and "source_file" columns.'
         ),
     )
+    split_group = parser.add_mutually_exclusive_group()
+    split_group.add_argument(
+        '--split-files',
+        '--split_files',
+        dest='split_outputs',
+        action='store_true',
+        help='Write one output file or TileDB directory per scalar.',
+    )
+    split_group.add_argument(
+        '--no-split-files',
+        '--no_split_files',
+        dest='split_outputs',
+        action='store_false',
+        help='Write all scalars to one combined output.',
+    )
+    parser.set_defaults(split_outputs=None)
     parser.add_argument(
         '--backend',
         help='Storage backend for subject-by-element matrix',

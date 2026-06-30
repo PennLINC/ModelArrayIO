@@ -38,6 +38,7 @@ def test_parse_to_modelarray_minimal_defaults(tmp_path):
     assert args.workers == 1
     assert args.s3_workers == 1
     assert args.scalar_columns is None
+    assert args.split_outputs is None
     assert args.group_mask_file is None
     assert args.index_file is None
     assert args.directions_file is None
@@ -119,6 +120,33 @@ def test_parse_to_modelarray_target_chunk_mb_branch(tmp_path):
     args = parser.parse_args(['--cohort-file', str(cohort), '--target-chunk-mb', '8.5'])
     assert args.target_chunk_mb == 8.5
     assert args.chunk_voxels == 0
+
+
+@pytest.mark.parametrize(
+    ('flag', 'expected'),
+    [
+        ('--split-files', True),
+        ('--split_files', True),
+        ('--no-split-files', False),
+        ('--no_split_files', False),
+    ],
+)
+def test_parse_to_modelarray_split_output_flags(tmp_path, flag, expected):
+    cohort = tmp_path / 'cohort.csv'
+    cohort.touch()
+    parser = _parse_to_modelarray()
+    args = parser.parse_args(['--cohort-file', str(cohort), flag])
+    assert args.split_outputs is expected
+
+
+def test_parse_to_modelarray_split_output_flags_are_mutually_exclusive(tmp_path):
+    cohort = tmp_path / 'cohort.csv'
+    cohort.touch()
+    parser = _parse_to_modelarray()
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ['--cohort-file', str(cohort), '--split-files', '--no-split-files']
+        )
 
 
 def test_parse_to_modelarray_requires_cohort_file(tmp_path):
