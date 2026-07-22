@@ -135,7 +135,8 @@ def _parse_to_modelarray():
         nargs='+',
         help=(
             'Column names containing scalar file paths when the cohort table is in wide format. '
-            'If omitted, the cohort file must include "scalar_name" and "source_file" columns.'
+            'If omitted, the cohort file must include "scalar_name" and "source_file" columns. '
+            'Wide-format cohorts split outputs by default; use --no-split-files to combine them.'
         ),
     )
     split_group = parser.add_mutually_exclusive_group()
@@ -144,14 +145,20 @@ def _parse_to_modelarray():
         '--split_files',
         dest='split_outputs',
         action='store_true',
-        help='Write one output file or TileDB directory per scalar.',
+        help=(
+            'Write one output file or TileDB directory per scalar. This overrides the combined '
+            'output default for long-format cohorts.'
+        ),
     )
     split_group.add_argument(
         '--no-split-files',
         '--no_split_files',
         dest='split_outputs',
         action='store_false',
-        help='Write all scalars to one combined output.',
+        help=(
+            'Write all scalars to one combined output. This overrides the split output default '
+            'for wide-format cohorts.'
+        ),
     )
     parser.set_defaults(split_outputs=None)
     parser.add_argument(

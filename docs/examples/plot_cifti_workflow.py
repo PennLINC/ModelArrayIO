@@ -34,7 +34,7 @@ The CIFTI workflow is very similar to the MIF workflow
 #
 #     /home/username/myProject/data
 #     |
-#     ├── cohort_FA.csv
+#     ├── cohort_long.csv
 #     ├── cohort_wide.csv
 #     │
 #     ├── FA
@@ -54,7 +54,7 @@ The CIFTI workflow is very similar to the MIF workflow
 # Long-format cohort CSV
 # ----------------------
 #
-# Corresponding ``cohort_FA.csv`` for scalar FA:
+# Corresponding ``cohort_long.csv`` for scalars FA and MD:
 #
 # .. list-table::
 #    :header-rows: 1
@@ -77,6 +77,21 @@ The CIFTI workflow is very similar to the MIF workflow
 #      - M
 #    * - FA
 #      - /home/username/myProject/data/FA/sub-03_FA.dscalar.nii
+#      - sub-03
+#      - 15
+#      - F
+#    * - MD
+#      - /home/username/myProject/data/MD/sub-01_MD.dscalar.nii
+#      - sub-01
+#      - 10
+#      - F
+#    * - MD
+#      - /home/username/myProject/data/MD/sub-02_MD.dscalar.nii
+#      - sub-02
+#      - 20
+#      - M
+#    * - MD
+#      - /home/username/myProject/data/MD/sub-03_MD.dscalar.nii
 #      - sub-03
 #      - 15
 #      - F
@@ -128,10 +143,11 @@ The CIFTI workflow is very similar to the MIF workflow
 # compatible CIFTI axes.
 
 # %%
-# Convert CIFTI files to HDF5
-# ---------------------------
+# Convert a long-format cohort
+# ----------------------------
 #
-# Using the FA dataset from the example above:
+# Long-format cohorts combine all scalars into one output by default. The
+# ``--no-split-files`` flag below makes that choice explicit:
 #
 # .. code-block:: console
 #
@@ -139,11 +155,23 @@ The CIFTI workflow is very similar to the MIF workflow
 #     conda activate <env_name>
 #
 #     modelarrayio to-modelarray \
-#         --cohort-file     /home/username/myProject/data/cohort_FA.csv \
-#         --output          /home/username/myProject/data/FA.h5
+#         --cohort-file     /home/username/myProject/data/cohort_long.csv \
+#         --no-split-files \
+#         --output          /home/username/myProject/data/modelarray.h5
 #
-# This produces ``FA.h5`` in ``/home/username/myProject/data``.  You can then use
-# `ModelArray <https://pennlinc.github.io/ModelArray/>`_ to run statistical analyses on it.
+# This creates one ``modelarray.h5`` containing both ``scalars/FA`` and ``scalars/MD``.
+# To write one file per scalar instead, use ``--split-files`` with the same output basename:
+#
+# .. code-block:: console
+#
+#     modelarrayio to-modelarray \
+#         --cohort-file /home/username/myProject/data/cohort_long.csv \
+#         --split-files \
+#         --output      /home/username/myProject/data/modelarray.h5
+#
+# The split command creates ``FA_modelarray.h5`` and ``MD_modelarray.h5``. You can then use
+# `ModelArray <https://pennlinc.github.io/ModelArray/>`_ to run statistical analyses on either
+# the combined output or the scalar-specific outputs.
 
 # %%
 # Convert a wide-format cohort
@@ -159,15 +187,26 @@ The CIFTI workflow is very similar to the MIF workflow
 #         --output         /home/username/myProject/data/modelarray.h5
 #
 # Wide cohorts write one output per scalar by default. This command creates
-# ``FA_modelarray.h5`` and ``MD_modelarray.h5``. Add ``--no-split-files`` to store both
-# scalars in the single ``modelarray.h5`` output instead.
+# ``FA_modelarray.h5`` and ``MD_modelarray.h5``. To override that default, add
+# ``--no-split-files``:
+#
+# .. code-block:: console
+#
+#     modelarrayio to-modelarray \
+#         --cohort-file     /home/username/myProject/data/cohort_wide.csv \
+#         --scalar-columns  FA MD \
+#         --no-split-files \
+#         --output          /home/username/myProject/data/modelarray.h5
+#
+# This creates one ``modelarray.h5`` containing both scalar groups.
 
 # %%
 # Convert result .h5 back to CIFTI
 # --------------------------------
 #
-# After running **ModelArray** and obtaining statistical results inside ``FA.h5`` (suppose the
-# analysis name is ``"mylm"``), use ``modelarrayio export-results`` to export them as CIFTI files.
+# After running **ModelArray** and obtaining statistical results inside ``FA_modelarray.h5``
+# (suppose the analysis name is ``"mylm"``), use ``modelarrayio export-results`` to export them
+# as CIFTI files.
 #
 # Supply either ``--cohort-file`` (the first ``source_file`` entry is used as a header template)
 # or ``--example-file`` (an explicit template path) — these two flags are mutually exclusive.
@@ -175,9 +214,9 @@ The CIFTI workflow is very similar to the MIF workflow
 # .. code-block:: console
 #
 #     modelarrayio export-results \
-#         --cohort-file     /home/username/myProject/data/cohort_FA.csv \
+#         --cohort-file     /home/username/myProject/data/cohort_long.csv \
 #         --analysis-name   mylm \
-#         --input-hdf5      /home/username/myProject/data/FA.h5 \
+#         --input-hdf5      /home/username/myProject/data/FA_modelarray.h5 \
 #         --output-dir      /home/username/myProject/data/FA_stats
 #
 # All converted volume data are saved as ``float32``.  Results in ``FA_stats`` can be viewed

@@ -33,7 +33,7 @@ This guide assumes **ModelArrayIO** is already installed.
 #
 #     /home/username/myProject/data
 #     |
-#     ├── cohort_FD.csv
+#     ├── cohort_long.csv
 #     ├── cohort_wide.csv
 #     │
 #     ├── FD
@@ -58,7 +58,7 @@ This guide assumes **ModelArrayIO** is already installed.
 # Long-format cohort CSV
 # ----------------------
 #
-# Corresponding ``cohort_FD.csv`` for scalar FD:
+# Corresponding ``cohort_long.csv`` for scalars FD and FC:
 #
 # .. list-table::
 #    :header-rows: 1
@@ -81,6 +81,21 @@ This guide assumes **ModelArrayIO** is already installed.
 #      - M
 #    * - FD
 #      - /home/username/myProject/data/FD/sub-03_fd.mif
+#      - sub-03
+#      - 15
+#      - F
+#    * - FC
+#      - /home/username/myProject/data/FC/sub-01_fc.mif
+#      - sub-01
+#      - 10
+#      - F
+#    * - FC
+#      - /home/username/myProject/data/FC/sub-02_fc.mif
+#      - sub-02
+#      - 20
+#      - M
+#    * - FC
+#      - /home/username/myProject/data/FC/sub-03_fc.mif
 #      - sub-03
 #      - 15
 #      - F
@@ -132,10 +147,11 @@ This guide assumes **ModelArrayIO** is already installed.
 # described by the supplied ``index.mif`` and ``directions.mif`` files.
 
 # %%
-# Convert .mif files to HDF5
-# --------------------------
+# Convert a long-format cohort
+# ----------------------------
 #
-# Using the FD dataset from the example above:
+# Long-format cohorts combine all scalars into one output by default. The
+# ``--no-split-files`` flag below makes that choice explicit:
 #
 # .. code-block:: console
 #
@@ -145,11 +161,25 @@ This guide assumes **ModelArrayIO** is already installed.
 #     modelarrayio to-modelarray \
 #         --index-file      /home/username/myProject/data/FD/index.mif \
 #         --directions-file /home/username/myProject/data/FD/directions.mif \
-#         --cohort-file     /home/username/myProject/data/cohort_FD.csv \
-#         --output          /home/username/myProject/data/FD.h5
+#         --cohort-file     /home/username/myProject/data/cohort_long.csv \
+#         --no-split-files \
+#         --output          /home/username/myProject/data/modelarray.h5
 #
-# This produces ``FD.h5`` in ``/home/username/myProject/data``.  You can then use
-# `ModelArray <https://pennlinc.github.io/ModelArray/>`_ to run statistical analyses on it.
+# This creates one ``modelarray.h5`` containing both ``scalars/FD`` and ``scalars/FC``.
+# To write one file per scalar instead, use ``--split-files`` with the same output basename:
+#
+# .. code-block:: console
+#
+#     modelarrayio to-modelarray \
+#         --index-file      /home/username/myProject/data/FD/index.mif \
+#         --directions-file /home/username/myProject/data/FD/directions.mif \
+#         --cohort-file     /home/username/myProject/data/cohort_long.csv \
+#         --split-files \
+#         --output          /home/username/myProject/data/modelarray.h5
+#
+# The split command creates ``FD_modelarray.h5`` and ``FC_modelarray.h5``. You can then use
+# `ModelArray <https://pennlinc.github.io/ModelArray/>`_ to run statistical analyses on either
+# the combined output or the scalar-specific outputs.
 
 # %%
 # Convert a wide-format cohort
@@ -167,26 +197,38 @@ This guide assumes **ModelArrayIO** is already installed.
 #         --output          /home/username/myProject/data/modelarray.h5
 #
 # Wide cohorts write one output per scalar by default. This command creates
-# ``FD_modelarray.h5`` and ``FC_modelarray.h5``. Add ``--no-split-files`` to store both
-# scalars in the single ``modelarray.h5`` output instead.
+# ``FD_modelarray.h5`` and ``FC_modelarray.h5``. To override that default, add
+# ``--no-split-files``:
+#
+# .. code-block:: console
+#
+#     modelarrayio to-modelarray \
+#         --index-file       /home/username/myProject/data/FD/index.mif \
+#         --directions-file  /home/username/myProject/data/FD/directions.mif \
+#         --cohort-file      /home/username/myProject/data/cohort_wide.csv \
+#         --scalar-columns   FD FC \
+#         --no-split-files \
+#         --output           /home/username/myProject/data/modelarray.h5
+#
+# This creates one ``modelarray.h5`` containing both scalar groups.
 
 # %%
 # Convert result .h5 back to .mif files
 # --------------------------------------
 #
-# After running ModelArray and obtaining statistical results inside ``FD.h5`` (suppose the
-# analysis name is ``"mylm"``), use ``modelarrayio export-results`` to export them as ``.mif`` files.
-# The command also copies the original ``index.mif`` and ``directions.mif`` into the output
-# folder.
+# After running ModelArray and obtaining statistical results inside ``FD_modelarray.h5``
+# (suppose the analysis name is ``"mylm"``), use ``modelarrayio export-results`` to export them
+# as ``.mif`` files. The command also copies the original ``index.mif`` and ``directions.mif``
+# into the output folder.
 #
 # .. code-block:: console
 #
 #     modelarrayio export-results \
 #         --index-file      /home/username/myProject/data/FD/index.mif \
 #         --directions-file /home/username/myProject/data/FD/directions.mif \
-#         --cohort-file     /home/username/myProject/data/cohort_FD.csv \
+#         --cohort-file     /home/username/myProject/data/cohort_long.csv \
 #         --analysis-name   mylm \
-#         --input-hdf5      /home/username/myProject/data/FD.h5 \
+#         --input-hdf5      /home/username/myProject/data/FD_modelarray.h5 \
 #         --output-dir      /home/username/myProject/data/FD_stats
 #
 # The results in ``FD_stats`` can now be viewed in ``mrview``.
