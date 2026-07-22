@@ -18,14 +18,14 @@ The voxel workflow is very similar to the fixel workflow
 # 1. **A cohort CSV** describing every NIfTI file to include (one CSV per scalar recommended).
 # 2. **A group mask** — only voxels inside the group mask are kept during conversion.
 # 3. **Subject-specific masks** *(optional)* — voxels outside each subject's mask are set to
-#    ``NaN`` after conversion.  If you do not have per-subject masks, supply the group mask for
-#    every subject (see the CSV example below).
+#    ``NaN`` after conversion.  If you do not have per-subject masks, put the path to the
+#    group mask in the ``source_mask_file`` column.
 #
 # Cohort CSV columns (names are fixed, not user-defined):
 #
 # * ``scalar_name`` — which metric is being analysed (e.g., ``FA``)
 # * ``source_file`` — path to the subject's NIfTI file
-# * ``source_mask_file`` — path to the subject-specific mask (or the group mask if none exists)
+# * ``source_mask_file`` — path to the subject-specific mask
 
 # %%
 # Example folder structure
