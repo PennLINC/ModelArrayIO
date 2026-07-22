@@ -59,8 +59,8 @@ Storage backends: HDF5 and TileDB
 
 ModelArrayIO supports two on-disk backends for the subject-by-element matrix:
 
-* HDF5 (default), implemented in ``modelarrayio/h5_storage.py``
-* TileDB, implemented in ``modelarrayio/tiledb_storage.py``
+* HDF5 (default), implemented in ``src/modelarrayio/storage/h5_storage.py``
+* TileDB, implemented in ``src/modelarrayio/storage/tiledb_storage.py``
 
 Both backends expose a similar API:
 

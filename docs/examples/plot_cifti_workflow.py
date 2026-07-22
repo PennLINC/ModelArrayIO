@@ -15,12 +15,16 @@ The CIFTI workflow is very similar to the MIF workflow
 #
 # To convert a list of CIFTI files to ``.h5`` format, you need:
 #
-# 1. **A cohort CSV** describing every CIFTI file to include (one CSV per scalar recommended).
+# 1. **A cohort CSV** describing every CIFTI file to include.
 #
-# Cohort CSV columns (names are fixed, not user-defined):
+# The cohort CSV may use either of these layouts:
 #
-# * ``scalar_name`` — which metric is being analysed (e.g., ``FA``)
-# * ``source_file`` — path to the subject's CIFTI file
+# * **Long format:** one row per subject and scalar, with the fixed columns ``scalar_name`` and
+#   ``source_file``.
+# * **Wide format:** one row per subject, with a separate file-path column for each scalar
+#   (for example, ``FA`` and ``MD``). Pass those column names to ``--scalar-columns``.
+#
+# Other columns, such as subject IDs and demographics, may appear alongside the path columns.
 
 # %%
 # Example folder structure
@@ -31,6 +35,7 @@ The CIFTI workflow is very similar to the MIF workflow
 #     /home/username/myProject/data
 #     |
 #     ├── cohort_FA.csv
+#     ├── cohort_wide.csv
 #     │
 #     ├── FA
 #     │   ├── sub-01_FA.dscalar.nii
@@ -38,7 +43,16 @@ The CIFTI workflow is very similar to the MIF workflow
 #     │   ├── sub-03_FA.dscalar.nii
 #     │   └── ...
 #     │
+#     ├── MD
+#     │   ├── sub-01_MD.dscalar.nii
+#     │   ├── sub-02_MD.dscalar.nii
+#     │   ├── sub-03_MD.dscalar.nii
+#     │   └── ...
+#     │
 #     └── ...
+#
+# Long-format cohort CSV
+# ----------------------
 #
 # Corresponding ``cohort_FA.csv`` for scalar FA:
 #
@@ -79,6 +93,41 @@ The CIFTI workflow is very similar to the MIF workflow
 #   between the CSV and disk.
 
 # %%
+# Wide-format cohort CSV
+# ----------------------
+#
+# A wide CSV stores all scalar paths for a subject on one row. For example,
+# ``cohort_wide.csv`` can contain both FA and MD:
+#
+# .. list-table::
+#    :header-rows: 1
+#    :widths: auto
+#
+#    * - subject_id
+#      - **FA**
+#      - **MD**
+#      - age
+#      - sex
+#    * - sub-01
+#      - /home/username/myProject/data/FA/sub-01_FA.dscalar.nii
+#      - /home/username/myProject/data/MD/sub-01_MD.dscalar.nii
+#      - 10
+#      - F
+#    * - sub-02
+#      - /home/username/myProject/data/FA/sub-02_FA.dscalar.nii
+#      - /home/username/myProject/data/MD/sub-02_MD.dscalar.nii
+#      - 20
+#      - M
+#    * - ...
+#      - ...
+#      - ...
+#      - ...
+#      - ...
+#
+# ``FA`` and ``MD`` are user-defined scalar column names. All files for a scalar must use
+# compatible CIFTI axes.
+
+# %%
 # Convert CIFTI files to HDF5
 # ---------------------------
 #
@@ -95,6 +144,23 @@ The CIFTI workflow is very similar to the MIF workflow
 #
 # This produces ``FA.h5`` in ``/home/username/myProject/data``.  You can then use
 # `ModelArray <https://pennlinc.github.io/ModelArray/>`_ to run statistical analyses on it.
+
+# %%
+# Convert a wide-format cohort
+# ----------------------------
+#
+# Name each scalar path column with ``--scalar-columns``:
+#
+# .. code-block:: console
+#
+#     modelarrayio to-modelarray \
+#         --cohort-file    /home/username/myProject/data/cohort_wide.csv \
+#         --scalar-columns FA MD \
+#         --output         /home/username/myProject/data/modelarray.h5
+#
+# Wide cohorts write one output per scalar by default. This command creates
+# ``FA_modelarray.h5`` and ``MD_modelarray.h5``. Add ``--no-split-files`` to store both
+# scalars in the single ``modelarray.h5`` output instead.
 
 # %%
 # Convert result .h5 back to CIFTI
