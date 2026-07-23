@@ -12,6 +12,11 @@ import tiledb
 from modelarrayio.storage import tiledb_storage
 
 
+def assert_domain_dtypes(array: tiledb.Array, expected: list[str]) -> None:
+    for idx, dtype in enumerate(expected):
+        assert array.schema.domain.dim(idx).dtype == np.dtype(dtype)
+
+
 def test_build_filter_list_variants() -> None:
     no_filters = tiledb_storage._build_filter_list(None, None, shuffle=False)
     assert isinstance(no_filters, tiledb.FilterList)
@@ -41,6 +46,7 @@ def test_create_empty_scalar_matrix_array_writes_metadata_and_overwrites(tmp_pat
     )
     assert tiledb.object_type(uri) == 'array'
     with tiledb.open(uri, 'r') as array:
+        assert_domain_dtypes(array, ['int32', 'int32'])
         assert json.loads(array.meta['column_names']) == ['s1', 's2']
 
     uri_again = tiledb_storage.create_empty_scalar_matrix_array(
@@ -96,6 +102,7 @@ def test_write_parcel_names_and_column_names(tmp_path: Path) -> None:
     parcel_uri = base / 'parcels' / 'parcel_id'
     assert tiledb.object_type(str(parcel_uri)) == 'array'
     with tiledb.open(str(parcel_uri), 'r') as array:
+        assert_domain_dtypes(array, ['int32'])
         np.testing.assert_array_equal(array[:]['values'], np.array(['P1', 'P2'], dtype=object))
 
     # Some TileDB builds do not implicitly create missing parent directories.
@@ -104,6 +111,7 @@ def test_write_parcel_names_and_column_names(tmp_path: Path) -> None:
     tiledb_storage.write_column_names(str(base), 'FA', ['sub-1', 'sub-2'])
     column_uri = base / 'scalars' / 'FA' / 'column_names'
     with tiledb.open(str(column_uri), 'r') as array:
+        assert_domain_dtypes(array, ['int32'])
         np.testing.assert_array_equal(
             array[:]['values'], np.array(['sub-1', 'sub-2'], dtype=object)
         )
@@ -124,5 +132,6 @@ def test_create_scalar_matrix_array_writes_values_and_metadata(tmp_path: Path) -
         compression_level=3,
     )
     with tiledb.open(uri, 'r') as array:
+        assert_domain_dtypes(array, ['int32', 'int32'])
         np.testing.assert_array_equal(array[:]['values'], values)
         assert json.loads(array.meta['column_names']) == ['first', 'second']
