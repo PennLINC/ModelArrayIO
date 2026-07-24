@@ -59,8 +59,8 @@ Storage backends: HDF5 and TileDB
 
 ModelArrayIO supports two on-disk backends for the subject-by-element matrix:
 
-* HDF5 (default), implemented in ``modelarrayio/h5_storage.py``
-* TileDB, implemented in ``modelarrayio/tiledb_storage.py``
+* HDF5 (default), implemented in ``src/modelarrayio/storage/h5_storage.py``
+* TileDB, implemented in ``src/modelarrayio/storage/tiledb_storage.py``
 
 Both backends expose a similar API:
 
@@ -71,6 +71,6 @@ Both backends expose a similar API:
 Notes and minor differences:
 
 * Chunking vs tiling: HDF5 uses chunks; TileDB uses tiles. We compute tile sizes analogous to chunk sizes to keep write/read patterns similar.
-* Compression: HDF5 uses ``gzip`` by default; TileDB defaults to ``zstd`` with shuffle for better speed/ratio. You can switch to ``gzip`` for parity.
+* Compression: HDF5 uses ``gzip`` by default; TileDB defaults to ``gzip`` with shuffle for better speed/ratio. You can switch to ``gzip`` for parity.
 * Metadata: HDF5 stores ``column_names`` as a dataset attribute; TileDB stores names as JSON metadata on the array/group.
 * Layout: Both backends keep dimensions in the same order and use zero-based indices.

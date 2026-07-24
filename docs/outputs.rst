@@ -26,16 +26,86 @@ The commands fall into two groups:
 Output splitting
 ================
 
-By default, wide cohorts supplied with ``--scalar-columns`` write one output per
-scalar, while long-format cohorts write all scalars to one combined output. Override
-either default explicitly:
+CSV layout and output splitting are independent choices:
 
-- ``--split-files`` writes one output file or TileDB directory per scalar.
-- ``--no-split-files`` writes all scalars to one combined output.
+- A **long-format** CSV contains the fixed ``scalar_name`` and ``source_file``
+  columns. Do not pass ``--scalar-columns``. Multiple scalar names may appear in
+  the same CSV.
+- A **wide-format** CSV contains one path column per scalar. Pass all of those
+  column names to ``--scalar-columns``.
 
-For example, ``--split-files --output modelarray.h5`` with scalars ``alpha`` and
-``beta`` writes ``alpha_modelarray.h5`` and ``beta_modelarray.h5``. The same prefix
-rule applies to TileDB output paths.
+The CSV layout selects the default output behavior, while ``--split-files`` and
+``--no-split-files`` explicitly override that default:
+
+.. list-table:: Output behavior by cohort layout
+   :header-rows: 1
+   :widths: auto
+
+   * - Cohort input
+     - No splitting flag
+     - ``--split-files``
+     - ``--no-split-files``
+   * - Long format
+     - One combined output
+     - One output per scalar
+     - One combined output
+   * - Wide format with ``--scalar-columns``
+     - One output per scalar
+     - One output per scalar
+     - One combined output
+
+The flags control only how the converted scalars are packaged; they do not change
+how rows or scalar path columns are interpreted.
+
+The commands below focus on splitting behavior and omit modality-specific arguments
+such as ``--mask``, ``--index-file``, and ``--directions-file``.
+
+Combined outputs
+----------------
+
+A combined output uses exactly the path given to ``--output``. For example, a
+long-format cohort containing ``FA`` and ``MD`` writes both ``scalars/FA`` and
+``scalars/MD`` inside ``modelarray.h5`` with this command:
+
+.. code-block:: console
+
+   modelarrayio to-modelarray \
+       --cohort-file cohort_long.csv \
+       --no-split-files \
+       --output modelarray.h5
+
+Because combined output is the long-format default, omitting ``--no-split-files``
+from this command produces the same result.
+
+Split outputs
+-------------
+
+Split output prefixes the requested output name with each scalar name:
+
+.. code-block:: console
+
+   modelarrayio to-modelarray \
+       --cohort-file cohort_long.csv \
+       --split-files \
+       --output modelarray.h5
+
+For scalars ``FA`` and ``MD``, this writes ``FA_modelarray.h5`` and
+``MD_modelarray.h5``. Each output contains only its named scalar. With
+``--backend tiledb --output modelarray.tdb``, the corresponding directories are
+``FA_modelarray.tdb`` and ``MD_modelarray.tdb``.
+
+For a wide cohort, the equivalent default command is:
+
+.. code-block:: console
+
+   modelarrayio to-modelarray \
+       --cohort-file cohort_wide.csv \
+       --scalar-columns FA MD \
+       --output modelarray.h5
+
+It also writes ``FA_modelarray.h5`` and ``MD_modelarray.h5``. Adding
+``--no-split-files`` instead writes both scalars into the single
+``modelarray.h5`` output.
 
 
 ***********************
