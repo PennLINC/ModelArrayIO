@@ -14,6 +14,9 @@ from modelarrayio.storage import utils as storage_utils
 
 logger = logging.getLogger(__name__)
 
+# TileDBArray R package expects dimensions to be R integers.
+_DIM_DTYPE = np.int32
+
 
 def resolve_dtype(storage_dtype):
     """Resolve a storage dtype to a supported NumPy floating type.
@@ -162,10 +165,10 @@ def create_scalar_matrix_array(
 
     # Domain and schema
     dim_subjects = tiledb.Dim(
-        name='subjects', domain=(0, n_files - 1), tile=tile_shape[0], dtype=np.int64
+        name='subjects', domain=(0, n_files - 1), tile=tile_shape[0], dtype=_DIM_DTYPE
     )
     dim_items = tiledb.Dim(
-        name='items', domain=(0, n_elements - 1), tile=tile_shape[1], dtype=np.int64
+        name='items', domain=(0, n_elements - 1), tile=tile_shape[1], dtype=_DIM_DTYPE
     )
     dom = tiledb.Domain(dim_subjects, dim_items)
     attr_filters = _build_filter_list(compression, compression_level, shuffle)
@@ -254,10 +257,10 @@ def create_empty_scalar_matrix_array(
     _ensure_parent_group(uri)
 
     dim_subjects = tiledb.Dim(
-        name='subjects', domain=(0, n_files - 1), tile=tile_shape[0], dtype=np.int64
+        name='subjects', domain=(0, n_files - 1), tile=tile_shape[0], dtype=_DIM_DTYPE
     )
     dim_items = tiledb.Dim(
-        name='items', domain=(0, n_elements - 1), tile=tile_shape[1], dtype=np.int64
+        name='items', domain=(0, n_elements - 1), tile=tile_shape[1], dtype=_DIM_DTYPE
     )
     dom = tiledb.Domain(dim_subjects, dim_items)
     attr_filters = _build_filter_list(compression, compression_level, shuffle)
@@ -349,7 +352,7 @@ def write_parcel_names(base_uri: str, array_path: str, names: Sequence[str]):
 
     n = len(names)
     dim_idx = tiledb.Dim(
-        name='idx', domain=(0, max(n - 1, 0)), tile=max(1, min(n, 1024)), dtype=np.int64
+        name='idx', domain=(0, max(n - 1, 0)), tile=max(1, min(n, 1024)), dtype=_DIM_DTYPE
     )
     dom = tiledb.Domain(dim_idx)
     # np.unicode_ was removed in NumPy 2.0; np.str_ is the compatible string scalar.
@@ -383,7 +386,7 @@ def write_column_names(base_uri: str, scalar: str, sources: Sequence[str]):
 
     n = len(sources)
     dim_idx = tiledb.Dim(
-        name='idx', domain=(0, max(n - 1, 0)), tile=max(1, min(n, 1024)), dtype=np.int64
+        name='idx', domain=(0, max(n - 1, 0)), tile=max(1, min(n, 1024)), dtype=_DIM_DTYPE
     )
     dom = tiledb.Domain(dim_idx)
     attr_values = tiledb.Attr(name='values', dtype=np.str_)

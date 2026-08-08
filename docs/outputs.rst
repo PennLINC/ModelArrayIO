@@ -23,6 +23,21 @@ The commands fall into two groups:
   for CIFTI).
 
 
+Output splitting
+================
+
+By default, wide cohorts supplied with ``--scalar-columns`` write one output per
+scalar, while long-format cohorts write all scalars to one combined output. Override
+either default explicitly:
+
+- ``--split-files`` writes one output file or TileDB directory per scalar.
+- ``--no-split-files`` writes all scalars to one combined output.
+
+For example, ``--split-files --output modelarray.h5`` with scalars ``alpha`` and
+``beta`` writes ``alpha_modelarray.h5`` and ``beta_modelarray.h5``. The same prefix
+rule applies to TileDB output paths.
+
+
 ***********************
 to-modelarray (volumes)
 ***********************
@@ -45,13 +60,7 @@ TileDB output contents:
   ``(n_subjects, n_voxels)``.
 - Column names are stored in array metadata (``column_names``).
 
-When ``--scalar-columns`` is provided:
-
-- Output is split by scalar column name.
-- Example: ``--scalar-columns alpha beta --output modelarray.h5`` writes:
-  - ``alpha_modelarray.h5``
-  - ``beta_modelarray.h5``
-- The same prefix rule also applies to TileDB output paths.
+See `Output splitting`_ for combined and per-scalar output options.
 
 
 *********************
@@ -80,13 +89,7 @@ TileDB output contents:
 - Column names metadata is written on each scalar matrix.
 - An explicit TileDB array is also written at ``scalars/<scalar_name>/column_names``.
 
-When ``--scalar-columns`` is provided:
-
-- Output is split by scalar column name.
-- Example: ``--scalar-columns alpha beta --output modelarray.h5`` writes:
-  - ``alpha_modelarray.h5``
-  - ``beta_modelarray.h5``
-- The same prefix rule also applies to TileDB output paths.
+See `Output splitting`_ for combined and per-scalar output options.
 
 
 **************************
@@ -114,13 +117,7 @@ TileDB output contents:
   ``(n_subjects, n_fixels)``.
 - Column names are stored in array metadata (``column_names``).
 
-When ``--scalar-columns`` is provided:
-
-- Output is split by scalar column name.
-- Example: ``--scalar-columns alpha beta --output modelarray.h5`` writes:
-  - ``alpha_modelarray.h5``
-  - ``beta_modelarray.h5``
-- The same prefix rule also applies to TileDB output paths.
+See `Output splitting`_ for combined and per-scalar output options.
 
 
 *********************************

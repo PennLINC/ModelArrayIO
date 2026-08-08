@@ -79,5 +79,20 @@ def _sync_overview_figure(app) -> None:
         shutil.copyfile(root_png, static_png)
 
 
+def _patch_sphinxarg_parallel_merge() -> None:
+    """Teach sphinx-argparse's domain how to merge parallel-read data."""
+    from sphinxarg.ext import ArgParseDomain
+
+    def merge_domaindata(self, docnames, otherdata):
+        self.data['commands'].extend(otherdata.get('commands', []))
+
+        commands_by_group = self.data['commands-by-group']
+        for group, commands in otherdata.get('commands-by-group', {}).items():
+            commands_by_group.setdefault(group, []).extend(commands)
+
+    ArgParseDomain.merge_domaindata = merge_domaindata
+
+
 def setup(app):
+    _patch_sphinxarg_parallel_merge()
     app.connect('builder-inited', _sync_overview_figure)

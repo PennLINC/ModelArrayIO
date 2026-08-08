@@ -141,6 +141,71 @@ class TestToModelarrayRouting:
         assert hasattr(kwargs['cohort_long'], 'itertuples'), 'cohort_long must be a DataFrame'
 
 
+class TestSplitOutputsRouting:
+    """CLI splitting can override, or preserve, the cohort-format default."""
+
+    def test_long_cohort_combines_by_default(self, tmp_path, monkeypatch):
+        cohort = _write_cohort(
+            tmp_path, [{'scalar_name': 'THICK', 'source_file': 'sub-01.dscalar.nii'}]
+        )
+        mock = MagicMock(return_value=0)
+        monkeypatch.setattr(_to_modelarray_mod, 'cifti_to_h5', mock)
+
+        to_modelarray(cohort, output=tmp_path / 'out.h5')
+
+        assert mock.call_args.kwargs['split_outputs'] is False
+
+    def test_wide_cohort_splits_by_default(self, tmp_path, monkeypatch):
+        cohort = tmp_path / 'cohort.csv'
+        pd.DataFrame(
+            {
+                'THICK': ['sub-01.dscalar.nii'],
+                'MYELIN': ['sub-01-myelin.dscalar.nii'],
+            }
+        ).to_csv(cohort, index=False)
+        mock = MagicMock(return_value=0)
+        monkeypatch.setattr(_to_modelarray_mod, 'cifti_to_h5', mock)
+
+        to_modelarray(
+            cohort,
+            output=tmp_path / 'out.h5',
+            scalar_columns=['THICK', 'MYELIN'],
+        )
+
+        assert mock.call_args.kwargs['split_outputs'] is True
+
+    def test_split_files_overrides_long_cohort_default(self, tmp_path, monkeypatch):
+        cohort = _write_cohort(
+            tmp_path, [{'scalar_name': 'THICK', 'source_file': 'sub-01.dscalar.nii'}]
+        )
+        mock = MagicMock(return_value=0)
+        monkeypatch.setattr(_to_modelarray_mod, 'cifti_to_h5', mock)
+
+        to_modelarray(cohort, output=tmp_path / 'out.h5', split_outputs=True)
+
+        assert mock.call_args.kwargs['split_outputs'] is True
+
+    def test_no_split_files_overrides_wide_cohort_default(self, tmp_path, monkeypatch):
+        cohort = tmp_path / 'cohort.csv'
+        pd.DataFrame(
+            {
+                'THICK': ['sub-01.dscalar.nii'],
+                'MYELIN': ['sub-01-myelin.dscalar.nii'],
+            }
+        ).to_csv(cohort, index=False)
+        mock = MagicMock(return_value=0)
+        monkeypatch.setattr(_to_modelarray_mod, 'cifti_to_h5', mock)
+
+        to_modelarray(
+            cohort,
+            output=tmp_path / 'out.h5',
+            scalar_columns=['THICK', 'MYELIN'],
+            split_outputs=False,
+        )
+
+        assert mock.call_args.kwargs['split_outputs'] is False
+
+
 # ===========================================================================
 # to_modelarray: user errors
 # ===========================================================================
