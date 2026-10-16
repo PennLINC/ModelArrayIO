@@ -5,8 +5,8 @@ CIFTI (Greyordinate-wise) Data Conversion
 For imaging data in CIFTI format, use the ``modelarrayio to-modelarray`` command to convert
 the CIFTI files to the HDF5 format (``.h5``) used by **ModelArray**,
 and ``modelarrayio export-results`` to export results back to CIFTI.
-The CIFTI workflow is very similar to the MIF workflow
-(:ref:`sphx_glr_auto_examples_plot_mif_workflow.py`).
+The CIFTI workflow is very similar to the fixel workflow
+(:ref:`sphx_glr_auto_examples_plot_fixel_workflow.py`).
 """
 
 # %%

@@ -1,0 +1,48 @@
+#!/bin/sh
+set -eu
+
+# Launch the unmodified ModelArrayIO sources from the commit used by the
+# published benchmark while reusing this checkout's Python environment.
+BASELINE_REVISION=9ab13dd7a4efaed5b86c5d5a184515c4a6968a67
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+REPOSITORY_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
+BASELINE_ROOT=${MODELARRAYIO_BASELINE_ROOT:-${TMPDIR:-/tmp}/modelarrayio-baseline-9ab13dd}
+
+prepare_baseline() {
+    if [ -f "$BASELINE_ROOT/src/modelarrayio/__init__.py" ]; then
+        return
+    fi
+    if [ -e "$BASELINE_ROOT" ]; then
+        echo "Baseline cache exists but is incomplete: $BASELINE_ROOT" >&2
+        echo "Remove it or set MODELARRAYIO_BASELINE_ROOT to an empty path." >&2
+        exit 2
+    fi
+
+    baseline_parent=$(dirname -- "$BASELINE_ROOT")
+    mkdir -p "$baseline_parent"
+    baseline_stage=$(mktemp -d "$baseline_parent/.modelarrayio-baseline-stage.XXXXXX")
+    trap 'rm -rf "$baseline_stage"' EXIT HUP INT TERM
+    git -C "$REPOSITORY_ROOT" archive "$BASELINE_REVISION" | tar -x -C "$baseline_stage"
+    mv "$baseline_stage" "$BASELINE_ROOT"
+    trap - EXIT HUP INT TERM
+}
+
+prepare_baseline
+
+if [ "${1:-}" = "--prepare-only" ]; then
+    printf '%s\n' "$BASELINE_ROOT"
+    exit 0
+fi
+
+if [ -n "${MODELARRAYIO_PYTHON:-}" ]; then
+    PYTHON_EXECUTABLE=$MODELARRAYIO_PYTHON
+elif [ -x "$REPOSITORY_ROOT/.venv/bin/python" ]; then
+    PYTHON_EXECUTABLE=$REPOSITORY_ROOT/.venv/bin/python
+else
+    PYTHON_EXECUTABLE=$(command -v python3)
+fi
+
+export PYTHONPATH="$BASELINE_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+exec "$PYTHON_EXECUTABLE" -c \
+    'import sys; from modelarrayio.cli.main import main; raise SystemExit(main(sys.argv[1:]))' \
+    "$@"

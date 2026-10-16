@@ -71,6 +71,39 @@ Both backends expose a similar API:
 Notes and minor differences:
 
 * Chunking vs tiling: HDF5 uses chunks; TileDB uses tiles. We compute tile sizes analogous to chunk sizes to keep write/read patterns similar.
-* Compression: HDF5 uses ``gzip`` by default; TileDB defaults to ``zstd`` with shuffle for better speed/ratio. You can switch to ``gzip`` for parity.
-* Metadata: HDF5 stores ``column_names`` as a dataset attribute; TileDB stores names as JSON metadata on the array/group.
+* Compression: HDF5 defaults to ``gzip`` level 4; TileDB defaults to ``zstd`` level 5. Compressed outputs use byte shuffle; ``--compression none`` disables the filter pipeline. You can switch TileDB to ``gzip`` for parity.
+* Metadata: HDF5 stores ``column_names`` as a sibling dataset under each scalar group. TileDB stores names as JSON metadata, and CIFTI outputs also retain their dedicated column-name arrays.
 * Layout: Both backends keep dimensions in the same order and use zero-based indices.
+
+Fast conversion and input sources
+=================================
+
+``modelarrayio to-modelarray`` stages one scalar at a time into a typed,
+C-contiguous matrix, then writes that matrix in one backend submission. Use
+``--workers N`` to bound how many input sources are loaded concurrently. This
+meaning applies to local paths and ``s3://`` URLs, every modality, and both
+backends; it does not cap HDF5 compression threads or TileDB's internal pools.
+
+``--workers`` previously controlled concurrent TileDB scalar writes.
+``--s3-workers`` is accepted as a deprecated alias for one minor release.
+Matching values are accepted, conflicting values are rejected, and the alias
+will be removed in the next breaking release.
+
+Local files and materialized DataLad/git-annex symlinks are read directly.
+ModelArrayIO never runs ``datalad get`` implicitly; a broken annex symlink
+reports an actionable error. S3 sources use one shared connection pool sized
+for the loader concurrency. Set ``MODELARRAYIO_S3_ANON=1`` for public buckets.
+
+``--dtype float32`` is the faster, smaller default. ``--dtype float64`` keeps
+source precision through decoding, staging, and storage, at twice the staging
+memory. On the committed 20-subject fixture, three warm runs showed HDF5's
+median write phase increasing from 0.00090 s to 0.00138 s (1.54x) and compressed
+output from 37,460 to 54,355 bytes (1.45x). That fixture is too small for a
+throughput claim; use the reproducible `benchmark harness
+<benchmarks/to_modelarray/README.md>`_ to measure the medium ABIDE cohort on deployment
+hardware.
+
+Pass ``--timing-jsonl PATH`` to append structured per-scalar and total runtime
+records. Outputs are written to a same-filesystem temporary path and validated
+before publication. File replacement is atomic; existing TileDB directories
+use a recoverable rename-and-rollback sequence.

@@ -3,16 +3,42 @@
 from __future__ import annotations
 
 import logging
+import operator
+import os
+import time
+import zlib
+from collections.abc import MutableMapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from itertools import islice, product
 
 import h5py
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-from tqdm.contrib.logging import logging_redirect_tqdm
 
 from modelarrayio.storage import utils as storage_utils
 
 logger = logging.getLogger(__name__)
+
+_H5_FILTER_DEFLATE = 1
+_H5_FILTER_SHUFFLE = 2
+
+
+class _DirectChunkUnsupported(RuntimeError):
+    """Raised when a dataset's filter pipeline cannot be reproduced safely."""
+
+
+def _write_column_names_to_group(
+    group: h5py.Group,
+    sources: pd.Series | Sequence[str],
+) -> h5py.Dataset:
+    """Write source names beside the values dataset in *group*."""
+    values = np.array(storage_utils.normalize_column_names(sources), dtype=object)
+    return group.create_dataset(
+        'column_names',
+        data=values,
+        dtype=h5py.string_dtype(encoding='utf-8'),
+        shape=(len(values),),
+    )
 
 
 def resolve_dtype(storage_dtype):
@@ -116,6 +142,7 @@ def create_scalar_matrix_dataset(
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
+    metrics: MutableMapping[str, object] | None = None,
 ):
     """Create a scalar matrix dataset in an HDF5 file.
 
@@ -150,8 +177,7 @@ def create_scalar_matrix_dataset(
     storage_np_dtype = resolve_dtype(storage_dtype)
     comp, comp_opts, use_shuffle = resolve_compression(compression, compression_level, shuffle)
 
-    if stacked_values.dtype != storage_np_dtype:
-        stacked_values = stacked_values.astype(storage_np_dtype)
+    stacked_values = _coerce_full_matrix(stacked_values, dtype=storage_np_dtype)
 
     n_files, n_elements = stacked_values.shape
     chunk_shape = compute_chunk_shape_full_subjects(
@@ -176,10 +202,13 @@ def create_scalar_matrix_dataset(
         shuffle=use_shuffle,
     )
     logger.info('Writing full dataset %s to HDF5 (this may take a while)...', dataset_path)
-    dset[...] = stacked_values
+    write_metrics = write_full_matrix(dset, stacked_values)
     logger.info('Finished writing dataset %s', dataset_path)
     if sources_list is not None:
-        dset.attrs['column_names'] = list(sources_list)
+        _write_column_names_to_group(dset.parent, sources_list)
+    if metrics is not None:
+        metrics.update(write_metrics)
+        metrics['dataset_path'] = str(dataset_path)
     return dset
 
 
@@ -194,7 +223,7 @@ def create_empty_scalar_matrix_dataset(
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
-    sources_list=None | pd.Series | list,
+    sources_list: pd.Series | list | None = None,
 ):
     """Create an empty scalar matrix dataset in an HDF5 file.
 
@@ -253,9 +282,7 @@ def create_empty_scalar_matrix_dataset(
         shuffle=use_shuffle,
     )
     if sources_list is not None:
-        # dataset_path is e.g. 'scalars/FA/values'; extract the scalar name segment
-        scalar_name = dataset_path.split('/')[1] if dataset_path.count('/') >= 2 else dataset_path
-        write_column_names(h5file, scalar_name, sources_list)
+        _write_column_names_to_group(dset.parent, sources_list)
     return dset
 
 
@@ -271,24 +298,264 @@ def write_column_names(h5_file: h5py.File, scalar: str, sources: pd.Series | lis
     sources : :obj:`list`
         Sources list.
     """
-    values = np.array(storage_utils.normalize_column_names(sources), dtype=object)
+    scalar = storage_utils.validate_scalar_name(scalar)
     grp = h5_file.require_group(f'scalars/{scalar}')
+    _write_column_names_to_group(grp, sources)
 
-    # Variable-length UTF-8 string dtype
-    vlen_str = h5py.string_dtype(encoding='utf-8')
 
-    # Create 1-D dataset of strings
-    grp.create_dataset(
-        'column_names',
-        data=values,
-        dtype=vlen_str,
-        shape=(len(values),),
+# Shared with the other backend; kept under the private name for callers and tests.
+_coerce_full_matrix = storage_utils.coerce_full_matrix
+
+
+def _hdf5_byte_shuffle(raw: bytes, element_size: int) -> bytes:
+    """Apply the HDF5 shuffle filter's byte transpose exactly."""
+    if element_size <= 0:
+        raise ValueError('element_size must be positive')
+    byte_values = np.frombuffer(raw, dtype=np.uint8)
+    if byte_values.size % element_size:
+        raise ValueError('raw chunk size must be divisible by element_size')
+    return byte_values.reshape(-1, element_size).T.tobytes(order='C')
+
+
+def _chunk_offsets(shape: tuple[int, int], chunk_shape: tuple[int, int]) -> list[tuple[int, int]]:
+    return list(
+        product(
+            range(0, shape[0], chunk_shape[0]),
+            range(0, shape[1], chunk_shape[1]),
+        )
     )
 
 
+def _encode_gzip_chunk(
+    matrix: np.ndarray,
+    offset: tuple[int, int],
+    chunk_shape: tuple[int, int],
+    fill_value: object,
+    compression_level: int,
+    shuffle: bool,
+) -> tuple[tuple[int, int], bytes, float, float]:
+    """Pad, optionally byte-shuffle, and gzip one HDF5 chunk."""
+    wall_started = time.perf_counter()
+    cpu_started = time.thread_time()
+    row_start, column_start = offset
+    row_stop = min(row_start + chunk_shape[0], matrix.shape[0])
+    column_stop = min(column_start + chunk_shape[1], matrix.shape[1])
+    source = matrix[row_start:row_stop, column_start:column_stop]
+
+    if source.shape == chunk_shape:
+        chunk = np.ascontiguousarray(source)
+    else:
+        chunk = np.empty(chunk_shape, dtype=matrix.dtype, order='C')
+        chunk.fill(fill_value)
+        chunk[: source.shape[0], : source.shape[1]] = source
+
+    raw = chunk.tobytes(order='C')
+    if shuffle:
+        raw = _hdf5_byte_shuffle(raw, matrix.dtype.itemsize)
+    compressed = zlib.compress(raw, level=compression_level)
+    return (
+        offset,
+        compressed,
+        time.perf_counter() - wall_started,
+        time.thread_time() - cpu_started,
+    )
+
+
+def _available_cpu_count() -> int:
+    """Return CPUs available to this process, respecting affinity/cgroup limits."""
+    process_cpu_count = getattr(os, 'process_cpu_count', None)
+    if process_cpu_count is not None:
+        count = process_cpu_count()
+        if count:
+            return max(1, int(count))
+
+    sched_getaffinity = getattr(os, 'sched_getaffinity', None)
+    if sched_getaffinity is not None:
+        try:
+            return max(1, len(sched_getaffinity(0)))
+        except OSError:
+            pass
+
+    return max(1, os.cpu_count() or 1)
+
+
+def _resolve_compression_workers(compression_workers: int | None) -> int:
+    """Resolve and validate the direct-chunk compression worker count."""
+    configured_workers: object = compression_workers
+    if configured_workers is None:
+        configured_workers = os.environ.get('MODELARRAYIO_HDF5_COMPRESSION_WORKERS')
+        if configured_workers is None:
+            return _available_cpu_count()
+        try:
+            requested_workers = int(configured_workers)
+        except ValueError as exc:
+            raise ValueError(
+                'MODELARRAYIO_HDF5_COMPRESSION_WORKERS must be a positive integer'
+            ) from exc
+    else:
+        if isinstance(configured_workers, bool):
+            raise ValueError('HDF5 compression workers must be a positive integer')
+        try:
+            requested_workers = operator.index(configured_workers)
+        except TypeError as exc:
+            raise ValueError('HDF5 compression workers must be a positive integer') from exc
+
+    if requested_workers < 1:
+        raise ValueError('HDF5 compression workers must be a positive integer')
+    return requested_workers
+
+
+def _validate_direct_chunk_pipeline(dset: h5py.Dataset) -> None:
+    """Verify that direct bytes can reproduce the dataset's full filter pipeline."""
+    if dset.chunks is None:
+        raise _DirectChunkUnsupported('the dataset is not chunked')
+    if dset.compression != 'gzip':
+        raise _DirectChunkUnsupported(
+            f'compression {dset.compression!r} is not supported by the direct-chunk writer'
+        )
+    if not hasattr(dset.id, 'write_direct_chunk'):
+        raise _DirectChunkUnsupported('h5py does not expose write_direct_chunk')
+
+    expected: list[tuple[int, tuple[int, ...]]] = []
+    if dset.shuffle:
+        expected.append((_H5_FILTER_SHUFFLE, (dset.dtype.itemsize,)))
+    expected.append((_H5_FILTER_DEFLATE, (int(dset.compression_opts),)))
+
+    creation_properties = dset.id.get_create_plist()
+    actual = []
+    for index in range(creation_properties.get_nfilters()):
+        filter_id, _flags, client_data, _name = creation_properties.get_filter(index)
+        actual.append((int(filter_id), tuple(int(value) for value in client_data)))
+    if actual != expected:
+        raise _DirectChunkUnsupported(
+            f'the declared HDF5 filter pipeline {actual!r} does not match {expected!r}'
+        )
+
+
+def _write_direct_gzip_chunks(
+    dset: h5py.Dataset,
+    matrix: np.ndarray,
+    *,
+    compression_workers: int | None,
+) -> dict[str, object]:
+    """Compress chunks in worker threads and submit bytes from the calling thread."""
+    _validate_direct_chunk_pipeline(dset)
+    chunk_shape = tuple(int(value) for value in dset.chunks)
+    offsets = _chunk_offsets(matrix.shape, chunk_shape)
+    requested_workers = _resolve_compression_workers(compression_workers)
+    worker_count = max(1, min(requested_workers, len(offsets)))
+    compression_seconds = 0.0
+    compression_cpu_seconds = 0.0
+    submission_seconds = 0.0
+
+    offset_iterator = iter(offsets)
+    with ThreadPoolExecutor(
+        max_workers=worker_count,
+        thread_name_prefix='modelarrayio-hdf5',
+    ) as executor:
+        while batch := tuple(islice(offset_iterator, worker_count)):
+            compression_started = time.perf_counter()
+            futures = [
+                executor.submit(
+                    _encode_gzip_chunk,
+                    matrix,
+                    offset,
+                    chunk_shape,
+                    dset.fillvalue,
+                    int(dset.compression_opts),
+                    bool(dset.shuffle),
+                )
+                for offset in batch
+            ]
+            encoded_chunks = [future.result() for future in futures]
+            compression_seconds += time.perf_counter() - compression_started
+            compression_cpu_seconds += sum(result[3] for result in encoded_chunks)
+
+            for offset, compressed, _worker_wall_seconds, _worker_cpu_seconds in encoded_chunks:
+                submission_started = time.perf_counter()
+                dset.id.write_direct_chunk(offset, compressed, filter_mask=0)
+                submission_seconds += time.perf_counter() - submission_started
+
+    return {
+        'compression_seconds': compression_seconds,
+        'compression_cpu_seconds': compression_cpu_seconds,
+        'submission_seconds': submission_seconds,
+        'compression_workers': worker_count,
+        'chunk_count': len(offsets),
+    }
+
+
+def write_full_matrix(
+    dset: h5py.Dataset,
+    values: np.ndarray | Sequence[np.ndarray],
+    *,
+    compression_workers: int | None = None,
+) -> dict[str, object]:
+    """Write a complete matrix, using parallel direct-chunk gzip when safe.
+
+    The HDF5 handle is only accessed by the calling thread. Worker threads receive
+    NumPy slices and return fully filtered byte buffers. Unsupported filters and
+    worker failures are logged and safely rewritten through ordinary h5py assignment.
+    """
+    matrix = _coerce_full_matrix(values, dtype=dset.dtype, shape=dset.shape)
+    started = time.perf_counter()
+    metrics: dict[str, object] = {
+        'matrix_shape': [int(value) for value in matrix.shape],
+        'dtype': matrix.dtype.name,
+        'chunk_shape': [int(value) for value in dset.chunks] if dset.chunks else None,
+        'compression': dset.compression or 'none',
+        'compression_level': (int(dset.compression_opts) if dset.compression == 'gzip' else None),
+        'shuffle': bool(dset.shuffle),
+        'direct_chunk': False,
+        'fallback': False,
+        'fallback_reason': None,
+        'compression_seconds': 0.0,
+        'compression_cpu_seconds': 0.0,
+        'submission_seconds': 0.0,
+        'compression_workers': 0,
+        'chunk_count': 0,
+    }
+
+    if dset.compression is None:
+        submission_started = time.perf_counter()
+        dset[...] = matrix
+        metrics['submission_seconds'] = time.perf_counter() - submission_started
+    else:
+        # Configuration errors are user errors, not direct-writer failures. Resolve
+        # them before entering the fallback boundary so they cannot be hidden by a
+        # successful but unexpectedly serial h5py write.
+        resolved_workers = _resolve_compression_workers(compression_workers)
+        try:
+            direct_metrics = _write_direct_gzip_chunks(
+                dset,
+                matrix,
+                compression_workers=resolved_workers,
+            )
+        except Exception as exc:  # noqa: BLE001 - any worker/filter failure must fall back safely
+            reason = str(exc) or type(exc).__name__
+            logger.warning(
+                'Falling back to ordinary HDF5 dataset assignment for %s: %s',
+                dset.name,
+                reason,
+            )
+            logger.debug('Direct-chunk write failure details', exc_info=True)
+            submission_started = time.perf_counter()
+            dset[...] = matrix
+            metrics['submission_seconds'] = time.perf_counter() - submission_started
+            metrics['compression_seconds'] = None
+            metrics['compression_cpu_seconds'] = None
+            metrics['fallback'] = True
+            metrics['fallback_reason'] = reason
+        else:
+            metrics.update(direct_metrics)
+            metrics['direct_chunk'] = True
+
+    metrics['write_seconds'] = time.perf_counter() - started
+    return metrics
+
+
 def write_rows_in_column_stripes(dset, rows):
-    """Fill a 2D HDF5 dataset by buffering column-aligned stripes to minimize
-    chunk recompression, using about one chunk's worth of memory.
+    """Compatibility wrapper that now writes rows as one full matrix.
 
     Parameters
     ----------
@@ -296,39 +563,11 @@ def write_rows_in_column_stripes(dset, rows):
         Target dataset with shape (n_files, n_elements) and chunking set.
     rows : Sequence[np.ndarray]
         List/sequence of 1D arrays, one per subject, length == n_elements.
-        Each will be cast on write to dset.dtype if needed.
-    """
-    n_files, n_elements = dset.shape
-    if len(rows) != n_files:
-        raise ValueError('rows length does not match dataset subjects dimension')
-    stripe_width = dset.chunks[1] if dset.chunks is not None else max(1, n_elements // 8)
-    logger.info(
-        'Stripe-writing dataset %s with stripe width=%d (chunks=%s)',
-        dset.name,
-        stripe_width,
-        str(dset.chunks),
-    )
+        Each will be cast into one C-contiguous staging matrix if needed.
 
-    buf = np.empty((n_files, stripe_width), dtype=dset.dtype)
-    with logging_redirect_tqdm():
-        for start in tqdm(
-            range(0, n_elements, stripe_width),
-            bar_format=(
-                '{percentage:3.0f}% {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
-            ),
-            ascii=True,
-            mininterval=max(1, (n_elements / stripe_width) // 200),
-        ):
-            end = min(start + stripe_width, n_elements)
-            width = end - start
-            if width != stripe_width:
-                # resize buffer view on last partial stripe
-                buf_view = buf[:, :width]
-            else:
-                buf_view = buf
-            for i, row in enumerate(rows):
-                # slice is contiguous; cast on assignment if needed
-                buf_view[i, :] = row[start:end]
-            logger.debug('Writing stripe [%d:%d] to %s', start, end, dset.name)
-            dset[:, start:end] = buf_view
-    logger.info('Finished stripe-writing dataset %s', dset.name)
+    Returns
+    -------
+    dict
+        JSON-serializable write metrics from :func:`write_full_matrix`.
+    """
+    return write_full_matrix(dset, rows)

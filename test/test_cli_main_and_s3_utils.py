@@ -70,7 +70,7 @@ def test_make_s3_client_anon_and_signed(monkeypatch) -> None:
 
     monkeypatch.setenv('MODELARRAYIO_S3_ANON', '0')
     s3_utils._make_s3_client()
-    assert calls[1] == ('s3', {})
+    assert calls[1] == ('s3', {'config': ('cfg', {'max_pool_connections': 10})})
 
 
 def test_make_s3_client_requires_boto3(monkeypatch) -> None:
@@ -93,6 +93,19 @@ def test_load_nibabel_local_path(monkeypatch, tmp_path) -> None:
     data = np.zeros((2, 2, 2), dtype=np.float32)
     nb.Nifti1Image(data, np.eye(4)).to_filename(nifti_path)
     loaded = s3_utils.load_nibabel(str(nifti_path))
+    np.testing.assert_array_equal(loaded.get_fdata(), data)
+
+
+def test_load_nibabel_materialized_datalad_symlink(tmp_path) -> None:
+    annex_object = tmp_path / '.git' / 'annex' / 'objects' / 'image.nii.gz'
+    annex_object.parent.mkdir(parents=True)
+    data = np.arange(8, dtype=np.float32).reshape(2, 2, 2)
+    nb.Nifti1Image(data, np.eye(4)).to_filename(annex_object)
+    worktree_link = tmp_path / 'image.nii.gz'
+    worktree_link.symlink_to(annex_object)
+
+    loaded = s3_utils.load_nibabel(worktree_link)
+
     np.testing.assert_array_equal(loaded.get_fdata(), data)
 
 

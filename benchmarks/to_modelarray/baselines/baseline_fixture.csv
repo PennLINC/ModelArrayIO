@@ -1,0 +1,5 @@
+cohort,cohort_sha256,measured_at,platform,repetitions,aggregation,backend,workers,dtype,compression,compression_level,target_chunk_mb,wall_seconds,write_seconds,output_bytes,output_file_count,fragment_count,r_gate
+fixture-20-nifti,867c3eb9194d51b7f20ce511a308fa818d1bbe75124f6fc66f76bcc7c85508fb,2026-09-18,macOS-arm64-14cpu,3,median,hdf5,1,float32,gzip,4,2.0,0.4263049580,0.0008974160,37460,1,,passed
+fixture-20-nifti,867c3eb9194d51b7f20ce511a308fa818d1bbe75124f6fc66f76bcc7c85508fb,2026-09-18,macOS-arm64-14cpu,3,median,hdf5,1,float64,gzip,4,2.0,0.4020678340,0.0013775420,54355,1,,passed
+fixture-20-nifti,867c3eb9194d51b7f20ce511a308fa818d1bbe75124f6fc66f76bcc7c85508fb,2026-09-18,macOS-arm64-14cpu,3,median,tiledb,1,float32,zstd,5,2.0,0.4307647080,0.0062273330,20018,8,1,passed
+fixture-20-nifti,867c3eb9194d51b7f20ce511a308fa818d1bbe75124f6fc66f76bcc7c85508fb,2026-09-18,macOS-arm64-14cpu,3,median,tiledb,1,float64,zstd,5,2.0,0.4465746670,0.0061256250,37116,8,1,passed

@@ -23,6 +23,7 @@ def test_mif_to_image_uses_mifimage_loader(monkeypatch, tmp_path: Path) -> None:
         assert path == str(tmp_path / 'input.mif')
         return _FakeImage()
 
+    (tmp_path / 'input.mif').touch()
     monkeypatch.setattr(mif.MifImage, 'from_filename', staticmethod(_fake_from_filename))
     img, data = mif.mif_to_image(tmp_path / 'input.mif')
     assert isinstance(img, _FakeImage)
@@ -37,7 +38,7 @@ def test_load_cohort_mif_sequential_and_parallel(monkeypatch) -> None:
         }
     )
 
-    def _fake_mif_to_image(path):
+    def _fake_mif_to_image(path, dtype=None):
         mapping = {
             'a': np.array([1.0, 2.0], dtype=np.float32),
             'b': np.array([3.0, 4.0], dtype=np.float32),
@@ -70,7 +71,7 @@ def test_gather_fixels_builds_tables(monkeypatch) -> None:
         dtype=np.float32,
     )
 
-    def _fake_mif_to_image(path):
+    def _fake_mif_to_image(path, dtype=np.float32):
         if str(path).endswith('index.mif'):
             return object(), index_data
         return object(), directions
@@ -89,7 +90,7 @@ def test_gather_fixels_raises_when_terminal_count_missing(monkeypatch) -> None:
     index_data[..., 1] = np.nan
     directions = np.zeros((1, 3), dtype=np.float32)
 
-    def _fake_mif_to_image(path):
+    def _fake_mif_to_image(path, dtype=np.float32):
         return object(), index_data if str(path).endswith('index.mif') else directions
 
     monkeypatch.setattr(mif, 'mif_to_image', _fake_mif_to_image)

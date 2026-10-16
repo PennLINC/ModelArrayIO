@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import Sequence
+import time
+from collections.abc import MutableMapping, Sequence
 
 import numpy as np
 import tiledb
@@ -34,27 +35,39 @@ def resolve_dtype(storage_dtype):
     return storage_utils.resolve_dtype(storage_dtype)
 
 
+def _resolve_compression_settings(
+    compression: str | None,
+    compression_level: int | None,
+) -> tuple[str, int | None]:
+    """Return the effective TileDB codec and level used by the schema."""
+    comp = 'none' if compression is None else str(compression).lower()
+    if comp == 'none':
+        return 'none', None
+    if comp not in {'zstd', 'gzip'}:
+        logger.warning("Unknown compression '%s' for TileDB; disabling compression.", comp)
+        return 'none', None
+
+    default_level = 5 if comp == 'zstd' else 4
+    try:
+        level = int(compression_level) if compression_level is not None else default_level
+    except (TypeError, ValueError):
+        level = default_level
+    return comp, level
+
+
 def _build_filter_list(compression: str | None, compression_level: int | None, shuffle: bool):
+    compression, compression_level = _resolve_compression_settings(compression, compression_level)
     filters = []
-    if shuffle:
+    # A standalone byte-shuffle still consumes CPU even though it cannot
+    # reduce output size. Keep ``--compression none`` as the true no-filter
+    # path, matching HDF5 and the CLI description.
+    if shuffle and compression != 'none':
         # ByteShuffle works well for float data; BitShuffle is also available
         filters.append(tiledb.ByteShuffleFilter())
-    if compression is None or str(compression).lower() == 'none':
-        pass
-    else:
-        comp = str(compression).lower()
-        level = None
-        try:
-            level = int(compression_level) if compression_level is not None else None
-        except (TypeError, ValueError):
-            level = None
-        if comp == 'zstd':
-            filters.append(tiledb.ZstdFilter(level=level if level is not None else 5))
-        elif comp == 'gzip':
-            filters.append(tiledb.GzipFilter(level=level if level is not None else 4))
-        else:
-            # Fallback: no compression if an unknown codec is provided
-            logger.warning("Unknown compression '%s' for TileDB; disabling compression.", comp)
+    if compression == 'zstd':
+        filters.append(tiledb.ZstdFilter(level=compression_level))
+    elif compression == 'gzip':
+        filters.append(tiledb.GzipFilter(level=compression_level))
     return tiledb.FilterList(filters)
 
 
@@ -120,6 +133,7 @@ def create_scalar_matrix_array(
     shuffle=True,
     tile_voxels=0,
     target_tile_mb=2.0,
+    metrics: MutableMapping[str, object] | None = None,
 ):
     """Create a scalar matrix array in a TileDB directory.
 
@@ -152,8 +166,7 @@ def create_scalar_matrix_array(
         URI of the created array.
     """
     storage_np_dtype = resolve_dtype(storage_dtype)
-    if stacked_values.dtype != storage_np_dtype:
-        stacked_values = stacked_values.astype(storage_np_dtype)
+    stacked_values = _coerce_full_matrix(stacked_values, dtype=storage_np_dtype)
 
     n_files, n_elements = stacked_values.shape
     tile_shape = compute_tile_shape_full_subjects(
@@ -171,7 +184,11 @@ def create_scalar_matrix_array(
         name='items', domain=(0, n_elements - 1), tile=tile_shape[1], dtype=_DIM_DTYPE
     )
     dom = tiledb.Domain(dim_subjects, dim_items)
-    attr_filters = _build_filter_list(compression, compression_level, shuffle)
+    effective_compression, effective_level = _resolve_compression_settings(
+        compression, compression_level
+    )
+    effective_shuffle = bool(shuffle and effective_compression != 'none')
+    attr_filters = _build_filter_list(effective_compression, effective_level, shuffle)
     attr_values = tiledb.Attr(name='values', dtype=storage_np_dtype, filters=attr_filters)
     schema = tiledb.ArraySchema(domain=dom, attrs=[attr_values], sparse=False)
 
@@ -188,9 +205,12 @@ def create_scalar_matrix_array(
         tiledb.remove(uri)
     tiledb.Array.create(uri, schema)
 
-    logger.info('Writing full array %s to TileDB (this may take a while)...', uri)
+    logger.info('Writing full array %s to TileDB in one dense submission...', uri)
+    write_started = time.perf_counter()
     with tiledb.open(uri, 'w') as A:
+        submission_started = time.perf_counter()
         A[:] = {'values': stacked_values}
+        submission_seconds = time.perf_counter() - submission_started
         if sources_list is not None:
             try:
                 A.meta['column_names'] = json.dumps(
@@ -199,6 +219,28 @@ def create_scalar_matrix_array(
             except (TypeError, ValueError, tiledb.TileDBError):
                 # Fallback without metadata if serialization fails
                 logger.warning('Failed to write column_names metadata for %s', uri)
+    write_seconds = time.perf_counter() - write_started
+    if metrics is not None:
+        fragment_count = len(tiledb.array_fragments(uri))
+        output_file_count, output_bytes = _local_output_stats(uri)
+        metrics.update(
+            {
+                'dataset_path': str(dataset_path),
+                'matrix_shape': [int(value) for value in stacked_values.shape],
+                'dtype': stacked_values.dtype.name,
+                'tile_shape': [int(value) for value in tile_shape],
+                'compression': effective_compression,
+                'compression_level': effective_level,
+                'shuffle': effective_shuffle,
+                'compression_seconds': None,
+                'submission_seconds': submission_seconds,
+                'write_seconds': write_seconds,
+                'dense_submissions': 1,
+                'fragment_count': fragment_count,
+                'output_file_count': output_file_count,
+                'output_bytes': output_bytes,
+            }
+        )
     logger.info('Finished writing array %s', uri)
     return uri
 
@@ -291,9 +333,73 @@ def create_empty_scalar_matrix_array(
     return uri
 
 
+# Shared with the other backend; kept under the private name for callers and tests.
+_coerce_full_matrix = storage_utils.coerce_full_matrix
+
+
+def _local_output_stats(uri: str) -> tuple[int | None, int | None]:
+    """Return local file count and bytes without treating remote URIs as paths."""
+    if '://' in uri or not os.path.exists(uri):
+        return None, None
+    file_count = 0
+    byte_count = 0
+    for root, _directories, files in os.walk(uri):
+        for filename in files:
+            file_count += 1
+            try:
+                byte_count += os.path.getsize(os.path.join(root, filename))
+            except OSError:
+                logger.debug('Could not stat TileDB output file %s', filename, exc_info=True)
+    return file_count, byte_count
+
+
+def write_full_matrix(uri: str, values: np.ndarray | Sequence[np.ndarray]) -> dict[str, object]:
+    """Write an existing dense TileDB array in exactly one submission."""
+    with tiledb.open(uri, 'r') as array_info:
+        schema = array_info.schema
+        if schema.sparse:
+            raise ValueError(f"TileDB array '{uri}' must be dense")
+        if schema.domain.ndim != 2:
+            raise ValueError(
+                f"TileDB array '{uri}' must have two dimensions, got {schema.domain.ndim}"
+            )
+        if schema.nattr != 1 or not schema.has_attr('values'):
+            raise ValueError(
+                f"TileDB array '{uri}' must have exactly one attribute named 'values'"
+            )
+
+        domain = schema.domain
+        shape = tuple(
+            int(domain.dim(index).domain[1] - domain.dim(index).domain[0] + 1)
+            for index in range(2)
+        )
+        attr_dtype = schema.attr('values').dtype
+        tile_shape = tuple(int(domain.dim(index).tile) for index in range(2))
+
+    matrix = _coerce_full_matrix(values, dtype=attr_dtype, shape=shape)
+    write_started = time.perf_counter()
+    with tiledb.open(uri, 'w') as array:
+        submission_started = time.perf_counter()
+        array[:] = {'values': matrix}
+        submission_seconds = time.perf_counter() - submission_started
+    write_seconds = time.perf_counter() - write_started
+    output_file_count, output_bytes = _local_output_stats(uri)
+    return {
+        'matrix_shape': [int(value) for value in matrix.shape],
+        'dtype': matrix.dtype.name,
+        'tile_shape': [int(value) for value in tile_shape],
+        'compression_seconds': None,
+        'submission_seconds': submission_seconds,
+        'write_seconds': write_seconds,
+        'dense_submissions': 1,
+        'fragment_count': len(tiledb.array_fragments(uri)),
+        'output_file_count': output_file_count,
+        'output_bytes': output_bytes,
+    }
+
+
 def write_rows_in_column_stripes(uri: str, rows: Sequence[np.ndarray]):
-    """Fill a 2D TileDB dense array by buffering column-aligned stripes to minimize
-    tile writes, using about one tile's worth of memory.
+    """Compatibility wrapper that now writes rows in one dense submission.
 
     Parameters
     ----------
@@ -301,34 +407,14 @@ def write_rows_in_column_stripes(uri: str, rows: Sequence[np.ndarray]):
         Target array URI with shape (n_files, n_elements).
     rows : Sequence[np.ndarray]
         List/sequence of 1D arrays, one per subject, length == n_elements.
-        Each will be cast on write to array attr dtype if needed.
+        Each will be cast into one C-contiguous staging matrix if needed.
+
+    Returns
+    -------
+    dict
+        JSON-serializable write metrics from :func:`write_full_matrix`.
     """
-    with tiledb.open(uri, 'r') as Ainfo:
-        dom = Ainfo.schema.domain
-        n_files = dom.dim(0).domain[1] - dom.dim(0).domain[0] + 1
-        n_elements = dom.dim(1).domain[1] - dom.dim(1).domain[0] + 1
-        attr_dtype = Ainfo.schema.attr(0).dtype
-
-    if len(rows) != n_files:
-        raise ValueError('rows length does not match array subjects dimension')
-
-    # Try to align stripe width to the items tile for best throughput
-    with tiledb.open(uri, 'r') as Ainfo2:
-        items_tile = Ainfo2.schema.domain.dim(1).tile
-    stripe_width = items_tile if items_tile is not None else max(1, n_elements // 8)
-
-    buf = np.empty((n_files, stripe_width), dtype=attr_dtype)
-    for start in range(0, n_elements, stripe_width):
-        end = min(start + stripe_width, n_elements)
-        width = end - start
-        if width != stripe_width:
-            buf_view = buf[:, :width]
-        else:
-            buf_view = buf
-        for i, row in enumerate(rows):
-            buf_view[i, :] = row[start:end]
-        with tiledb.open(uri, 'w') as A:
-            A[:, start:end] = {'values': buf_view}
+    return write_full_matrix(uri, rows)
 
 
 def write_parcel_names(base_uri: str, array_path: str, names: Sequence[str]):
@@ -380,6 +466,7 @@ def write_column_names(base_uri: str, scalar: str, sources: Sequence[str]):
     sources : :obj:`list`
         Sources list.
     """
+    scalar = storage_utils.validate_scalar_name(scalar)
     sources = storage_utils.normalize_column_names(sources)
     uri = os.path.join(base_uri, 'scalars', scalar, 'column_names')
     _ensure_parent_group(uri)

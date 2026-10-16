@@ -1,0 +1,2 @@
+measured_at,run_id,cohort,cohort_sha256,platform,allocated_cpus,repetitions,total_cases,hdf5_cases,tiledb_cases,loader_workers,dtypes,target_chunk_mb,hdf5_codecs,tiledb_codecs,hdf5_compression_workers,passed_cases,failed_cases,r_gate_passed_cases,status
+2026-09-19,fixture-nifti-full-sharded-20260919,nifti-20,23abf80d6356e0ebb2f8e1c0320bb254735c3654364d8df78a9db497a3191c52,macOS-arm64-M3-Max,14,1,440,280,160,"1,2,4,8,14","float32,float64","8,32,64,128","gzip-1,gzip-4,none","zstd-1,zstd-3,zstd-5,none","1,4,14",440,0,440,passed

@@ -73,6 +73,12 @@ instance/
 docs/_build/
 docs/generated/
 docs/auto_examples/
+docs/sg_execution_times.rst
+
+# Downloaded/generated benchmark data and results (one set per suite)
+benchmarks/*/cohorts/
+benchmarks/*/data/
+benchmarks/*/results/
 
 # PyBuilder
 target/

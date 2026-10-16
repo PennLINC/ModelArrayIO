@@ -11,7 +11,9 @@ from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.cifti_to_h5 import cifti_to_h5
 from modelarrayio.cli.mif_to_h5 import mif_to_h5
 from modelarrayio.cli.nifti_to_h5 import nifti_to_h5
-from modelarrayio.cli.parser_utils import _is_file, add_log_level_arg
+from modelarrayio.cli.parser_utils import _is_file, _is_file_or_s3, add_log_level_arg
+from modelarrayio.cli.runtime import resolve_loader_workers
+from modelarrayio.storage import utils as storage_utils
 from modelarrayio.utils.misc import load_and_normalize_cohort
 
 logger = logging.getLogger(__name__)
@@ -22,18 +24,19 @@ def to_modelarray(
     backend='hdf5',
     output=Path('modelarray.h5'),
     storage_dtype='float32',
-    compression='gzip',
-    compression_level=4,
+    compression=None,
+    compression_level=None,
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
-    workers=1,
-    s3_workers=1,
+    workers=None,
+    s3_workers=None,
     scalar_columns=None,
     split_outputs=None,
     group_mask_file=None,
     index_file=None,
     directions_file=None,
+    timing_jsonl=None,
 ):
     """Load neuroimaging data and write to an HDF5 or TileDB modelarray file.
 
@@ -57,6 +60,15 @@ def to_modelarray(
     cohort_long, modality = load_and_normalize_cohort(cohort_file, scalar_columns=scalar_columns)
     logger.info('Detected modality: %s', modality)
 
+    workers = resolve_loader_workers(workers, s3_workers)
+    if workers > 1:
+        logger.info('Loading %d sources concurrently.', workers)
+    compression, compression_level = storage_utils.resolve_backend_compression(
+        backend,
+        compression,
+        compression_level,
+    )
+
     if split_outputs is None:
         split_outputs = bool(scalar_columns)
 
@@ -71,8 +83,9 @@ def to_modelarray(
         'chunk_voxels': chunk_voxels,
         'target_chunk_mb': target_chunk_mb,
         'workers': workers,
-        's3_workers': s3_workers,
+        's3_workers': None,
         'split_outputs': split_outputs,
+        'timing_jsonl': timing_jsonl,
     }
 
     if modality == 'nifti':
@@ -111,7 +124,7 @@ def _parse_to_modelarray():
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    IsFile = partial(_is_file, parser=parser)
+    IsFileOrS3 = partial(_is_file_or_s3, parser=parser)
 
     parser.add_argument(
         '--cohort-file',
@@ -162,7 +175,13 @@ def _parse_to_modelarray():
     )
     parser.add_argument(
         '--dtype',
-        help='Floating dtype for storing values: float32 (default) or float64',
+        help=(
+            'Floating dtype for loading and storing values. float32 is the faster, smaller '
+            'default; float64 preserves full source precision and generally doubles staging '
+            'memory and bytes processed. On the bundled 20-subject fixture, float64 made the '
+            'HDF5 write phase 1.54x slower and the compressed output 1.45x larger; real cohorts '
+            'vary.'
+        ),
         choices=['float32', 'float64'],
         default='float32',
         dest='storage_dtype',
@@ -170,20 +189,20 @@ def _parse_to_modelarray():
     parser.add_argument(
         '--compression',
         help=(
-            'Compression filter (default gzip). '
+            'Compression filter. The default is gzip for HDF5 and zstd for TileDB. '
             'gzip works for both backends; '
             'lzf is HDF5-only; '
             'zstd is TileDB-only.'
         ),
         choices=['gzip', 'zstd', 'lzf', 'none'],
-        default='gzip',
+        default=None,
     )
     parser.add_argument(
         '--compression-level',
         '--compression_level',
         type=int,
-        help='Compression level (codec-dependent). Default 4.',
-        default=4,
+        help='Compression level. Effective defaults: gzip 4; TileDB zstd 5.',
+        default=None,
     )
     parser.add_argument(
         '--no-shuffle',
@@ -212,16 +231,22 @@ def _parse_to_modelarray():
         default=2.0,
     )
 
-    tiledb_group = parser.add_argument_group('TileDB arguments')
-    tiledb_group.add_argument(
+    runtime_group = parser.add_argument_group('Runtime arguments')
+    runtime_group.add_argument(
         '--workers',
         type=int,
         help=(
-            'Maximum number of parallel TileDB write workers. '
-            'Default 1. '
-            'Has no effect when --backend=hdf5.'
+            'Maximum number of input sources loaded concurrently, for local or S3 input, '
+            'every modality, and either backend. Effective default: 1.'
         ),
-        default=1,
+        default=None,
+    )
+    runtime_group.add_argument(
+        '--timing-jsonl',
+        '--timing_jsonl',
+        type=Path,
+        default=None,
+        help='Append structured per-scalar and total runtime metrics to this JSON Lines file.',
     )
 
     s3_group = parser.add_argument_group('S3 arguments')
@@ -229,11 +254,10 @@ def _parse_to_modelarray():
         '--s3-workers',
         '--s3_workers',
         type=int,
-        default=1,
+        default=None,
         help=(
-            'Number of parallel worker processes for loading image files. '
-            'Set > 1 to enable parallel downloads when cohort paths begin with s3://. '
-            'Default 1 (serial).'
+            'Deprecated alias for --workers. Matching values are accepted for one minor '
+            'release; conflicting values are rejected.'
         ),
     )
 
@@ -241,7 +265,7 @@ def _parse_to_modelarray():
     nifti_group.add_argument(
         '--mask',
         help='Path to a NIfTI binary group mask file.',
-        type=IsFile,
+        type=IsFileOrS3,
         default=None,
         dest='group_mask_file',
     )
@@ -251,14 +275,14 @@ def _parse_to_modelarray():
         '--index-file',
         '--index_file',
         help='Nifti2 index file.',
-        type=IsFile,
+        type=IsFileOrS3,
         default=None,
     )
     mif_group.add_argument(
         '--directions-file',
         '--directions_file',
         help='Nifti2 directions file.',
-        type=IsFile,
+        type=IsFileOrS3,
         default=None,
     )
 

@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from modelarrayio.storage import h5_storage, tiledb_storage
+from modelarrayio.storage import utils as storage_utils
 
 
 def configure_logging(log_level: str) -> None:
@@ -45,6 +46,33 @@ def prefixed_output_path(output_path: str | Path, prefix: str) -> Path:
     return path.with_name(f'{safe_prefix}_{path.name}')
 
 
+def conversion_output_paths(
+    output_path: str | Path,
+    scalar_names: Sequence[str],
+    *,
+    split_outputs: bool,
+) -> list[Path]:
+    """Return final output paths and reject colliding split filenames."""
+    if not split_outputs:
+        for scalar_name in scalar_names:
+            storage_utils.validate_scalar_name(scalar_name)
+        return [Path(output_path)]
+
+    validated_names = [storage_utils.validate_scalar_name(name) for name in scalar_names]
+    paths = [prefixed_output_path(output_path, scalar_name) for scalar_name in validated_names]
+    collision_keys: dict[str, tuple[str, Path]] = {}
+    for scalar_name, path in zip(validated_names, paths, strict=True):
+        key = str(path.resolve(strict=False)).casefold()
+        if key in collision_keys:
+            previous_name, previous_path = collision_keys[key]
+            raise ValueError(
+                f'Scalar names {previous_name!r} and {str(scalar_name)!r} map to the same '
+                f'split output {str(previous_path)!r}.'
+            )
+        collision_keys[key] = (str(scalar_name), path)
+    return paths
+
+
 def write_table_dataset(
     h5_file: h5py.File,
     dataset_name: str,
@@ -62,7 +90,7 @@ def write_table_dataset(
 
 def write_hdf5_scalar_matrices(
     h5_file: h5py.File,
-    scalars: Mapping[str, Sequence[np.ndarray]],
+    scalars: Mapping[str, np.ndarray | Sequence[np.ndarray]],
     sources_by_scalar: Mapping[str, Sequence[str]],
     *,
     storage_dtype: str,
@@ -71,32 +99,37 @@ def write_hdf5_scalar_matrices(
     shuffle: bool,
     chunk_voxels: int,
     target_chunk_mb: float,
-) -> None:
-    """Write per-scalar matrices into an open HDF5 file."""
-    for scalar_name, rows in scalars.items():
-        n_files = len(rows)
+) -> dict[str, dict[str, object]]:
+    """Write each scalar as one full matrix into an open HDF5 file."""
+    metrics: dict[str, dict[str, object]] = {}
+    for scalar_name, matrix in scalars.items():
+        scalar_name = storage_utils.validate_scalar_name(scalar_name)
+        n_files = len(matrix)
         if n_files == 0:
             continue
-        n_elements = rows[0].shape[0]
-        dataset = h5_storage.create_empty_scalar_matrix_dataset(
+        scalar_metrics: dict[str, object] = {}
+        h5_storage.create_scalar_matrix_dataset(
             h5_file,
             f'scalars/{scalar_name}/values',
-            n_files,
-            n_elements,
+            matrix,
+            sources_by_scalar[scalar_name],
             storage_dtype=storage_dtype,
             compression=compression,
             compression_level=compression_level,
             shuffle=shuffle,
             chunk_voxels=chunk_voxels,
             target_chunk_mb=target_chunk_mb,
-            sources_list=sources_by_scalar[scalar_name],
+            metrics=scalar_metrics,
         )
-        h5_storage.write_rows_in_column_stripes(dataset, rows)
+        scalar_metrics['backend'] = 'hdf5'
+        scalar_metrics['scalar_name'] = str(scalar_name)
+        metrics[str(scalar_name)] = scalar_metrics
+    return metrics
 
 
 def write_tiledb_scalar_matrices(
     output_dir: str | Path,
-    scalars: Mapping[str, Sequence[np.ndarray]],
+    scalars: Mapping[str, np.ndarray | Sequence[np.ndarray]],
     sources_by_scalar: Mapping[str, Sequence[str]],
     *,
     storage_dtype: str,
@@ -106,35 +139,40 @@ def write_tiledb_scalar_matrices(
     chunk_voxels: int,
     target_chunk_mb: float,
     write_column_name_arrays: bool = False,
-) -> None:
-    """Write per-scalar matrices into a TileDB directory."""
+) -> dict[str, dict[str, object]]:
+    """Write each scalar in one dense submission into a TileDB directory."""
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
+    metrics: dict[str, dict[str, object]] = {}
 
-    for scalar_name, rows in scalars.items():
-        n_files = len(rows)
+    for scalar_name, matrix in scalars.items():
+        scalar_name = storage_utils.validate_scalar_name(scalar_name)
+        n_files = len(matrix)
         if n_files == 0:
             continue
-        n_elements = rows[0].shape[0]
         dataset_path = f'scalars/{scalar_name}/values'
-        tiledb_storage.create_empty_scalar_matrix_array(
+        scalar_metrics: dict[str, object] = {}
+        tiledb_storage.create_scalar_matrix_array(
             str(output_path),
             dataset_path,
-            n_files,
-            n_elements,
+            matrix,
+            sources_by_scalar[scalar_name],
             storage_dtype=storage_dtype,
             compression=compression,
             compression_level=compression_level,
             shuffle=shuffle,
             tile_voxels=chunk_voxels,
             target_tile_mb=target_chunk_mb,
-            sources_list=sources_by_scalar[scalar_name],
+            metrics=scalar_metrics,
         )
         if write_column_name_arrays:
             tiledb_storage.write_column_names(
                 str(output_path), scalar_name, sources_by_scalar[scalar_name]
             )
-        tiledb_storage.write_rows_in_column_stripes(str(output_path / dataset_path), rows)
+        scalar_metrics['backend'] = 'tiledb'
+        scalar_metrics['scalar_name'] = str(scalar_name)
+        metrics[str(scalar_name)] = scalar_metrics
+    return metrics
 
 
 def write_hdf5_parcel_arrays(

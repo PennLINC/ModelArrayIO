@@ -26,9 +26,19 @@ CLI flag.
 
 ## Measured starting point
 
-These numbers come from a scouting run on a 14-core macOS workstation with a
-warm page cache. They exist only to rank the work; the benchmark plan below
-replaces them with measurements on real data.
+**Production baseline (CUBIC, real run).** The original converter was run on the
+full RBC freesurferpost cohort — 8,693 subject-sessions × 70 scalars, 608,510
+`fs_LR den-164k` dscalars — with `--backend tiledb --compression zstd
+--compression-level 1 --target-chunk-mb 32 --workers 15`
+(`modelarray_rbc_tiledb/code/02_create_tiledb.sh`). Its log shows the **first
+scalar took 112 h 23 m** (the old loader parsed all 608,510 CIFTI XML headers
+up front, GIL-bound, so extra workers made it slower), and the run stalled at
+15/70 scalars after ~119 h; 18 scalars were completed. That output is now the
+bitwise correctness reference for the optimized converter.
+
+The scouting numbers below come from a 14-core macOS workstation with a warm
+page cache; they rank the work, and the CUBIC ladder in the benchmark plan
+replaces them with production measurements.
 
 ```text
 HDF5 write, gzip-4 + shuffle
@@ -50,44 +60,41 @@ NIfTI row assembly, current flattened_image    52 ms/subject
 NIfTI row assembly, cached mask + float32      34 ms/subject
 ```
 
-Three conclusions follow, and they set the shape of the plan.
+## What was slow in the original code
 
-**Writing HDF5 is slow because of compression, not disk speed.** `h5py`
-compresses each chunk one at a time, on the single thread that writes the file.
-That caps HDF5 output at roughly 70 MB/s no matter how fast the loader feeds
-it. Compressing chunks on several threads at once removes the cap — 70 MB/s
-becomes 695 MB/s — and is the single largest win available.
+The measurements above explain each bottleneck; the fix for each is in
+*Decisions*.
 
-**Writing TileDB is fast once we stop reopening the array.** The current code
-reopens the array once per spatial stripe. Writing the whole matrix in one
-query is 6.7 times faster, and turns 92 write commits across 278 files into
-1 commit across 5 files.
+1. **HDF5 writes were limited by compression, not disk speed.** `h5py`
+   compresses each chunk one at a time on the single thread that writes the
+   file, capping output at roughly 70 MB/s no matter how fast the loader feeds
+   it. Compressing chunks on several threads removes the cap (695 MB/s) and is
+   the single largest write-side win.
+2. **TileDB writes reopened the array once per spatial stripe**, and
+   `create_empty_scalar_matrix_array` opened it one more time just to write
+   `column_names`: one scalar became 92 array opens and 92 write commits across
+   278 files. One full-matrix query is 6.7 times faster and leaves 1 commit
+   across 5 files.
+3. `load_cohort_cifti`, `load_cohort_voxels` and `load_cohort_mif` each built
+   the **entire cohort across all scalars** in memory — as dictionaries of
+   per-subject row lists — before any writing started, and submitted one task
+   per cohort item when workers > 1.
+4. CIFTI-to-TileDB started several scalar jobs at once under its own
+   `--workers`, so a run could hold several full scalar matrices in memory.
+5. `flattened_image` decoded each scalar and its individual mask into
+   full-volume `float64` temporaries, thresholded the mask at `> 0` into another
+   float64 array, and mutated the decoded scalar volume in place before
+   fancy-indexing it — several full-volume temporaries per row at double the
+   precision the output needs.
+6. CIFTI axis validation built and compared large label arrays for every input
+   file, and S3 loading created a new client for every file.
 
 **Loading dominates, so overlapping load and write buys little.** With 8 loader
 threads the example scalar takes about 1.7 s to load and about 0.10 s to write
 to TileDB. Even hiding the write completely behind the load would save about
 five percent, and once compression runs on several threads the writer and the
-loader compete for the same cores anyway. Overlapping is a late, optional step
-whose real value is hiding S3 network latency.
-
-## What is slow currently
-
-1. HDF5 output is limited by compressing one chunk at a time on the writer
-   thread.
-2. The stripe writers reopen the TileDB array for every spatial stripe, and
-   `create_empty_scalar_matrix_array` opens it one more time just to write
-   `column_names`. One scalar becomes 92 array opens and 92 write commits.
-3. `load_cohort_cifti`, `load_cohort_voxels` and `load_cohort_mif` each build
-   the **entire cohort across all scalars** in memory — as dictionaries of
-   per-subject row lists — before any writing starts, and they submit one task
-   per cohort item when workers > 1.
-4. CIFTI-to-TileDB starts several scalar jobs at once under its own
-   `--workers`, so a run can hold several full scalar matrices in memory.
-5. `flattened_image` loads a mask file for every subject even when the whole
-   cohort shares one mask, and it builds two full-volume `float64` temporary
-   arrays per row.
-6. CIFTI axis validation builds and compares large label arrays for every input
-   file, and S3 loading creates a new client for every file.
+loader compete for the same cores anyway. Overlap is therefore deferred
+(implementation step 4); its real value would be hiding S3 network latency.
 
 Relevant code: `src/modelarrayio/cli/{to_modelarray,cifti_to_h5}.py`,
 `src/modelarrayio/utils/{cifti,nifti,mif}.py`,
@@ -96,6 +103,8 @@ Relevant code: `src/modelarrayio/cli/{to_modelarray,cifti_to_h5}.py`,
 ## Decisions
 
 ### One public worker option
+
+*Status: implemented — cli/runtime.py:resolve_loader_workers, cli/to_modelarray.py.*
 
 `--workers N` means one thing: *the maximum number of input sources being
 loaded at the same time*. A source is one scalar image plus any companion input
@@ -122,12 +131,64 @@ Writer lanes stay an internal runtime policy.
 
 ### Loader concurrency uses threads
 
+*Status: implemented — utils/loading.py:stage_source_rows (bounded ThreadPoolExecutor).*
+
 Use a `ThreadPoolExecutor`. This is settled: nibabel `.nii.gz` decoding scaled
 from 108 to 1011 MB/s between 1 and 14 threads, because zlib lets other threads
 run while it decompresses. Do not build a process pool or a shared-memory ring
 buffer.
 
+### CIFTI loading bypasses the XML parse instead of adding threads
+
+*Status: implemented — utils/cifti.py:_CiftiRawReadPlan / _read_cifti_row_raw; rows served this way are counted in `fast_path_rows`.*
+
+The thread scaling above is a NIfTI/gzip result and does **not** transfer to
+uncompressed CIFTI. On real `fs_LR den-164k` `.dscalar.nii` files (327,684
+greyordinates, ~3.4 MB, of which ~2 MB is the CIFTI XML header) nibabel spends
+about 0.78 s parsing the header and 0.48 s in `get_axis` while reading the data
+block takes 0.5 ms. That parse holds the GIL, so it does not thread: measured on
+cubic, the loader ran 0.8 files/s at one worker and *0.3 files/s at eight*. A
+608,510-file freesurferpost conversion under this path took nearly seven days
+with `--workers 15` pinned to roughly one core.
+
+Because every source in a cohort shares one surface template, its values are a
+contiguous floating block after the XML; the XML only needs parsing once. The
+loader therefore decodes each scalar's first source with nibabel to fix the
+reference row, brain-model axis and layout, then reads later sources straight
+from their data block (`np.fromfile` at each file's own `vox_offset`) whenever a
+cheap check passes — falling back to a full nibabel decode otherwise. The plan
+self-validates against the decoded reference row, so any layout it cannot
+reproduce (parcellated-connectivity ordering, on-disk scaling, byte order,
+remote or compressed inputs) disables it rather than risking a wrong row.
+`MODELARRAYIO_CIFTI_RAW=0` forces the nibabel path.
+
+**What the cheap check must be (learned on CUBIC).** The first version required
+the file's `vox_offset` and size to equal the reference's. On the production RBC
+files that rejected 91 of 100 `area` files: the pipeline embeds per-subject
+provenance strings (`wb_command` paths with job/subject/session IDs) in the CIFTI
+metadata, so the XML length — and `vox_offset` — differs by a few bytes between
+subjects while the brain-model `MatrixIndicesMap` is byte-identical
+(2,072,200 bytes across every size class). Those rows silently fell back to the
+1 s nibabel parse and the CUBIC step-2 CIFTI comparison showed no speedup at
+all. The check is now: NIfTI-2 dims, dtype and scaling equal the reference, the
+file is large enough to hold the block at its own offset, and a SHA-256 of the
+raw XML bytes of the dimension-1 (brain-model) `MatrixIndicesMap` equals the
+reference's — a few milliseconds per file, and strictly safer than the size
+check, since identical map bytes are what guarantee identical greyordinate
+order. `fast_path_rows` in the per-scalar telemetry counts rows served this
+way; a value below the row count means silent fallbacks and must be treated as
+a performance bug, not noise.
+
+Measured effect on real data (16 subjects × 3 scalars, warm cache): output
+bitwise-identical to nibabel, and 448 s → 6.3 s at `--workers 8` (71×). Because
+the raw read releases the GIL, threads help again; the per-scalar reference
+decode (~70 nibabel loads for the full cohort) is negligible. This is the
+CIFTI-specific answer to "loading dominates" — for uncompressed CIFTI the fix is
+to stop parsing the header, not to add loader threads or a process pool.
+
 ### Compress HDF5 chunks on several threads
+
+*Status: implemented — storage/h5_storage.py:_write_direct_gzip_chunks (pool size `MODELARRAYIO_HDF5_COMPRESSION_WORKERS`, default all CPUs).*
 
 Instead of letting `h5py` compress chunks on the writer thread, compress them
 in a thread pool and hand the finished bytes straight to HDF5:
@@ -162,6 +223,8 @@ Requirements:
 
 ### Write each scalar matrix in one submission
 
+*Status: implemented — storage/tiledb_storage.py (one dense write, fragment_count 1); storage/h5_storage.py:write_full_matrix.*
+
 Write each staged scalar matrix in a single backend call instead of as a list
 of rows. Keep every source-name and CIFTI metadata item exactly where and how
 it lives today — in particular, do **not** replace the existing
@@ -195,6 +258,8 @@ gzip-4 because it happened to be the old default.
 
 ### Default to the fast dtype, with precision as an explicit opt-in
 
+*Status: implemented — cli/to_modelarray.py `--dtype` (float32 default); readers decode directly in the storage dtype.*
+
 `--dtype float32` stays the default and is the fast path. `--dtype float64` is
 the supported opt-in for workloads that need double precision end to end.
 
@@ -225,29 +290,52 @@ Implementation:
 
 ### Cache masks and select with flat indices
 
-`flattened_image` builds two full-volume temporaries per row: a float64 mask
-thresholded at `> 0`, and a float64 scalar volume that it modifies in place and
-then fancy-indexes. In practice the per-subject mask is usually one file
-repeated across the whole cohort, and often the group mask itself.
+*Status: implemented — utils/nifti.py:_flat_group_indices, ReducedMaskCache, _selected_mask_values.*
 
-Compute `np.flatnonzero(group_mask)` once; cache masks by file path in a
-bounded dictionary; reduce each cached mask down to the selected elements once;
-and fill the typed staging row by flat selection, then apply the subject mask
-to the already-selected row. Skip the mask load entirely when the subject's
-mask path is the group mask path. This dropped row assembly from 52 to 34 ms
-per subject with bitwise-identical output, including NaN positions.
+`flattened_image` builds two full-volume temporaries per row: a `float64` mask
+thresholded at `> 0`, and a `float64` scalar volume that it modifies in place
+and then fancy-indexes.
+
+The group mask fixes the output columns — the set of voxels every subject's row
+is reported at. Each subject also has its **own** individual mask, defined by
+that subject's anatomy, which may cover only part of the group mask and differs
+from subject to subject. We cannot assume any subject's mask matches the group
+mask or another subject's. Voxels that are inside the group mask but outside a
+given subject's individual mask are written as `NaN` for that subject; ModelArray
+reads those per-subject `NaN`s and handles the differing coverage downstream. So
+the per-subject mask is real, per-subject work, not a shared file that can be
+loaded once and reused.
+
+Compute `np.flatnonzero(group_mask)` once; fill the typed staging row by flat
+selection at those group indices; reduce each subject's individual mask to the
+same group indices; and set the out-of-mask positions of the already-selected
+row to `NaN`. The scalar is decoded directly in the storage dtype (`float32` by
+default) via `get_fdata(dtype=storage_dtype, caching='unchanged')`, and the mask
+is read from its native `dataobj` and thresholded `> 0` — neither is ever
+promoted to `float64`. Cache reduced masks by file path in a bounded dictionary
+so cohorts that *do* repeat a mask (for example repeated rows, or sessions that
+share one mask) avoid re-decoding it, but never skip applying a subject's mask on
+the assumption that the group mask covers it. The one safe short-circuit is
+when a subject's mask path is literally the group-mask file: every selected voxel
+is then in-mask by construction, so applying it is a no-op and is skipped. This
+dropped row assembly from 52 to 34 ms per subject with bitwise-identical output,
+including `NaN` positions.
 
 Cache the reduced boolean selection — not the nibabel image and not its
-`get_fdata()` array. `flattened_image` writes NaN into the decoded volume in
-place, which is only safe because every call decodes a fresh copy; a cache that
-handed back a reused decoded array would let one subject's NaNs corrupt the
-next subject's data. Test that loading the same path twice through the cache
-leaves the second row unaffected by the first.
+`get_fdata()` array. Each row is a fresh `np.take` result that gets its
+out-of-mask positions overwritten with NaN, which is only safe because every
+call decodes and selects a fresh copy; a cache that handed back a reused
+scalar array would let one subject's NaNs corrupt the next subject's data. The
+cached reduced mask is read-only and never mutated. Test that loading the same
+path twice through the cache leaves the second row unaffected by the first.
 
-Do not build a float64 mask just to test `> 0`, and do not keep a second full
-scalar volume after selection.
+Do not build a float64 mask just to test `> 0`, do not keep a second full
+scalar volume after selection, and stage in `float32` unless the user asks for
+`--dtype float64`.
 
 ### Reuse CIFTI setup work and validate cheaply
+
+*Status: implemented — utils/cifti.py (first row reused; cifti_spatial_signature instead of label compare).*
 
 Load, decode and validate the first CIFTI source once. Reuse its decoded row as
 the first row of the first staging matrix, and reuse its metadata to create the
@@ -262,6 +350,8 @@ only for the reference metadata or for a failure message.
 
 ### Do not throttle TileDB's internal thread pools
 
+*Status: implemented — concurrency levels are only read into telemetry (cli/runtime.py:_tiledb_runtime_settings), never set.*
+
 TileDB writes measured 791 MB/s against `h5py`'s 73 at the same codec and
 level, and the reason is that TileDB compresses on many threads internally.
 Capping `sm.compute_concurrency_level` or `sm.io_concurrency_level` to
@@ -273,31 +363,94 @@ benchmark run.
 For S3, reuse one configured client whose connection pool can serve `--workers`
 loads at once.
 
-### Preserve split-output behaviour
+### Per-scalar output is the primary target
 
-`--scalar-columns` selects wide-cohort input and produces one output per
-scalar; a long cohort keeps the scalar datasets under one output root. Preserve
-this exactly. There is no `--no-split-files` option, and split behaviour is not
-a performance knob.
+*Status: implemented — cli/to_modelarray.py `--split-files`/`--no-split-files`; per-scalar atomic publish in every CLI.*
+
+Optimize for **one output file per scalar** — one `.h5` file, or one `.tdb`
+root, per scalar. This is what we want in practice: ModelArray reads per-scalar
+files directly, and separate files make a cohort easier to share, copy, and
+reprocess one scalar at a time. `--split-files` produces per-scalar outputs and
+is the default for wide `--scalar-columns` input; `--no-split-files` keeps every
+scalar under one combined output root and stays supported for callers that want
+a single file. Split is a data-layout choice, not a performance knob — but
+because per-scalar files are fully independent, the scalar is also the unit the
+converter parallelizes and shards on (next section), so the fast path is built
+around it.
+
+Each scalar is staged lazily and written to its own atomically published output
+with no cross-scalar coupling, so one scalar can be built, validated, and
+published without touching another. Preserve the greyordinate/parcel and
+fixel/voxel metadata each per-scalar file needs.
+
+### Scalar-sharded conversion for HPC
+
+*Status: implemented — recipe and job templates in benchmarks/to_modelarray/cubic/ (README, sbatch/04_scalar_array.sbatch); `--only-scalar` deferred — per-scalar cohort CSVs select the scalar.*
+
+Because each scalar's file is independent, the scalar is the natural unit of
+coarse parallelism, and on a cluster the productive pattern is **one job per
+scalar** rather than more threads inside one job. This mirrors ModelArray's HPC
+sharding (`vignette("element-splitting")` and its `run_chunk.R`), with one
+important difference that comes from building the matrix rather than analysing
+one.
+
+ModelArray shards the **element** axis: each array task analyses a disjoint
+range of fixels/voxels, writes its own `result_chunk_k.h5`, and a final
+single-process step concatenates the chunk files into one output. That works
+because it reads element slices lazily from an already-built matrix, and it needs
+the combine step only because the shards are disjoint element ranges and HDF5
+forbids concurrent writes.
+
+Building the matrix is the opposite shape, so the axes map differently:
+
+- **Element-range sharding does not transfer.** To read elements *j..k* of a
+  subject you must decode that subject's whole `.nii.gz`/`.mif` — gzip is not
+  seekable — so *E* element-shards re-decode all *N* subjects (*E×N* decodes).
+  This is the one piece of ModelArray's approach that does not carry over to the
+  build.
+- **Scalar sharding is the win, with no aggregation.** One array task per scalar,
+  each decoding its subjects once and writing its own final per-scalar file. The
+  shards are already the desired output granularity, so there is nothing to
+  combine and no concurrent-write hazard — "shard and aggregate" collapses to
+  just "shard." The CLI already supports this (one `--scalar-columns X`, or a
+  scalar-filtered cohort, per `$SLURM_ARRAY_TASK_ID`); an explicit
+  `--only-scalar` selector would let a long-format job array map cleanly to the
+  task index without pre-filtering the CSV. Document this array recipe as the
+  build-side analogue of `element-splitting`.
+- **Subject-block sharding is a niche add-on** for a single scalar too large for
+  one node. Decode each subject once inside its block, then recombine along the
+  subject (row) axis. The backend decides the cost: HDF5 inherits ModelArray's
+  no-concurrent-write rule, so it needs a single-process combine that copies the
+  row blocks into the final dataset — one extra full pass, worth it only when
+  decode dominates a plain copy, which it does. TileDB does not inherit it —
+  subject-block jobs can write disjoint row ranges as concurrent fragments into
+  one array with no copy, trading the single-fragment write for a bounded number
+  of fragments (one per block, not per stripe). For the sharded build this is a
+  real TileDB advantage over HDF5.
+
+Scalar-sharded jobs and the in-node thread parallelism (`--workers` decode
+threads plus the HDF5 compression pool / TileDB internal pool) are orthogonal
+and compose: shard scalars across nodes, thread within each job. Neither adds a
+public worker knob; `--only-scalar` selects work, it does not size a pool.
 
 ## Implementation plan
 
 ### 1. Measurement before behaviour
 
-Add per-scalar structured timing at INFO level, plus optional JSON Lines output
-for benchmark automation. Record source load time, CIFTI validation time,
-staging allocation time, write time with compression separated from
-submission, per-scalar and total time, matrix shape and dtype, chunk/tile
-shape, compression settings, peak memory, and TileDB commit and output-byte
-counts per write.
+*Status: implemented — cli/runtime.py:TimingRecorder, `--timing-jsonl`.*
 
-Also record *waiting*, not just duration. Phase durations alone cannot tell you
-which side to widen, and they will not reveal the loader/writer core
-competition that parallel compression introduces. So record writer idle time,
-loader blocked time, sampled queue occupancy, and per-phase CPU utilization.
-
-Keep it cheap. Do not instrument every one of hundreds of thousands of files
-during production runs.
+Per-scalar structured timing at INFO level plus optional JSON Lines output for
+benchmark automation records: source load time, CIFTI validation time, staging
+allocation time, write time with compression separated from submission,
+per-scalar and total time, matrix shape and dtype, chunk/tile shape,
+compression settings, peak memory, TileDB fragment counts and output bytes,
+CPU utilization, and the bounded-loader counters that actually exist —
+`scheduler_wait_seconds`, `in_flight_sources_mean/max`, and `fast_path_rows`
+(rows served by the CIFTI raw read; a value below the source count means some
+rows silently fell back to nibabel). Loader/writer *overlap* counters
+(`loader_blocked_seconds`, queue occupancy) are not measured because the
+pipeline is sequential per scalar; they are emitted as zeros and must not be
+used as evidence. Keep instrumentation cheap: never per-file at production scale.
 
 ### 2. Shared bounded source loader
 
@@ -332,17 +485,20 @@ written independently; concurrent writers must never modify shared
 output-group metadata unless that is proven safe. Expect the compression pool,
 not extra writer lanes, to be the effective lever.
 
-### 4. Overlap load and write only if the measurement justifies it
+In-process writer lanes are for building several per-scalar files within one
+invocation. On HPC, prefer the coarser and simpler split: one process (one job
+array task) per scalar, each writing its own per-scalar file, as in
+*Scalar-sharded conversion for HPC*. That needs no shared-handle coordination
+and no aggregation, and it uses the scheduler's cores instead of competing with
+the in-node loader and compression threads.
 
-Read the writer-idle and loader-blocked counters. If writing is a small
-fraction of wall time on local input, as the scouting numbers suggest, stop
-here for local workloads.
+### 4. Deferred: overlap load and write
 
-Add overlap only where it pays, which is S3 input where network latency
-dominates: start loading the next scalar as soon as the current one is handed to
-a queue that holds one item. Keep the depth at one; a deeper queue only
-multiplies how many matrices sit in memory. The first CIFTI row is copied into
-the staging matrix rather than decoded again.
+Not implemented, and not justified by measurement: on local and GPFS input the
+write phase is a small fraction of wall time and the two phases run
+sequentially per scalar. Revive it only for S3-latency-bound input, with a
+one-item queue (a deeper queue only multiplies resident matrices). Subject-block
+sharding is likewise deferred until a single scalar no longer fits one node.
 
 ### 5. Recoverable output completion
 
@@ -404,9 +560,33 @@ output-size or compression-ratio conclusions from them.
 Two limits to state wherever ABIDE numbers are reported. First, 65 k voxels and
 285 KB files make per-file overhead matter more than it does in production
 fixel and CIFTI workloads — which is exactly what the production confirmation
-run exists to catch. Second, ABIDE has no public CIFTI or MIF equivalent, so
-those modalities are benchmarked on internal data with the same harness and
-only the NIfTI numbers are publicly reproducible.
+run exists to catch. Second, ABIDE is NIfTI-only, so the other two modalities
+use their own reproducible cohorts, described next.
+
+### MIF and CIFTI benchmark data
+
+MIF has a fully public, reproducible cohort: the ModelArray walkthrough FDC
+demo — 100 fixel `.mif` subjects (602,229 fixels each) plus `index.mif` and
+`directions.mif`, downloaded from OSF (`https://osf.io/tce9d/download`, mirrored
+by `benchmarks/to_modelarray/make_mif_cohort.py`). This is real diffusion fixel data, so its
+runtime, `--workers` scaling and compression ratios are all quotable, and the
+shipped `cohort_FDC_n100.csv` is already long-format and drives the harness
+directly. It is the MIF analogue of ABIDE.
+
+CIFTI has no public `.dscalar.nii` cohort, so it is benchmarked with
+`benchmarks/to_modelarray/make_cifti_cohort.py`, which has two reproducible modes. The default
+`synthesize` writes seeded `fs_LR den-164k` dscalars with scalar-appropriate
+marginal ranges and a medial-wall zero block — reproducible anywhere and valid
+for load/runtime timing, but its per-vertex values are independent, so it is not
+quoted for compression ratios. Passing `--reference-dir` derives, per scalar,
+the shared medial-wall mask and the per-vertex mean and standard deviation from
+a small set of real dscalars and generates each subject as
+`clip(mean + std·noise, min, max)`; only aggregate statistics are read and fresh
+noise is drawn, so no real subject row is reproduced, while the real mean map's
+spatial smoothness makes compression realistic (measured 1.38× versus 1.41× for
+the real reference at gzip-4, against 1.17× for the independent-noise default).
+The reference axes are copied verbatim so the header and `vox_offset` match the
+real files exactly, which is what the raw-read fast path depends on.
 
 Use the same cohort file and an empty output location for every comparison.
 Label warm-cache and cold-cache runs separately and never compare across that
@@ -419,24 +599,38 @@ be added, run and updated without touching the library or the main test suite:
 
 ```text
 benchmarks/
-  README.md                 what each cohort is, how to run, how to read results
-  make_cohort.py            deterministic ABIDE cohort-CSV generator
-  run_benchmarks.py         builds the CLI commands, times them, appends result rows
-  plot_results.R            figures from the results CSV
-  results/
-    <run-id>/
-      results.csv           one row per run
-      run_meta.json         exact commands, environment, versions, cohort hash
-      plots/                generated figures
-  baselines/
-    baseline_<cohort>.csv   pinned reference numbers, committed
+  README.md                 index of suites and their shared conventions
+  to_modelarray/            this suite; a future export-results suite gets a sibling folder
+    README.md               what each cohort is, how to run, how to read results
+    make_cohort.py          deterministic ABIDE (NIfTI) cohort-CSV generator
+    make_mif_cohort.py      downloads/normalizes the public walkthrough FDC cohort
+    make_cifti_cohort.py    seeded/realistic CIFTI dscalar cohort generator
+    run_benchmarks.py       builds the CLI commands, times them, appends result rows
+    r_read_gate.R           per-candidate R read gate (rhdf5/HDF5Array/tiledb)
+    plot_results.R          figures from the results CSV
+    compare_revisions.py    original (pinned commit) vs optimized, per modality, with a bitwise check
+    harness_common.py       cohort, CSV, output-naming and provenance helpers shared by the scripts
+    output_compare.py       block-wise HDF5/TileDB output comparison (revisions and reference)
+    comparison_runs.py      reads compare_revisions run directories for the report and summary
+    create_comparison_report.py  renders the cross-modality original-vs-optimized findings PDF
+    fixtures/               committed fixture cohort CSVs
+    baselines/
+      baseline_<cohort>.csv pinned reference numbers, committed
+    reports/                rendered findings PDFs, committed
+    cubic/                  HPC validation ladder (SLURM templates, container env)
+    data/  cohorts/         downloaded/generated inputs, gitignored
+    results/                gitignored
+      <run-id>/
+        results.csv         one row per run
+        run_meta.json       exact commands, environment, versions, cohort hash
+        plots/              generated figures
 ```
 
-Benchmark output is written under `benchmarks/results/<run-id>/` and nowhere
+Benchmark output is written under `benchmarks/to_modelarray/results/<run-id>/` and nowhere
 else — not into the package, not into the test data folders, not into `docs/`.
 An environment variable (`MODELARRAYIO_BENCHMARK_RESULTS_DIR`) overrides the
 results root so a cluster job can write to scratch. The harness documentation
-lives in `benchmarks/README.md`; the main docs link to it rather than
+lives in `benchmarks/to_modelarray/README.md`; the main docs link to it rather than
 duplicating it.
 
 ### Reuse the conventions, not the code, from earlier benchmarking
@@ -484,65 +678,42 @@ sweeping chunk geometry and codecs at 10,000 and 40,000 rows, where holding
 that many real decoded subjects is not the point. Mark those rows in `run_kind`
 and never quote them as end-to-end runtimes.
 
-### Sequence
+### Sequence: the CUBIC validation ladder
 
-1. **Measure the ceilings first, before writing pipeline code.** Real ABIDE
-   decode throughput, serially and at several thread counts, per modality;
-   single-matrix compress-and-write throughput per backend and candidate codec,
-   including the parallel direct-chunk path at several thread counts; and raw
-   source-read and output-write bandwidth plus S3 first-byte latency. From
-   those, write down the predicted floor and an **absolute acceptance target**
-   — for example a sustained input-files-per-minute figure, or a stated
-   fraction of the decode ceiling. "The fastest candidate" has no stopping
-   rule; a target does.
-2. **Current baseline** on the medium cohort at current production settings.
-   Do not spend a production-scale run on the unmodified converter.
-3. **Architecture comparison** on the same cohort with identical dtype,
-   compression, tile target and storage. This isolates bounded loading, float32
-   loading, mask caching, full-matrix writing and parallel compression. ABIDE
-   tests the mask-caching change well, because every subject has its own
-   `func_mask` and none of them is the group mask, so it measures the
-   cache-miss path rather than the best case.
-4. **Loader sweep.** `--workers` at 1, 2, 4, 8 and higher, while filesystem
-   throughput and memory stay healthy. Run local and `s3://` separately; one is
-   CPU-bound on zlib and the other is latency-bound, so their best settings
-   differ.
-5. **Compression-thread sweep.** For HDF5, sweep the chunk-compression pool
-   against a fixed `--workers`, then sweep both together, since they compete
-   for the same cores. Record where throughput stops improving.
-6. **dtype check.** Medium cohort at `--dtype float32` and `--dtype float64`,
-   recording runtime, write time, output size and peak memory, to document the
-   real cost of the precision opt-in.
-7. **Overlap check.** Sequential versus bounded overlapping pipeline, local and
-   S3 separately. Expect a small local gain and a larger S3 gain; keep overlap
-   only where it pays.
-8. **Writer-lane sweep** on the wide cohort. One lane for combined HDF5; a
-   small number of bounded lanes for TileDB scalar-split outputs that can be
-   written independently.
-9. **Layout and codec sweep.** Item extents of 8, 32, 64 and 128 MiB. For
-   TileDB, `zstd` at levels 1, 3 and 5 with shuffle, plus none; if output is
-   still the bottleneck, try alternative cell/tile orders and TileDB internal
-   concurrency — and confirm that constraining TileDB's pools makes things
-   worse before shipping any such setting. For HDF5, gzip 1 and 4 through the
-   direct-chunk path, plus none, plus any plugin codec that clears the R gate.
-   Always pass and record an explicit `--compression`. This step and step 8 may
-   use seeded synthetic data to reach 10,000 and 40,000 rows, but must also run
-   once at each real cohort size, because compression ratio depends on the real
-   value distribution.
-10. **Full-scale confirmation** of the two or three finalists on the production
-    workload, reporting time per output unit, input files per minute, output
-    size, peak memory and total duration.
+The local original-vs-optimized comparison (2026-09-21, superseded by the CUBIC step-2 results
+pinned in `benchmarks/to_modelarray/baselines/cubic_cross_modality_9ab13dd_vs_optimized_20260922.csv`)
+fixes the architecture; what remains is validating it where it runs. Each step is
+gated on correctness before the next starts; scripts live in `benchmarks/to_modelarray/cubic/`.
 
-Every run records: ModelArrayIO commit, Python, nibabel, h5py and TileDB
-versions, allocated CPUs and RAM, TileDB concurrency settings, source and
-output filesystem types, cohort hash and repeat factor, scalar names, input
+0. **Environment and smoke** — container venv (glibc 2.31) with the exact local
+   library versions, offline pytest on a compute node, quick-tier fixtures
+   through both gate branches (R ModelArray for HDF5, Python for TileDB), and a
+   fixture old-vs-new bitwise comparison. `source_tree_sha256` must equal the
+   local tree's.
+1. **Production-data preflight** — reference-scalar completeness
+   (`compare_to_reference.py --list`), per-scalar cohort CSVs, header-size
+   uniformity of one scalar's files (the raw fast path needs it).
+2. **Original vs optimized on the public and RBC-subset cohorts** — ABIDE-100,
+   MIF walkthrough-100, RBC CIFTI 100 × 3; both backends; 3 counterbalanced
+   repetitions after a warm-up; bitwise equality, both gates; the raw fast path
+   and the nibabel path must both equal the deployed reference.
+3. **One full production scalar** (8,693 subjects) — old vs new on the same
+   node, a `--workers` sweep, every output bitwise against the deployed
+   reference (`rbc_freesurferpost.tdb`), `fragment_count == 1`, no leftover
+   temporaries, an R read of a representative element range.
+4. **Scalar-sharded job array** — one task per complete reference scalar, its
+   own per-scalar file, no aggregation; every task bitwise against its
+   reference scalar. Aggregate wall versus the serial sum is the HPC result.
+5. **Full production build** — every scalar as a job array, outputs kept, the 18
+   cross-checkable scalars bitwise, every file through the HDF5 gate. Submitted
+   only when every step-4 shard passed.
+
+Every run records: ModelArrayIO commit *and* `source_tree_sha256`, Python,
+nibabel, h5py and TileDB versions, allocated CPUs and RAM, TileDB concurrency
+settings, source and output filesystem types, cohort hash, scalar names, input
 byte total, and the exact CLI command; plus wall time, CPU utilization, peak
-memory, output bytes, phase times, writer-idle and loader-blocked time, TileDB
-fragment and file counts, peak open file descriptors and S3 pool settings. On
-Linux, `/usr/bin/time -v` covers the outer resource record.
-
-Comparing node-local scratch storage is optional and low priority now that
-staging lives in RAM. If it is run, include staging and copy-back time.
+memory, output bytes, phase times, `fast_path_rows`, TileDB fragment and file
+counts, and peak open file descriptors.
 
 ### Every HDF5 codec candidate must pass an R read gate
 
@@ -564,6 +735,32 @@ A candidate that halves conversion time by turning off compression and then
 doubles every downstream read is a bad trade that a write-only benchmark cannot
 see.
 
+## CUBIC results (ladder completed 2026-09-23)
+
+Environment: CUBIC compute nodes (Xeon Gold 6130), everything inside the ModelArray
+container with a uv-managed Python 3.12 venv (numpy 2.5.3, h5py 3.16.0, tiledb
+0.36.1, nibabel 5.4.2); HDF5 gated by the current ModelArray R package installed
+into a user library, TileDB gated in Python; `source_tree_sha256` recorded in every
+run. Warm GPFS cache; medians of three counterbalanced repetitions after one
+warm-up; one loader worker; identical inputs for both converters.
+
+| Step | Result |
+|---|---|
+| 0 Env + smoke | 415 tests pass on a compute node; quick-tier NIfTI and CIFTI fixtures pass both gate branches; fixture original-vs-optimized bitwise on both backends. |
+| 2 Original (`9ab13dd`) vs optimized | NIfTI ABIDE-100: **1.40× HDF5, 1.46× TileDB**. MIF walkthrough-100: **3.70× HDF5, 4.11× TileDB**. RBC CIFTI 100 × 3 (area, areaPial, curv): **31.8× HDF5 (385.8 → 12.1 s), 31.6× TileDB (396.5 → 12.6 s)**. All 36 runs passed their gate; every optimized output bitwise-equal to the original (max abs diff 0.0). |
+| 2b Raw fast path on production headers | After the digest fix, `fast_path_rows` = 99/100 per scalar (was 8/100); raw path 27.2 s vs nibabel path 659.2 s for 100 × 3; **both** paths bitwise-equal to the deployed old-code TileDB reference (rows aligned by source name, NaN maps equal). |
+| 3 One full scalar (8,693 subjects), old vs new | `area`, 8,693 × 327,684, `--target-chunk-mb 32`, one loader worker, 1 rep each: **HDF5 11,854.8 s (3 h 17 m) → 429.9 s (7.2 min), 27.6×; TileDB 11,501.6 s (3 h 12 m) → 418.1 s (7.0 min), 27.5×** (output files 1,031 → 14). Both gates passed; optimized output bitwise-equal to the original on the full matrix (max abs diff 0.0). Optimized worker sweep on the same scalar (`fast_path_rows` = 8,692, i.e. every non-reference row): HDF5 403.9 / 120.9 / **90.6 s** at 1 / 4 / 8 workers (5,756 files/min), peak RSS ≈ 12 GB; TileDB 186.3 / 83.2 / **68.6 s** (7,603 files/min), `fragment_count` 1, peak RSS ≈ 20 GB — about 130× (HDF5) and 170× (TileDB) the original at 8 workers. All eight optimized outputs bitwise-equal to the deployed old-code reference for all 8,693 rows. |
+| 4 Scalar-sharded job array (15 reference scalars) | `--array=1-15%6`, 8 CPUs / 48 GB per task, one scalar per task, HDF5 then TileDB, no aggregation: **15/15 shards passed**; per-scalar wall 112–141 s (HDF5) and 70–118 s (TileDB) at 8 workers; serial-equivalent sum **1,947 s (32 min) HDF5 / 1,466 s (24 min) TileDB** for 15 scalars that took the original run ~119 h; **array wall-clock 21.0 min** (first task start to last task end, rerun included). All 30 per-scalar outputs bitwise-equal to the deployed old-code reference. One task was cancelled by the node (signal, 3 min in, on the node step 3 had just vacated) and passed on rerun. |
+| 5 Full production build (70 scalars) | `--array=1-70%10`, 8 CPUs / 48 GB per task, per-scalar HDF5 gzip-4, `--target-chunk-mb 32`, 8 workers: **70/70 scalars passed** (converter validation + current-ModelArray R gate on every file; the 15 cross-checkable scalars bitwise-equal to the deployed reference). Per-scalar wall 107–192 s, median 138 s; serial-equivalent 9,800 s (2.7 h); **array wall-clock 22.2 min** for the entire 608,510-file dataset (484 GB of per-scalar files). The original run needed 112 h for its first scalar and never finished. |
+
+Three harness/cluster defects surfaced and were fixed by the ladder before any
+production number was trusted: the container's ModelArray 0.1.5 cannot read the
+current HDF5 format (attribute- vs dataset-stored `column_names`); the cohort
+writers emitted CRLF line endings that broke shell consumers; and the login node's
+2 h CPU-time `ulimit` propagates into SLURM jobs, killing the original converter
+with SIGXCPU two-thirds of the way through a full scalar (jobs now submit with
+`--propagate=NONE`). All are documented in `benchmarks/to_modelarray/cubic/README.md`.
+
 ## Acceptance criteria
 
 Compare every optimized output against the current converter on the same
@@ -579,8 +776,10 @@ inputs:
   selected codec and layout; and
 - no unexpected TileDB fragment growth and no leftover temporary output.
 
-Ship the fastest candidate that produces correct, compatible output, clears the
-R read gate, and fits the allocated resources. Report output size and
+The CUBIC ladder above is the acceptance path: each step's gate must pass on
+production data before the next runs. Ship the fastest candidate that produces
+correct, compatible output, clears the read gates, and fits the allocated
+resources. Report output size and
 downstream read observations, but do not use them to reject a faster correct
 conversion unless the R-side read regression is large enough to be recorded as
 a deliberate trade.
@@ -616,20 +815,36 @@ Documentation and benchmarking:
 - CLI help, README and usage docs covering the single worker meaning, the
   redefinition of `--workers`, the `--s3-workers` removal schedule, and the
   measured cost of `--dtype float64`.
-- The `benchmarks/` folder described above, containing the harness, the
-  plotting script, `benchmarks/README.md`, and a deterministic ABIDE cohort-CSV
+- The `benchmarks/to_modelarray/` folder described above, containing the harness, the
+  plotting script, `benchmarks/to_modelarray/README.md`, and a deterministic ABIDE cohort-CSV
   generator that takes a subject count, derivative list and repeat factor, so
   anyone can reproduce the small, medium and wide cohorts from the public
   bucket with no credentials.
-- A pinned baseline results CSV committed under `benchmarks/baselines/`, so a
+- A pinned baseline results CSV committed under `benchmarks/to_modelarray/baselines/`, so a
   future regression is detectable by rerunning one command.
+- An HPC scalar-sharding recipe — the build-side analogue of ModelArray's
+  `element-splitting` — showing a SLURM job array that converts one scalar per
+  task into its own per-scalar file with no aggregation step, plus a note on the
+  TileDB concurrent-fragment option for a single scalar too large for one node.
+
+Optional, decided separately:
+
+- An `--only-scalar <name>` selector so a long-format cohort maps one scalar to
+  one job-array task without pre-filtering the CSV, with a regression test that
+  it produces exactly the same per-scalar output as converting that scalar
+  alone.
 
 ## Non-goals
 
-- No independent public knobs for source, scalar and write workers.
+- No independent public knobs for source, scalar and write workers. (A
+  `--only-scalar` selector for scalar-sharded HPC job arrays selects work, not
+  worker counts, and is a separate, optional addition.)
 - No output schema change; chunk/tile layout is tunable only while the output
   stays compatible and readable from R.
-- No process-based or shared-memory loader.
+- No process-based or shared-memory loader *inside one conversion*. A
+  scalar-sharded HPC job array — one ordinary threaded process per scalar,
+  writing its own file — is a supported deployment pattern, not a process-pool
+  loader, and does not violate this.
 - No peak-memory admission checks, memory-mapped staging, or `--staging-dir`.
 - No mandatory node-local scratch.
 - No exhaustive sweep of every combination of formats, backends and settings

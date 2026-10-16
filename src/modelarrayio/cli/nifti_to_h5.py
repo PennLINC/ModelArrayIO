@@ -3,17 +3,25 @@
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-import h5py
-import nibabel as nb
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 
 from modelarrayio.cli import utils as cli_utils
+from modelarrayio.cli.runtime import (
+    TimingRecorder,
+    publish_scalar_outputs,
+    resolve_loader_workers,
+    validate_timing_jsonl_path,
+)
+from modelarrayio.storage import utils as storage_utils
 from modelarrayio.utils.nifti import load_cohort_voxels
+from modelarrayio.utils.s3_utils import (
+    configure_s3_client_pool,
+    load_nibabel,
+    release_image_buffers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +37,10 @@ def nifti_to_h5(
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
-    workers=1,
-    s3_workers=1,
+    workers=None,
+    s3_workers=None,
     split_outputs=False,
+    timing_jsonl=None,
 ):
     """Load all volume data and write to an HDF5 or TileDB file.
 
@@ -61,15 +70,44 @@ def nifti_to_h5(
     target_chunk_mb : :obj:`float`
         Target chunk/tile size in MiB when auto-computing. Default 2.0.
     workers : :obj:`int`
-        Maximum number of parallel TileDB write workers. Default 1.
-        Has no effect when ``backend='hdf5'``.
+        Maximum number of input sources loaded concurrently, for every backend.
     s3_workers : :obj:`int`
-        Number of parallel workers for S3 downloads. Default 1.
+        Deprecated alias for ``workers``.
     split_outputs : :obj:`bool`
         If True, write one output file per scalar. Default False.
+    timing_jsonl : path-like, optional
+        Append structured per-scalar and total runtime records to this file.
     """
-    group_mask_img = nb.load(group_mask_file)
-    group_mask_matrix = group_mask_img.get_fdata() > 0
+    worker_count = resolve_loader_workers(workers, s3_workers)
+    configure_s3_client_pool(worker_count)
+    compression, compression_level = storage_utils.resolve_backend_compression(
+        backend, compression, compression_level
+    )
+    planned_scalar_names = list(dict.fromkeys(str(value) for value in cohort_long['scalar_name']))
+    planned_outputs = cli_utils.conversion_output_paths(
+        output,
+        planned_scalar_names,
+        split_outputs=split_outputs,
+    )
+    validate_timing_jsonl_path(
+        timing_jsonl,
+        planned_outputs,
+        directory_outputs=backend == 'tiledb',
+    )
+    recorder = TimingRecorder(
+        timing_jsonl,
+        modality='nifti',
+        backend=backend,
+        workers=worker_count,
+        compression=compression,
+        compression_level=compression_level,
+        shuffle=shuffle,
+    )
+    group_mask_img = load_nibabel(group_mask_file)
+    try:
+        group_mask_matrix = np.asanyarray(group_mask_img.dataobj) > 0
+    finally:
+        release_image_buffers(group_mask_img)
     voxel_coords = np.column_stack(np.nonzero(group_mask_matrix))
 
     voxel_table = pd.DataFrame(
@@ -82,79 +120,35 @@ def nifti_to_h5(
     )
 
     logger.info('Extracting NIfTI data...')
-    scalars, sources_lists = load_cohort_voxels(cohort_long, group_mask_matrix, s3_workers)
+    scalars, sources_lists = load_cohort_voxels(
+        cohort_long,
+        group_mask_matrix,
+        workers=worker_count,
+        storage_dtype=storage_dtype,
+        group_mask_path=group_mask_file,
+    )
     if not sources_lists:
         raise ValueError('Unable to derive scalar sources from cohort file.')
 
-    scalar_names = list(sources_lists.keys())
-    split_scalar_outputs = split_outputs
+    def _hdf5_metadata(h5_file):
+        cli_utils.write_table_dataset(h5_file, 'voxels', voxel_table)
 
-    if backend == 'hdf5':
-        if split_scalar_outputs:
-            outputs: list[Path] = []
-            for scalar_name in scalar_names:
-                scalar_output = cli_utils.prepare_output_parent(
-                    cli_utils.prefixed_output_path(output, scalar_name)
-                )
-                with h5py.File(scalar_output, 'w') as h5_file:
-                    cli_utils.write_table_dataset(h5_file, 'voxels', voxel_table)
-                    cli_utils.write_hdf5_scalar_matrices(
-                        h5_file,
-                        {scalar_name: scalars[scalar_name]},
-                        {scalar_name: sources_lists[scalar_name]},
-                        storage_dtype=storage_dtype,
-                        compression=compression,
-                        compression_level=compression_level,
-                        shuffle=shuffle,
-                        chunk_voxels=chunk_voxels,
-                        target_chunk_mb=target_chunk_mb,
-                    )
-                outputs.append(scalar_output)
-            return int(not all(path.exists() for path in outputs))
-
-        output = cli_utils.prepare_output_parent(output)
-        with h5py.File(output, 'w') as h5_file:
-            cli_utils.write_table_dataset(h5_file, 'voxels', voxel_table)
-            cli_utils.write_hdf5_scalar_matrices(
-                h5_file,
-                scalars,
-                sources_lists,
-                storage_dtype=storage_dtype,
-                compression=compression,
-                compression_level=compression_level,
-                shuffle=shuffle,
-                chunk_voxels=chunk_voxels,
-                target_chunk_mb=target_chunk_mb,
-            )
-        return int(not output.exists())
-
-    worker_count = min(len(scalar_names), workers)
-
-    def _write_scalar_job(scalar_name):
-        scalar_output = (
-            cli_utils.prefixed_output_path(output, scalar_name) if split_scalar_outputs else output
-        )
-        cli_utils.write_tiledb_scalar_matrices(
-            scalar_output,
-            {scalar_name: scalars[scalar_name]},
-            {scalar_name: sources_lists[scalar_name]},
-            storage_dtype=storage_dtype,
-            compression=compression,
-            compression_level=compression_level,
-            shuffle=shuffle,
-            chunk_voxels=chunk_voxels,
-            target_chunk_mb=target_chunk_mb,
-        )
-
-    if worker_count <= 1:
-        for scalar_name in scalar_names:
-            _write_scalar_job(scalar_name)
-    else:
-        with ThreadPoolExecutor(max_workers=worker_count) as executor:
-            futures = {
-                executor.submit(_write_scalar_job, scalar_name): scalar_name
-                for scalar_name in scalar_names
-            }
-            for future in tqdm(as_completed(futures), total=len(futures), desc='TileDB scalars'):
-                future.result()
+    publish_scalar_outputs(
+        recorder,
+        backend=backend,
+        output=output,
+        split_outputs=split_outputs,
+        scalar_names=list(sources_lists),
+        scalars=scalars,
+        sources_by_scalar=sources_lists,
+        storage_dtype=storage_dtype,
+        compression=compression,
+        compression_level=compression_level,
+        shuffle=shuffle,
+        chunk_voxels=chunk_voxels,
+        target_chunk_mb=target_chunk_mb,
+        expected_elements=len(voxel_table),
+        hdf5_metadata=_hdf5_metadata,
+        hdf5_required_paths=('voxels',),
+    )
     return 0

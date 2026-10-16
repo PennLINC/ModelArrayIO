@@ -29,7 +29,6 @@ dependencies = [
   "nibabel>=5.0",
   "numpy>=1.26",
   "pandas>=2.0",
-  "tqdm>=4.65",
   "h5py>=3.10",
   "tiledb>=0.23",
 ]
@@ -99,7 +98,8 @@ exclude = ".*"
 
 [tool.ruff]
 line-length = 99
-src = ["src"]
+# The benchmark scripts import each other as top-level modules from their own directory.
+src = ["src", "benchmarks/to_modelarray"]
 extend-exclude = ["src/modelarrayio/__about__.py"]
 
 [tool.ruff.lint]
@@ -180,6 +180,8 @@ exclude_lines = [
 ]
 
 [tool.pytest.ini_options]
+# Benchmark scripts and their tests import the shared benchmark modules by name.
+pythonpath = ["benchmarks/to_modelarray"]
 markers = [
   "s3: tests that require network access to public S3 (deselect with '-m not s3')",
   "downloaded_data: tests that download external fixture data before running",

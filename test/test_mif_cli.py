@@ -33,7 +33,7 @@ def test_mif_to_h5_scalar_columns_writes_prefixed_outputs(tmp_path, monkeypatch)
     def fake_gather_fixels(_index_file, _directions_file):
         return fixel_table, voxel_table
 
-    def fake_load_cohort_mif(cohort_long, _s3_workers):
+    def fake_load_cohort_mif(cohort_long, **_kwargs):
         scalars = {}
         sources = {}
         for scalar_name, group in cohort_long.groupby('scalar_name'):

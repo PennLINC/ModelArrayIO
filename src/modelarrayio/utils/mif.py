@@ -1,19 +1,40 @@
 """Utility functions for MIF data."""
 
-from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import OrderedDict
+from io import BytesIO
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+from nibabel.filebasedimages import FileHolder
 
+from modelarrayio.utils.loading import (
+    LazyScalarMatrices,
+    resolve_loader_workers,
+    stage_source_rows,
+)
 from modelarrayio.utils.mif_image import MifHeader, MifImage
+from modelarrayio.utils.s3_utils import (
+    _check_local_source,
+    is_s3_path,
+    read_s3_bytes,
+    release_image_buffers,
+)
 
 __all__ = ['MifHeader', 'MifImage', 'gather_fixels', 'load_cohort_mif', 'mif_to_image']
 
 
-def mif_to_image(mif_file):
+def _load_mif_image(mif_file):
+    """Load a local, materialized-annex, or S3 MIF image."""
+    if not is_s3_path(mif_file):
+        return MifImage.from_filename(str(_check_local_source(Path(mif_file))))
+
+    data = read_s3_bytes(mif_file, decompress_gzip=True)
+    file_map = {'image': FileHolder(fileobj=BytesIO(data))}
+    return MifImage.from_file_map(file_map)
+
+
+def mif_to_image(mif_file, dtype=np.float32):
     """Load a `.mif` file into a :class:`MifImage`.
 
     Parameters
@@ -28,72 +49,73 @@ def mif_to_image(mif_file):
     data : :obj:`numpy.ndarray`
         Data from the MIF image
     """
-    input_path = Path(mif_file)
-    mif_img = MifImage.from_filename(str(input_path))
-    data = mif_img.get_fdata(dtype=np.float32).squeeze()
+    mif_img = _load_mif_image(mif_file)
+    release_after_decode = is_s3_path(mif_file)
+    try:
+        if hasattr(mif_img, 'dataobj'):
+            data = np.asanyarray(mif_img.dataobj).squeeze()
+            if dtype is not None and data.dtype != np.dtype(dtype):
+                data = data.astype(dtype, copy=False)
+        else:
+            # Compatibility with nibabel-like test doubles and older readers.
+            data = mif_img.get_fdata(dtype=dtype).squeeze()
+    finally:
+        if release_after_decode:
+            release_image_buffers(mif_img)
     return mif_img, data
 
 
-def load_cohort_mif(cohort_long, s3_workers):
-    """Load all MIF scalar rows from the cohort, optionally in parallel.
+def load_cohort_mif(
+    cohort_long,
+    s3_workers=None,
+    *,
+    workers=None,
+    storage_dtype='float32',
+):
+    """Return lazy per-scalar MIF staging matrices and ordered sources.
 
-    When s3_workers > 1, a ThreadPoolExecutor is used to run mrconvert
-    calls concurrently (subprocess calls release the GIL). Results arrive
-    via as_completed and are indexed by (scalar_name, subj_idx) so the
-    final ordered lists are reconstructed correctly regardless of completion
-    order.
+    Only the matrix requested by the writer is resident. Its rows are loaded
+    with the shared bounded thread scheduler and cast once as they enter the
+    requested staging dtype.
 
     Parameters
     ----------
     cohort_long : :obj:`pandas.DataFrame`
         Long-format cohort dataframe with columns 'scalar_name' and 'source_file'.
     s3_workers : :obj:`int`
-        Number of parallel workers for loading.
+        Deprecated positional alias for the loader worker count.
+    workers : :obj:`int`
+        Maximum number of concurrent source loads.
+    storage_dtype : {'float32', 'float64'}
+        Dtype of the staging matrix.
 
     Returns
     -------
-    scalars : dict[str, list[np.ndarray]]
-        Per-scalar ordered list of 1-D subject arrays, ready for stripe-write.
+    scalars : modelarrayio.utils.loading.LazyScalarMatrices
+        Lazy mapping that stages one ordered, typed matrix per scalar.
     sources_lists : dict[str, list[str]]
         Per-scalar ordered list of source file paths (for HDF5 metadata).
     """
-    scalar_subj_counter = defaultdict(int)
-    jobs = []
-    sources_lists = defaultdict(list)
+    worker_count = resolve_loader_workers(workers, s3_workers)
 
+    sources_lists: OrderedDict[str, list[str]] = OrderedDict()
     for row in cohort_long.itertuples(index=False):
-        sn = row.scalar_name
-        subj_idx = scalar_subj_counter[sn]
-        scalar_subj_counter[sn] += 1
-        src = row.source_file
-        jobs.append((sn, subj_idx, src))
-        sources_lists[sn].append(src)
+        sources_lists.setdefault(str(row.scalar_name), []).append(str(row.source_file))
 
-    def _worker(job):
-        sn, subj_idx, src = job
-        _img, data = mif_to_image(src)
-        return sn, subj_idx, data
+    def _load_native(source):
+        _image, data = mif_to_image(source, dtype=None)
+        return np.asarray(data).squeeze()
 
-    if s3_workers > 1:
-        results = defaultdict(dict)
-        with ThreadPoolExecutor(max_workers=s3_workers) as pool:
-            futures = {pool.submit(_worker, job): job for job in jobs}
-            for future in tqdm(
-                as_completed(futures),
-                total=len(futures),
-                desc='Loading MIF data',
-            ):
-                sn, subj_idx, data = future.result()
-                results[sn][subj_idx] = data
-        scalars = {
-            sn: [results[sn][i] for i in range(cnt)] for sn, cnt in scalar_subj_counter.items()
-        }
-    else:
-        scalars = defaultdict(list)
-        for job in tqdm(jobs, desc='Loading MIF data'):
-            sn, subj_idx, data = _worker(job)
-            scalars[sn].append(data)
+    def _stage(scalar_name):
+        return stage_source_rows(
+            sources_lists[scalar_name],
+            _load_native,
+            scalar_name=scalar_name,
+            storage_dtype=storage_dtype,
+            workers=worker_count,
+        )
 
+    scalars = LazyScalarMatrices(list(sources_lists), _stage, sources_by_scalar=sources_lists)
     return scalars, sources_lists
 
 

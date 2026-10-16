@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+import tiledb
 
 from modelarrayio.cli import cifti_to_h5
 
@@ -19,34 +20,22 @@ def test_cifti_to_h5_raises_when_scalar_sources_missing(monkeypatch) -> None:
 
 def test_cifti_to_h5_tiledb_split_outputs_and_parcels(monkeypatch, tmp_path: Path) -> None:
     scalar_sources = {'FA': ['fa1.nii'], 'MD': ['md1.nii']}
-    write_calls = []
-    parcel_calls = []
-
     monkeypatch.setattr(cifti_to_h5, 'build_scalar_sources', lambda _cohort: scalar_sources)
     monkeypatch.setattr(
         cifti_to_h5,
         '_get_cifti_parcel_info',
-        lambda _first: ('pscalar', {'parcel_id': np.array(['P1'])}),
+        lambda _first: ('pscalar', {'parcel_id': np.array(['P1', 'P2'])}),
     )
     monkeypatch.setattr(
         cifti_to_h5,
-        'extract_cifti_scalar_data',
-        lambda source_file, reference_brain_names=None: (
-            np.array([1.0, 2.0], dtype=np.float32),
-            ['brain-a'],
+        'load_cohort_cifti',
+        lambda *_args, **_kwargs: (
+            {
+                'FA': np.array([[1.0, 2.0]], dtype=np.float32),
+                'MD': np.array([[3.0, 4.0]], dtype=np.float32),
+            },
+            ['brain-a', 'brain-b'],
         ),
-    )
-    monkeypatch.setattr(
-        cifti_to_h5.cli_utils,
-        'write_tiledb_scalar_matrices',
-        lambda output, scalars, sources, **kwargs: write_calls.append(
-            (Path(output), scalars, sources)
-        ),
-    )
-    monkeypatch.setattr(
-        cifti_to_h5.cli_utils,
-        'write_tiledb_parcel_arrays',
-        lambda output, parcels: parcel_calls.append((Path(output), parcels)),
     )
 
     status = cifti_to_h5.cifti_to_h5(
@@ -60,10 +49,16 @@ def test_cifti_to_h5_tiledb_split_outputs_and_parcels(monkeypatch, tmp_path: Pat
     )
 
     assert status == 0
-    assert len(write_calls) == 2
-    assert sorted(path.name for path, _, _ in write_calls) == ['FA_store.tdb', 'MD_store.tdb']
-    assert len(parcel_calls) == 2
-    assert sorted(path.name for path, _ in parcel_calls) == ['FA_store.tdb', 'MD_store.tdb']
+    for scalar_name in scalar_sources:
+        scalar_output = tmp_path / f'{scalar_name}_store.tdb'
+        assert (
+            tiledb.object_type(str(scalar_output / 'scalars' / scalar_name / 'values')) == 'array'
+        )
+        assert tiledb.object_type(str(scalar_output / 'parcels' / 'parcel_id')) == 'array'
+        assert (
+            tiledb.object_type(str(scalar_output / 'scalars' / scalar_name / 'column_names'))
+            == 'array'
+        )
 
 
 def test_cifti_to_h5_hdf5_split_outputs_for_dscalar(monkeypatch, tmp_path: Path) -> None:
@@ -73,7 +68,9 @@ def test_cifti_to_h5_hdf5_split_outputs_for_dscalar(monkeypatch, tmp_path: Path)
     monkeypatch.setattr(cifti_to_h5, 'build_scalar_sources', lambda _cohort: scalar_sources)
     monkeypatch.setattr(cifti_to_h5, '_get_cifti_parcel_info', lambda _first: ('dscalar', {}))
     monkeypatch.setattr(
-        cifti_to_h5, 'load_cohort_cifti', lambda _cohort, _workers: (scalars, ['Left', 'Right'])
+        cifti_to_h5,
+        'load_cohort_cifti',
+        lambda *_args, **_kwargs: (scalars, ['Left', 'Right']),
     )
     monkeypatch.setattr(
         cifti_to_h5,

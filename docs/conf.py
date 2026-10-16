@@ -40,7 +40,13 @@ templates_path = ['_templates']
 source_suffix = {'.rst': 'restructuredtext'}
 
 master_doc = 'index'
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'examples/README.rst']
+
+# Gallery examples intentionally reuse headings such as "Prepare data". Prefix
+# their automatic labels by document and avoid labels for deep argparse-generated
+# subsections, which can repeat within a single usage page.
+autosectionlabel_prefix_document = True
+autosectionlabel_maxdepth = 2
 
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
@@ -81,7 +87,12 @@ def _sync_overview_figure(app) -> None:
 
 def _patch_sphinxarg_parallel_merge() -> None:
     """Teach sphinx-argparse's domain how to merge parallel-read data."""
-    from sphinxarg.ext import ArgParseDomain
+    try:
+        from sphinxarg.ext import ArgParseDomain
+    except ImportError:
+        # sphinx-argparse versions without a domain do not need this legacy
+        # parallel-data merge patch.
+        return
 
     def merge_domaindata(self, docnames, otherdata):
         self.data['commands'].extend(otherdata.get('commands', []))
