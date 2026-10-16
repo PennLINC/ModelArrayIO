@@ -745,10 +745,14 @@ def _cohort_table(grouped: dict[str, list[Group]], meta: dict) -> list[list[str]
         rows.append(
             [
                 MODALITY_NAME[modality],
-                f'{_plural(groups[0].n_subjects, "subject")} x {_plural(len(scalars), "scalar")}: '
-                f'{escape(", ".join(scalars))}',
-                f'{escape(Path(recorded["cohort"]).name)}<br/>'
-                f'sha256 {recorded.get("cohort_sha256", "")[:12]}',
+                (
+                    f'{_plural(groups[0].n_subjects, "subject")} x '
+                    f'{_plural(len(scalars), "scalar")}: {escape(", ".join(scalars))}'
+                ),
+                (
+                    f'{escape(Path(recorded["cohort"]).name)}<br/>'
+                    f'sha256 {recorded.get("cohort_sha256", "")[:12]}'
+                ),
                 escape(meta['cohort_sources'].get(modality, 'not recorded')),
             ]
         )

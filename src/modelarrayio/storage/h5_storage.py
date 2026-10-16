@@ -531,7 +531,8 @@ def write_full_matrix(
                 matrix,
                 compression_workers=resolved_workers,
             )
-        except Exception as exc:  # noqa: BLE001 - any worker/filter failure must fall back safely
+        # Any worker or filter failure must fall back safely; the debug log keeps the traceback.
+        except Exception as exc:
             reason = str(exc) or type(exc).__name__
             logger.warning(
                 'Falling back to ordinary HDF5 dataset assignment for %s: %s',

@@ -52,9 +52,9 @@ def compute_full_subject_chunk_shape(
             f'n_files={n_files}, n_elements={n_elements}'
         )
 
-    if isinstance(item_chunk, bool):
-        raise ValueError('item chunk must be a non-negative integer, not a boolean')
     try:
+        if isinstance(item_chunk, bool):
+            raise TypeError('a boolean is not an item chunk')  # bool passes operator.index
         resolved_item_chunk = operator.index(item_chunk)
     except TypeError as exc:
         raise ValueError(f'item chunk must be a non-negative integer, got {item_chunk!r}') from exc
@@ -127,9 +127,9 @@ def resolve_backend_compression(
     default_level = 4 if codec == 'gzip' else 5
     if compression_level is None:
         return codec, default_level
-    if isinstance(compression_level, bool):
-        raise ValueError('compression level must be an integer, not a boolean')
     try:
+        if isinstance(compression_level, bool):
+            raise TypeError('a boolean is not a compression level')  # bool passes operator.index
         level = operator.index(compression_level)
     except TypeError as exc:
         raise ValueError(

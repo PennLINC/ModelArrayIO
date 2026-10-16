@@ -71,9 +71,9 @@ def validate_workers(workers: int | None) -> int:
     """Return a positive loader-worker count."""
     if workers is None:
         return 1
-    if isinstance(workers, bool):
-        raise ValueError('workers must be a positive integer, not a boolean')
     try:
+        if isinstance(workers, bool):
+            raise TypeError('a boolean is not a worker count')  # bool passes operator.index
         resolved = operator.index(workers)
     except TypeError as exc:
         raise ValueError(f'workers must be a positive integer, got {workers!r}') from exc

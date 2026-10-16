@@ -25,7 +25,7 @@ def _rows_compare(run_dir: Path) -> list[dict[str, object]]:
     with path.open(newline='', encoding='utf-8') as stream:
         rows = list(csv.DictReader(stream))
     meta = json.loads((run_dir / 'comparison_meta.json').read_text(encoding='utf-8'))
-    n_rows = sum(1 for _ in open(meta['cohort'], encoding='utf-8')) - 1
+    n_rows = len(common.read_cohort(Path(meta['cohort'])))
     out = []
     for backend in sorted({r['backend'] for r in rows}):
         walls = {

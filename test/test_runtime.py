@@ -38,9 +38,11 @@ def test_resolve_loader_workers_defaults_and_deprecated_alias() -> None:
 
 
 def test_resolve_loader_workers_rejects_conflicts_and_nonpositive_values() -> None:
-    with pytest.warns(DeprecationWarning, match='--s3-workers is deprecated'):
-        with pytest.raises(ValueError, match='Conflicting loader worker counts'):
-            resolve_loader_workers(2, 3)
+    with (
+        pytest.warns(DeprecationWarning, match='--s3-workers is deprecated'),
+        pytest.raises(ValueError, match='Conflicting loader worker counts'),
+    ):
+        resolve_loader_workers(2, 3)
     with pytest.raises(ValueError, match='positive integer'):
         resolve_loader_workers(0, None)
 
