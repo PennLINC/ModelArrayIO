@@ -11,7 +11,12 @@ from modelarrayio.cli import utils as cli_utils
 from modelarrayio.cli.cifti_to_h5 import cifti_to_h5
 from modelarrayio.cli.mif_to_h5 import mif_to_h5
 from modelarrayio.cli.nifti_to_h5 import nifti_to_h5
-from modelarrayio.cli.parser_utils import _is_file, _is_file_or_s3, add_log_level_arg
+from modelarrayio.cli.parser_utils import (
+    _is_file,
+    _is_file_or_s3,
+    _positive_int,
+    add_log_level_arg,
+)
 from modelarrayio.cli.runtime import resolve_loader_workers
 from modelarrayio.storage import utils as storage_utils
 from modelarrayio.utils.misc import load_and_normalize_cohort
@@ -176,11 +181,8 @@ def _parse_to_modelarray():
     parser.add_argument(
         '--dtype',
         help=(
-            'Floating dtype for loading and storing values. float32 is the faster, smaller '
-            'default; float64 preserves full source precision and generally doubles staging '
-            'memory and bytes processed. On the bundled 20-subject fixture, float64 made the '
-            'HDF5 write phase 1.54x slower and the compressed output 1.45x larger; real cohorts '
-            'vary.'
+            'Floating dtype for loading and storing values. float32 is the default; float64 '
+            'preserves full source precision and doubles staging memory and bytes written.'
         ),
         choices=['float32', 'float64'],
         default='float32',
@@ -234,10 +236,13 @@ def _parse_to_modelarray():
     runtime_group = parser.add_argument_group('Runtime arguments')
     runtime_group.add_argument(
         '--workers',
-        type=int,
+        type=_positive_int,
         help=(
             'Maximum number of input sources loaded concurrently, for local or S3 input, '
-            'every modality, and either backend. Effective default: 1.'
+            'every modality, and either backend. Effective default: 1. This does not limit '
+            'HDF5 gzip compression threads, which default to every CPU available to the '
+            'process; set MODELARRAYIO_HDF5_COMPRESSION_WORKERS to cap them (for example on '
+            'shared cluster nodes).'
         ),
         default=None,
     )
@@ -253,11 +258,11 @@ def _parse_to_modelarray():
     s3_group.add_argument(
         '--s3-workers',
         '--s3_workers',
-        type=int,
+        type=_positive_int,
         default=None,
         help=(
-            'Deprecated alias for --workers. Matching values are accepted for one minor '
-            'release; conflicting values are rejected.'
+            'Deprecated alias for --workers; it will be removed in the next breaking release. '
+            'A value matching --workers is accepted; a conflicting value is rejected.'
         ),
     )
 

@@ -17,6 +17,7 @@ from modelarrayio.utils.loading import (
     resolve_loader_workers,
     stage_source_rows,
 )
+from modelarrayio.utils.misc import build_scalar_sources, iter_scalar_source_rows
 from modelarrayio.utils.s3_utils import is_s3_path, load_nibabel, release_image_buffers
 
 _DEFAULT_MASK_CACHE_SIZE = 128
@@ -264,14 +265,12 @@ def load_cohort_voxels(
     mask_cache = ReducedMaskCache(cache_size)
     group_mask_key = _path_cache_key(group_mask_path) if group_mask_path is not None else None
 
-    sources_by_scalar: dict[str, list[str]] = {}
+    sources_by_scalar = build_scalar_sources(cohort_long)
     source_pairs_by_scalar: dict[str, list[tuple[str, str]]] = {}
-    for cohort_row in cohort_long.itertuples(index=False):
-        scalar_name = cohort_row.scalar_name
-        source_file = cohort_row.source_file
-        source_mask_file = cohort_row.source_mask_file
-        sources_by_scalar.setdefault(scalar_name, []).append(source_file)
-        source_pairs_by_scalar.setdefault(scalar_name, []).append((source_file, source_mask_file))
+    for scalar_name, source_file, cohort_row in iter_scalar_source_rows(cohort_long):
+        source_pairs_by_scalar.setdefault(scalar_name, []).append(
+            (source_file, cohort_row.source_mask_file)
+        )
 
     def _load_row(source_pair: tuple[str, str]) -> np.ndarray:
         source_file, source_mask_file = source_pair

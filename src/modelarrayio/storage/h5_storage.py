@@ -27,6 +27,14 @@ class _DirectChunkUnsupported(RuntimeError):
     """Raised when a dataset's filter pipeline cannot be reproduced safely."""
 
 
+class _DirectChunkWriteFailed(_DirectChunkUnsupported):
+    """Raised when zlib or h5py fails while encoding or submitting a direct chunk."""
+
+
+# Exception types h5py maps HDF5 library errors onto.
+_H5PY_ERRORS = (OSError, RuntimeError, ValueError, TypeError, KeyError, NotImplementedError)
+
+
 def _write_column_names_to_group(
     group: h5py.Group,
     sources: pd.Series | Sequence[str],
@@ -72,22 +80,23 @@ def resolve_compression(compression, compression_level, shuffle):
     Returns
     -------
     :obj:`tuple`
-        Compression method, compression level, and whether to shuffle the data.
+        Compression method (``None`` for no compression), gzip level (``None``
+        unless gzip), and whether to shuffle the data.
+
+    Raises
+    ------
+    ValueError
+        For a codec HDF5 does not support or an invalid gzip level, exactly as
+        :func:`modelarrayio.storage.utils.resolve_backend_compression` does.
     """
-    comp = (
-        None
-        if compression is None or str(compression).lower() == 'none'
-        else str(compression).lower()
+    # ``None`` means "no compression" at this storage level; backend defaults
+    # are chosen by the CLI before it reaches here.
+    codec, level = storage_utils.resolve_backend_compression(
+        'hdf5', 'none' if compression is None else compression, compression_level
     )
+    comp = None if codec == 'none' else codec
     use_shuffle = bool(shuffle) if comp is not None else False
-    gzip_level = None
-    if comp == 'gzip':
-        try:
-            gzip_level = int(compression_level)
-        except (TypeError, ValueError):
-            gzip_level = 4
-        gzip_level = max(0, min(9, gzip_level))
-    return comp, gzip_level, use_shuffle
+    return comp, level if comp == 'gzip' else None, use_shuffle
 
 
 def compute_chunk_shape_full_subjects(
@@ -467,13 +476,21 @@ def _write_direct_gzip_chunks(
                 )
                 for offset in batch
             ]
-            encoded_chunks = [future.result() for future in futures]
+            try:
+                encoded_chunks = [future.result() for future in futures]
+            except zlib.error as exc:
+                raise _DirectChunkWriteFailed(f'gzip encoding failed: {exc}') from exc
             compression_seconds += time.perf_counter() - compression_started
             compression_cpu_seconds += sum(result[3] for result in encoded_chunks)
 
             for offset, compressed, _worker_wall_seconds, _worker_cpu_seconds in encoded_chunks:
                 submission_started = time.perf_counter()
-                dset.id.write_direct_chunk(offset, compressed, filter_mask=0)
+                try:
+                    dset.id.write_direct_chunk(offset, compressed, filter_mask=0)
+                except _H5PY_ERRORS as exc:
+                    raise _DirectChunkWriteFailed(
+                        f'write_direct_chunk failed for chunk at {offset}: {exc}'
+                    ) from exc
                 submission_seconds += time.perf_counter() - submission_started
 
     return {
@@ -494,8 +511,11 @@ def write_full_matrix(
     """Write a complete matrix, using parallel direct-chunk gzip when safe.
 
     The HDF5 handle is only accessed by the calling thread. Worker threads receive
-    NumPy slices and return fully filtered byte buffers. Unsupported filters and
-    worker failures are logged and safely rewritten through ordinary h5py assignment.
+    NumPy slices and return fully filtered byte buffers. Datasets without gzip
+    (uncompressed or ``lzf``) are written by ordinary h5py assignment. For gzip,
+    a pipeline the direct writer cannot reproduce, or a zlib/h5py failure while
+    encoding or submitting chunks, is logged and the matrix is rewritten through
+    ordinary h5py assignment; any other exception propagates.
     """
     matrix = _coerce_full_matrix(values, dtype=dset.dtype, shape=dset.shape)
     started = time.perf_counter()
@@ -516,7 +536,8 @@ def write_full_matrix(
         'chunk_count': 0,
     }
 
-    if dset.compression is None:
+    if dset.compression != 'gzip':
+        # Only gzip has a direct-chunk encoder; every other pipeline is h5py's own.
         submission_started = time.perf_counter()
         dset[...] = matrix
         metrics['submission_seconds'] = time.perf_counter() - submission_started
@@ -531,8 +552,8 @@ def write_full_matrix(
                 matrix,
                 compression_workers=resolved_workers,
             )
-        # Any worker or filter failure must fall back safely; the debug log keeps the traceback.
-        except Exception as exc:
+        # The debug log keeps the traceback of the direct-writer failure.
+        except _DirectChunkUnsupported as exc:
             reason = str(exc) or type(exc).__name__
             logger.warning(
                 'Falling back to ordinary HDF5 dataset assignment for %s: %s',

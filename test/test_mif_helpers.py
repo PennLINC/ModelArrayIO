@@ -16,8 +16,7 @@ from modelarrayio.utils import mif
 
 def test_mif_to_image_uses_mifimage_loader(monkeypatch, tmp_path: Path) -> None:
     class _FakeImage:
-        def get_fdata(self, dtype=None):
-            return np.array([[1.0, 2.0]], dtype=np.float32 if dtype is None else dtype)
+        dataobj = np.array([[1.0, 2.0]], dtype=np.float64)
 
     def _fake_from_filename(path):
         assert path == str(tmp_path / 'input.mif')

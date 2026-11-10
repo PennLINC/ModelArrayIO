@@ -265,11 +265,9 @@ def _load_timing(path: Path) -> dict[str, object]:
     aggregate: dict[str, object] = dict(complete)
     for field in (
         'source_load_seconds',
-        'source_cpu_seconds',
+        'staging_cpu_seconds',
         'validation_seconds',
         'staging_allocation_seconds',
-        'writer_idle_seconds',
-        'loader_blocked_seconds',
         'write_seconds',
         'compression_seconds',
         'submission_seconds',
@@ -684,11 +682,9 @@ def main() -> int:
                     key: timing.get(key)
                     for key in (
                         'source_load_seconds',
-                        'source_cpu_seconds',
+                        'staging_cpu_seconds',
                         'validation_seconds',
                         'staging_allocation_seconds',
-                        'writer_idle_seconds',
-                        'loader_blocked_seconds',
                         'write_seconds',
                         'compression_seconds',
                         'submission_seconds',

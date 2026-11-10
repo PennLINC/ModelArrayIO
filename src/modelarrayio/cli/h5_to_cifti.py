@@ -7,6 +7,7 @@ from pathlib import Path
 
 import h5py
 import nibabel as nb
+import numpy as np
 
 from modelarrayio.cli import utils as cli_utils
 
@@ -110,6 +111,11 @@ def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
     is_pconn = output_ext == '.pconn.nii'
     if is_pconn:
         n_rows, n_cols = cifti.shape
+    # Results are floating point whatever the template stores on disk (it may
+    # be, say, int16 with scl_slope), so write float32 as the NIfTI and MIF
+    # exporters do, instead of re-quantizing results into the template dtype.
+    output_nifti_header = cifti.nifti_header.copy()
+    output_nifti_header.set_data_dtype(np.float32)
 
     with h5py.File(in_file, 'r') as h5_data:
         results_matrix = h5_data[f'results/{analysis_name}/results_matrix']
@@ -120,12 +126,12 @@ def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
         for result_col, result_name in enumerate(results_names):
             valid_result_name = cli_utils.sanitize_result_name(result_name)
             out_cifti = output_path / f'{analysis_name}_{valid_result_name}{output_ext}'
-            row_data = results_matrix[result_col, :]
+            row_data = np.asarray(results_matrix[result_col, :], dtype=np.float32)
             data_array = row_data.reshape(n_rows, n_cols) if is_pconn else row_data.reshape(1, -1)
             temp_cifti2 = nb.Cifti2Image(
                 data_array,
                 header=cifti.header,
-                nifti_header=cifti.nifti_header,
+                nifti_header=output_nifti_header,
             )
             temp_cifti2.to_filename(out_cifti)
 
@@ -145,6 +151,6 @@ def h5_to_cifti(example_cifti, in_file, analysis_name, output_dir):
             temp_nifti2_1mpvalue = nb.Cifti2Image(
                 data_array_1mpvalue,
                 header=cifti.header,
-                nifti_header=cifti.nifti_header,
+                nifti_header=output_nifti_header,
             )
             temp_nifti2_1mpvalue.to_filename(out_cifti_1mpvalue)

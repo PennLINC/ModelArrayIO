@@ -16,6 +16,7 @@ from modelarrayio.cli.runtime import (
     validate_timing_jsonl_path,
 )
 from modelarrayio.storage import utils as storage_utils
+from modelarrayio.utils.misc import build_scalar_sources
 from modelarrayio.utils.nifti import load_cohort_voxels
 from modelarrayio.utils.s3_utils import (
     configure_s3_client_pool,
@@ -32,8 +33,8 @@ def nifti_to_h5(
     backend='hdf5',
     output=Path('voxelarray.h5'),
     storage_dtype='float32',
-    compression='gzip',
-    compression_level=4,
+    compression=None,
+    compression_level=None,
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
@@ -58,11 +59,13 @@ def nifti_to_h5(
         for the tiledb backend, path to a .tdb directory.
     storage_dtype : :obj:`str`
         Floating type to store values. Options: ``'float32'`` (default), ``'float64'``.
-    compression : :obj:`str`
-        Compression filter. ``gzip`` works for both backends;
-        ``lzf`` is HDF5-only; ``zstd`` is TileDB-only.
-    compression_level : :obj:`int`
-        Compression level (codec-dependent). Default 4.
+    compression : :obj:`str`, optional
+        Compression filter. ``None`` selects the backend default (``gzip`` for HDF5,
+        ``zstd`` for TileDB). ``gzip`` works for both backends; ``lzf`` is HDF5-only;
+        ``zstd`` is TileDB-only; ``none`` disables compression.
+    compression_level : :obj:`int`, optional
+        Compression level (codec-dependent). ``None`` selects the codec default
+        (gzip 4, zstd 5).
     shuffle : :obj:`bool`
         Enable shuffle filter. Default True.
     chunk_voxels : :obj:`int`
@@ -83,7 +86,7 @@ def nifti_to_h5(
     compression, compression_level = storage_utils.resolve_backend_compression(
         backend, compression, compression_level
     )
-    planned_scalar_names = list(dict.fromkeys(str(value) for value in cohort_long['scalar_name']))
+    planned_scalar_names = list(build_scalar_sources(cohort_long))
     planned_outputs = cli_utils.conversion_output_paths(
         output,
         planned_scalar_names,

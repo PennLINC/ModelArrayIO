@@ -29,8 +29,8 @@ def test_build_filter_list_variants() -> None:
     zstd = tiledb_storage._build_filter_list('zstd', 9, shuffle=True)
     assert len(zstd) >= 2
 
-    fallback = tiledb_storage._build_filter_list('not-a-codec', 'bad', shuffle=False)
-    assert len(fallback) == 0
+    with pytest.raises(ValueError, match="Compression 'not-a-codec' is not supported"):
+        tiledb_storage._build_filter_list('not-a-codec', None, shuffle=False)
 
 
 @pytest.mark.parametrize(
@@ -38,15 +38,30 @@ def test_build_filter_list_variants() -> None:
     [
         ('zstd', None, ('zstd', 5)),
         ('gzip', None, ('gzip', 4)),
-        ('zstd', 'bad', ('zstd', 5)),
+        ('zstd', 9, ('zstd', 9)),
         (None, 9, ('none', None)),
-        ('unknown', 9, ('none', None)),
+        ('none', 9, ('none', None)),
     ],
 )
 def test_resolve_compression_settings_reports_effective_values(
     compression, level, expected
 ) -> None:
     assert tiledb_storage._resolve_compression_settings(compression, level) == expected
+
+
+@pytest.mark.parametrize(
+    ('compression', 'level', 'message'),
+    [
+        ('zstd', 'bad', 'compression level must be an integer'),
+        ('gzip', 10, 'gzip compression level must be between 0 and 9'),
+        ('lzf', None, "Compression 'lzf' is not supported by tiledb"),
+        ('unknown', 9, "Compression 'unknown' is not supported by tiledb"),
+    ],
+)
+def test_resolve_compression_settings_rejects_invalid_values(compression, level, message) -> None:
+    # Shared with the CLI and HDF5 resolvers: no silent fallback to "none".
+    with pytest.raises(ValueError, match=message):
+        tiledb_storage._resolve_compression_settings(compression, level)
 
 
 def test_create_empty_scalar_matrix_array_writes_metadata_and_overwrites(tmp_path: Path) -> None:

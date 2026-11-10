@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass
 from io import BytesIO
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 # block follow it, and ``vox_offset`` in this header points past both.
 _NIFTI2_HEADER_SIZE = 540
 
-# Environment switch to disable the raw greyordinate fast path (diagnostics
+# Environment switch to disable the raw CIFTI fast path (diagnostics
 # and strict-validation runs). Any of 0/false/no/off turns it off.
 _RAW_READ_ENV = 'MODELARRAYIO_CIFTI_RAW'
 
@@ -86,12 +87,29 @@ def cifti_spatial_signature(cifti_file):
         spatial_count += 1
         _hash_signature_value(hasher, axis_index)
         _hash_signature_value(hasher, type(axis).__name__)
+        # Public nibabel properties only, read without a default: if one is ever
+        # renamed, the AttributeError surfaces instead of silently weakening the
+        # signature.
         if isinstance(axis, nb.cifti2.cifti2_axes.BrainModelAxis):
-            for attr in ('voxel', 'vertex', '_name', 'nvertices', '_affine', '_volume_shape'):
-                _hash_signature_value(hasher, getattr(axis, attr, None))
+            for value in (
+                axis.voxel,
+                axis.vertex,
+                axis.name,
+                axis.nvertices,
+                axis.affine,
+                axis.volume_shape,
+            ):
+                _hash_signature_value(hasher, value)
         elif isinstance(axis, nb.cifti2.cifti2_axes.ParcelsAxis):
-            for attr in ('name', 'voxels', 'vertices', '_affine', '_volume_shape', 'nvertices'):
-                _hash_signature_value(hasher, getattr(axis, attr, None))
+            for value in (
+                axis.name,
+                axis.voxels,
+                axis.vertices,
+                axis.affine,
+                axis.volume_shape,
+                axis.nvertices,
+            ):
+                _hash_signature_value(hasher, value)
         else:
             _hash_signature_value(hasher, vars(axis))
     if spatial_count == 0:
@@ -342,119 +360,184 @@ def brain_names_to_dataframe(brain_names):
 
 @dataclass(frozen=True)
 class _CiftiRawReadPlan:
-    """On-disk layout for reading a CIFTI scalar row without parsing its XML.
+    """On-disk layout for reading a CIFTI file's values without parsing its XML.
 
-    Every source in a cohort produced by one pipeline on one surface template
-    stores its values as a contiguous floating block at a fixed ``vox_offset``.
-    Recovering that block through nibabel means parsing the CIFTI XML header and
-    rebuilding the brain-model axis, which measures ~1 s per file; reading the
-    block directly measures well under a millisecond. A plan captures one
-    reference file's layout so later sources with an identical cheap header can
-    be read straight from disk.
+    A plan captures one reference file's layout so later sources with an
+    identical cheap header can be read straight from disk. dscalar, pscalar
+    and pconn files qualify (see :func:`_layout_digest`). Only unscaled
+    floating data (no ``scl_slope``/``scl_inter``) is served; anything else is
+    decoded by nibabel.
+
+    NIfTI stores the ``(n_rows, n_cols)`` CIFTI matrix in Fortran order (the
+    row index varies fastest), while the converter stores rows flattened in C
+    order, as ``get_fdata().ravel()`` does. A single-row file (dscalar,
+    pscalar) has ``n_rows == 1``, so both orders coincide; a pconn's block is
+    reordered on read.
     """
 
     offset: int
     disk_dtype: np.dtype
     n_elements: int
-    slope: float
-    inter: float
     expected_file_size: int
     storage_dtype: np.dtype
     # Cheap header facts that must match the reference before a data block is
-    # trusted: the NIfTI-2 dims (so the block holds exactly n_elements) and a
-    # digest of the raw XML bytes of the brain-model MatrixIndicesMap (so the
-    # greyordinate order is byte-identical). vox_offset may differ between
-    # files — production pipelines embed per-subject provenance strings in the
-    # CIFTI metadata, which shifts the data block without changing its layout.
+    # trusted: the NIfTI-2 dims and a digest of the CIFTI XML layout (see
+    # :func:`_layout_digest`). vox_offset may differ between files — pipelines
+    # can embed per-subject provenance strings in the CIFTI metadata, which
+    # shifts the data block without changing its layout.
     dims: tuple[int, ...] = ()
-    brain_model_digest: bytes = b''
+    layout_digest: bytes = b''
+
+    @property
+    def matrix_shape(self) -> tuple[int, int]:
+        """The CIFTI ``(n_rows, n_cols)`` shape: the last two NIfTI dims."""
+        return self.dims[-2], self.dims[-1]
 
 
-_BRAIN_MODEL_DIM_MARKER = b'AppliesToMatrixDimension="1"'
+_MATRIX_INDICES_MAP_OPEN = b'<MatrixIndicesMap'
+_MATRIX_INDICES_MAP_CLOSE = b'</MatrixIndicesMap>'
+_APPLIES_TO_DIMENSION_RE = re.compile(rb'AppliesToMatrixDimension\s*=\s*["\']([^"\']*)["\']')
+_INDEX_TYPE_RE = re.compile(rb'IndicesMapToDataType\s*=\s*["\']([^"\']*)["\']')
+_SCALARS_INDEX_TYPE = b'CIFTI_INDEX_TYPE_SCALARS'
+_PARCELS_INDEX_TYPE = b'CIFTI_INDEX_TYPE_PARCELS'
+_SINGLE_ROW_SPATIAL_INDEX_TYPES = frozenset(
+    {b'CIFTI_INDEX_TYPE_BRAIN_MODELS', _PARCELS_INDEX_TYPE}
+)
 
 
-def _brain_model_map_digest_bytes(head: bytes) -> bytes | None:
-    """Hash the XML bytes of the dimension-1 (brain-model) MatrixIndicesMap in *head*.
+def _layout_digest(buffer: bytes, end: int | None = None) -> tuple[int, bytes] | None:
+    """Return ``(required_rows, digest)`` for a supported CIFTI XML layout, or None.
 
-    *head* is the file prefix ``[0, vox_offset)``. The XML is never parsed, so
-    this costs a few milliseconds where a nibabel decode costs about a second.
-    Returns None when the map cannot be located, which disables the fast path
-    for that file.
+    Only ``buffer[:end]`` is examined (all of it when *end* is None); it must
+    contain the CIFTI XML. The XML is scanned with bounded byte searches, never
+    parsed, and nothing is copied except the short opening tags. The supported
+    layouts are exactly the ones :func:`extract_cifti_scalar_data` accepts:
+
+    * dscalar / pscalar — a scalar map for dimension 0 and a brain-model or
+      parcels map for dimension 1. The first item of the result is ``1``: the
+      matrix must have exactly one row. Scalar map names are excluded from the
+      digest because they may differ between subjects without changing the
+      data layout.
+    * pconn — parcels maps for dimensions 0 and 1, or one parcels map that
+      applies to both (``AppliesToMatrixDimension="0,1"``). The first item is
+      ``0``: no constraint on the number of rows. Every map's bytes are in the digest, so both
+      row and column parcels must be byte-identical.
+
+    Anything else — a label, series or dense-connectivity map, a missing or
+    duplicated map, or unrecognised markup — returns None, which keeps that
+    file on the nibabel path.
     """
-    xml_start = head.find(b'<CIFTI')
+    limit = len(buffer) if end is None else end
+    xml_start = buffer.find(b'<CIFTI', 0, limit)
     if xml_start < 0:
         return None
-    marker = head.find(_BRAIN_MODEL_DIM_MARKER, xml_start)
-    if marker < 0:
-        return None
-    start = head.rfind(b'<MatrixIndicesMap', xml_start, marker)
-    end = head.find(b'</MatrixIndicesMap>', marker)
-    if start < 0 or end < 0:
-        return None
-    end += len(b'</MatrixIndicesMap>')
-    return hashlib.sha256(head[start:end]).digest()
+    maps: dict[bytes, tuple[bytes, int, int]] = {}
+    position = xml_start
+    while (start := buffer.find(_MATRIX_INDICES_MAP_OPEN, position, limit)) >= 0:
+        tag_end = buffer.find(b'>', start, limit)
+        close = buffer.find(_MATRIX_INDICES_MAP_CLOSE, start, limit)
+        if tag_end < 0 or close < 0:
+            return None
+        close += len(_MATRIX_INDICES_MAP_CLOSE)
+        opening_tag = buffer[start : tag_end + 1]
+        dimension = _APPLIES_TO_DIMENSION_RE.search(opening_tag)
+        index_type = _INDEX_TYPE_RE.search(opening_tag)
+        if dimension is None or index_type is None:
+            return None
+        key = dimension.group(1).replace(b' ', b'')
+        if key in maps:
+            return None
+        maps[key] = (index_type.group(1).strip(), start, close)
+        position = close
 
-
-def _brain_model_map_digest(path: str, data_offset: int) -> bytes | None:
-    """Hash the brain-model map of the file at *path*, reading only ``[0, vox_offset)``."""
-    try:
-        with open(path, 'rb') as handle:
-            head = handle.read(int(data_offset))
-    except (OSError, ValueError, OverflowError):
+    view = memoryview(buffer)
+    types = {key: index_type for key, (index_type, _, _) in maps.items()}
+    if set(maps) == {b'0', b'1'} and types[b'0'] == _SCALARS_INDEX_TYPE:
+        if types[b'1'] not in _SINGLE_ROW_SPATIAL_INDEX_TYPES:
+            return None
+        rows_kind, layout, hashed = 1, b'single-row', (b'1',)
+    elif set(maps) == {b'0', b'1'} and types[b'0'] == types[b'1'] == _PARCELS_INDEX_TYPE:
+        rows_kind, layout, hashed = 0, b'pconn', (b'0', b'1')
+    elif set(maps) == {b'0,1'} and types[b'0,1'] == _PARCELS_INDEX_TYPE:
+        rows_kind, layout, hashed = 0, b'pconn-shared-axis', (b'0,1',)
+    else:
         return None
-    return _brain_model_map_digest_bytes(head)
+    hasher = hashlib.sha256()
+    parts = [layout, *(types[key] for key in sorted(types))]
+    parts += [view[maps[key][1] : maps[key][2]] for key in hashed]
+    for part in parts:
+        hasher.update(len(part).to_bytes(8, 'little'))
+        hasher.update(part)
+    return rows_kind, hasher.digest()
 
 
 def _raw_read_enabled() -> bool:
-    """Return True unless the raw greyordinate fast path is disabled by env."""
+    """Return True unless the raw CIFTI fast path is disabled by env."""
     return os.environ.get(_RAW_READ_ENV, '').strip().lower() not in {'0', 'false', 'no', 'off'}
 
 
-def _parse_nifti2_header(header_bytes: bytes):
-    """Parse a 540-byte NIfTI-2 header, or return None when it cannot be trusted."""
+def _is_unscaled(slope, inter) -> bool:
+    """Return True when NIfTI ``scl_slope``/``scl_inter`` apply no scaling."""
+    return slope in (None, 1.0) and inter in (None, 0.0)
+
+
+@dataclass(frozen=True)
+class _HeaderFacts:
+    """What the fast path needs from a file's own 540-byte NIfTI-2 header."""
+
+    offset: int
+    dims: tuple[int, ...]
+    disk_dtype: np.dtype
+
+
+def _header_facts(header_bytes: bytes) -> _HeaderFacts | None:
+    """Parse a file's on-disk NIfTI-2 header, or return None to use nibabel instead.
+
+    The reference and every follower are judged by this same function, so
+    they are compared on identical facts (the on-disk byte order and scaling,
+    which nibabel normalises away in a loaded image's header). None is
+    returned for anything that is not a NIfTI-2 header, for intensity scaling,
+    and for an offset that cannot hold the CIFTI extension.
+    """
     if len(header_bytes) != _NIFTI2_HEADER_SIZE:
         return None
     try:
-        return nb.Nifti2Header.from_fileobj(BytesIO(header_bytes), check=False)
-    except Exception:  # noqa: BLE001 - any parse failure must fall back to nibabel
-        return None
-
-
-def _read_nifti2_header(path: str):
-    """Parse only the 540-byte NIfTI-2 header, skipping the CIFTI XML extension."""
-    try:
-        with open(path, 'rb') as handle:
-            header_bytes = handle.read(_NIFTI2_HEADER_SIZE)
-    except OSError:
-        return None
-    return _parse_nifti2_header(header_bytes)
-
-
-def _normalize_slope_inter(header) -> tuple[float, float]:
-    """Return (slope, inter) as plain floats, treating 'no scaling' as (1, 0)."""
-    try:
+        header = nb.Nifti2Header.from_fileobj(BytesIO(header_bytes), check=False)
+        if int(header['sizeof_hdr']) != _NIFTI2_HEADER_SIZE:
+            return None
         slope, inter = header.get_slope_inter()
-    except Exception:  # noqa: BLE001 - unreadable scaling must fall back to nibabel
-        return 1.0, 0.0
-    slope = 1.0 if slope is None else float(slope)
-    inter = 0.0 if inter is None else float(inter)
-    return slope, inter
+        facts = _HeaderFacts(
+            offset=int(header.get_data_offset()),
+            dims=tuple(int(value) for value in header.get_data_shape()),
+            disk_dtype=np.dtype(header.get_data_dtype()),
+        )
+    except Exception:  # noqa: BLE001 - any unreadable header must fall back to nibabel
+        return None
+    if not _is_unscaled(slope, inter) or facts.offset <= _NIFTI2_HEADER_SIZE:
+        return None
+    return facts
+
+
+def _raw_values(data: bytes, plan: _CiftiRawReadPlan, offset: int = 0) -> np.ndarray:
+    """Decode a data block into the converter's C-order flattened row."""
+    values = np.frombuffer(data, dtype=plan.disk_dtype, count=plan.n_elements, offset=offset)
+    matrix = values.reshape(plan.matrix_shape, order='F')
+    return np.array(matrix, dtype=plan.storage_dtype, order='C').reshape(-1)
 
 
 def _read_cifti_row_raw(source, plan: _CiftiRawReadPlan) -> np.ndarray | None:
-    """Read one scalar row straight from its data block, or None to fall back.
+    """Read one source's values straight from its data block, or None to fall back.
 
-    Returns None unless *source* is a local, uncompressed file whose NIfTI-2
-    header matches *plan* in dims, dtype and scaling, whose brain-model
-    MatrixIndicesMap is byte-identical to the reference's, and whose file is
-    large enough to hold the data block at its own ``vox_offset``. The offset
-    itself may differ from the reference (per-subject provenance metadata
-    lengthens the XML); the digest is what guarantees the same greyordinate
-    order. Any mismatch means the caller decodes the source with nibabel.
+    Returns None unless *source* is a local, uncompressed file whose on-disk
+    header facts (:func:`_header_facts`) match *plan* in dims and dtype, whose
+    CIFTI XML layout digest equals the reference's, and whose file is large
+    enough to hold the data block at its own ``vox_offset``. The offset itself
+    may differ from the reference (per-subject provenance metadata lengthens
+    the XML); the digest is what guarantees the same element order. Any
+    mismatch means the caller decodes the source with nibabel.
 
     The file is opened once and read sequentially: header, XML extension and
-    data block in a single read, which matters on network filesystems where
-    every open is a metadata round trip.
+    data block in a single read, so network filesystems see one open per file.
     """
     if is_s3_path(source):
         return None
@@ -464,86 +547,73 @@ def _read_cifti_row_raw(source, plan: _CiftiRawReadPlan) -> np.ndarray | None:
     data_bytes = plan.n_elements * plan.disk_dtype.itemsize
     try:
         with open(path, 'rb') as handle:
-            header_bytes = handle.read(_NIFTI2_HEADER_SIZE)
-            header = _parse_nifti2_header(header_bytes)
-            if header is None:
+            facts = _header_facts(handle.read(_NIFTI2_HEADER_SIZE))
+            if facts is None or facts.dims != plan.dims or facts.disk_dtype != plan.disk_dtype:
                 return None
-            try:
-                offset = int(header.get_data_offset())
-                if tuple(int(v) for v in header.get_data_shape()) != plan.dims:
-                    return None
-                if np.dtype(header.get_data_dtype()) != plan.disk_dtype:
-                    return None
-            except Exception:  # noqa: BLE001 - any header mismatch must fall back to nibabel
-                return None
-            if _normalize_slope_inter(header) != (plan.slope, plan.inter):
-                return None
-            if offset < _NIFTI2_HEADER_SIZE:
-                return None
-            xml_length = offset - _NIFTI2_HEADER_SIZE
+            xml_length = facts.offset - _NIFTI2_HEADER_SIZE
             tail = handle.read(xml_length + data_bytes)
     except OSError:
         return None
     if len(tail) < xml_length + data_bytes:
         # Truncated file: the data block does not fit at its own offset.
         return None
-    if _brain_model_map_digest_bytes(header_bytes + tail[:xml_length]) != plan.brain_model_digest:
+    # The XML extension sits at the start of *tail*; digest it in place.
+    layout = _layout_digest(tail, xml_length)
+    if layout is None or layout[1] != plan.layout_digest:
         return None
-    values = np.frombuffer(tail, dtype=plan.disk_dtype, count=plan.n_elements, offset=xml_length)
-    if plan.slope != 1.0 or plan.inter != 0.0:
-        values = values.astype(np.float64) * plan.slope + plan.inter
-    return np.array(values, dtype=plan.storage_dtype, order='C')
+    return _raw_values(tail, plan, offset=xml_length)
 
 
 def _build_cifti_raw_read_plan(
-    reference_image, reference_row: np.ndarray, source, storage_dtype
+    reference_row: np.ndarray, source, storage_dtype
 ) -> _CiftiRawReadPlan | None:
     """Capture a raw-read plan from a reference source, or None if ineligible.
 
-    A plan is returned only when reading the reference file's data block
-    reproduces *reference_row* exactly, so any layout the fast path cannot
-    handle — parcellated-connectivity ordering, on-disk scaling, unusual byte
-    order, or remote/compressed inputs — disables it rather than risking a
-    silently wrong row.
+    *reference_row* is the reference's values as decoded by nibabel. The plan
+    is built from the reference file's own bytes through the same checks every
+    follower gets (:func:`_header_facts`, :func:`_layout_digest`); no nibabel
+    axis is rebuilt. The reference must be a local, uncompressed file with
+    unscaled floating data, a supported layout, and dims consistent with that
+    layout and with *reference_row*. As a final, independent check, reading the
+    reference's own data block must reproduce *reference_row* exactly.
     """
     if is_s3_path(source):
         return None
     path = os.fspath(source)
     if path.endswith('.gz'):
         return None
-    nifti_header = getattr(reference_image, 'nifti_header', None)
-    dataobj = getattr(reference_image, 'dataobj', None)
-    if nifti_header is None or dataobj is None:
-        return None
-    try:
-        disk_dtype = np.dtype(nifti_header.get_data_dtype())
-        offset = int(dataobj.offset)
-    except (AttributeError, TypeError, ValueError):
-        return None
-    if disk_dtype.kind != 'f':
-        return None
     reference_row = np.asarray(reference_row)
     if reference_row.ndim != 1:
         return None
     n_elements = int(reference_row.shape[0])
-    slope, inter = _normalize_slope_inter(nifti_header)
     try:
-        dims = tuple(int(v) for v in nifti_header.get_data_shape())
-    except Exception:  # noqa: BLE001 - unreadable dims must disable the fast path
+        with open(path, 'rb') as handle:
+            facts = _header_facts(handle.read(_NIFTI2_HEADER_SIZE))
+            if facts is None:
+                return None
+            xml = handle.read(facts.offset - _NIFTI2_HEADER_SIZE)
+    except OSError:
         return None
-    digest = _brain_model_map_digest(path, offset)
-    if digest is None:
+    if facts.disk_dtype.kind != 'f':
+        return None
+    dims = facts.dims
+    # The CIFTI matrix is the last two NIfTI dims; every earlier dim must be 1.
+    if len(dims) < 2 or int(np.prod(dims[:-2])) != 1 or dims[-2] * dims[-1] != n_elements:
+        return None
+    layout = _layout_digest(xml)
+    if layout is None:
+        return None
+    required_rows, digest = layout
+    if required_rows and dims[-2] != required_rows:
         return None
     plan = _CiftiRawReadPlan(
-        offset=offset,
-        disk_dtype=disk_dtype,
+        offset=facts.offset,
+        disk_dtype=facts.disk_dtype,
         n_elements=n_elements,
-        slope=slope,
-        inter=inter,
-        expected_file_size=offset + n_elements * disk_dtype.itemsize,
+        expected_file_size=facts.offset + n_elements * facts.disk_dtype.itemsize,
         storage_dtype=np.dtype(storage_dtype),
         dims=dims,
-        brain_model_digest=digest,
+        layout_digest=digest,
     )
     probe = _read_cifti_row_raw(path, plan)
     if probe is None:
@@ -565,11 +635,12 @@ def load_cohort_cifti(
     """Return lazy per-scalar CIFTI matrices and reference spatial metadata.
 
     Each scalar's first source is opened and decoded with nibabel once, to fix
-    its reference row and brain-model axis. Later sources are read straight from
-    their data block when their cheap NIfTI-2 header matches that reference
-    exactly (see :func:`_read_cifti_row_raw`), which avoids re-parsing the CIFTI
-    XML per file; any source that does not match falls back to a full nibabel
-    decode validated against a compact spatial signature. Set
+    its reference row and spatial axis. Later sources are read straight from
+    their data block when their cheap NIfTI-2 header and CIFTI XML layout match
+    that reference exactly (see :func:`_read_cifti_row_raw`), which avoids
+    re-parsing the CIFTI XML per file. Any source that does not match gets a
+    full nibabel decode validated against a compact spatial signature, so both
+    paths accept the same cohorts and produce the same values. Set
     ``MODELARRAYIO_CIFTI_RAW=0`` to force the nibabel path for every source.
 
     Rows are derived with :func:`~modelarrayio.utils.misc.build_scalar_sources`,
@@ -632,9 +703,7 @@ def load_cohort_cifti(
 
     raw_enabled = _raw_read_enabled()
     first_plan = (
-        _build_cifti_raw_read_plan(first_image, first_data, first_src, storage_dtype)
-        if raw_enabled
-        else None
+        _build_cifti_raw_read_plan(first_data, first_src, storage_dtype) if raw_enabled else None
     )
 
     def _validated_signature(image, source):
@@ -703,9 +772,7 @@ def load_cohort_cifti(
                 ) from exc
             try:
                 plan = (
-                    _build_cifti_raw_read_plan(
-                        reference_image, reusable_first.values, sources[0], storage_dtype
-                    )
+                    _build_cifti_raw_read_plan(reusable_first.values, sources[0], storage_dtype)
                     if raw_enabled
                     else None
                 )

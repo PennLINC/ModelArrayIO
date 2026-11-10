@@ -20,6 +20,11 @@ SourceT = TypeVar('SourceT')
 # Seconds between progress lines while a scalar is being staged.
 DEFAULT_PROGRESS_INTERVAL_SECONDS = 30.0
 
+S3_WORKERS_DEPRECATION_MESSAGE = (
+    '--s3-workers is deprecated and will be removed in the next breaking release; '
+    'use --workers instead. --workers now controls source loading for local and S3 input.'
+)
+
 
 class SourceLoadError(RuntimeError):
     """A source could not be loaded into its staging-matrix row."""
@@ -33,7 +38,7 @@ class LoadedRow:
     validation_seconds: float = 0.0
     source_seconds: float = 0.0
     cpu_seconds: float = 0.0
-    # True when a reader took a fast path (for example the CIFTI raw greyordinate
+    # True when a reader took a fast path (for example the CIFTI raw data-block
     # read) instead of a full decode, so silent fallbacks are visible in telemetry.
     fast_path: bool = False
 
@@ -51,10 +56,6 @@ class LoadStats:
     scheduler_wait_seconds: float = 0.0
     in_flight_sources_mean: float = 0.0
     in_flight_sources_max: int = 0
-    # Reserved for a future loader/writer overlap queue. The bounded source
-    # scheduler has in-flight tasks, but no producer/consumer queue.
-    queue_occupancy_mean: float = 0.0
-    queue_occupancy_max: int = 0
     # Rows whose reader reported a fast path (see LoadedRow.fast_path). The
     # first row of a scalar is its reference decode, so a fully served scalar
     # reports ``source_count - 1`` here.
@@ -94,12 +95,9 @@ def resolve_loader_workers(workers: int | None, s3_workers: int | None) -> int:
     resolved_workers = validate_workers(workers) if workers is not None else None
     resolved_s3 = validate_workers(s3_workers) if s3_workers is not None else None
     if resolved_s3 is not None:
-        message = (
-            '--s3-workers is deprecated and will be removed in the next breaking release; '
-            'use --workers instead. --workers now controls source loading for local and S3 input.'
-        )
-        warnings.warn(message, DeprecationWarning, stacklevel=3)
-        logger.warning(message)
+        # FutureWarning (not DeprecationWarning) because the audience is CLI
+        # users: Python shows it by default, so one emission is enough.
+        warnings.warn(S3_WORKERS_DEPRECATION_MESSAGE, FutureWarning, stacklevel=3)
     if (
         resolved_workers is not None
         and resolved_s3 is not None

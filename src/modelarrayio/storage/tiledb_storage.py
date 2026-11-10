@@ -39,20 +39,16 @@ def _resolve_compression_settings(
     compression: str | None,
     compression_level: int | None,
 ) -> tuple[str, int | None]:
-    """Return the effective TileDB codec and level used by the schema."""
-    comp = 'none' if compression is None else str(compression).lower()
-    if comp == 'none':
-        return 'none', None
-    if comp not in {'zstd', 'gzip'}:
-        logger.warning("Unknown compression '%s' for TileDB; disabling compression.", comp)
-        return 'none', None
+    """Return the effective TileDB codec and level used by the schema.
 
-    default_level = 5 if comp == 'zstd' else 4
-    try:
-        level = int(compression_level) if compression_level is not None else default_level
-    except (TypeError, ValueError):
-        level = default_level
-    return comp, level
+    ``None`` means "no compression" at this storage level; backend defaults are
+    chosen by the CLI before it reaches here. Unsupported codecs and invalid
+    levels raise ``ValueError``, exactly as
+    :func:`modelarrayio.storage.utils.resolve_backend_compression` does.
+    """
+    return storage_utils.resolve_backend_compression(
+        'tiledb', 'none' if compression is None else compression, compression_level
+    )
 
 
 def _build_filter_list(compression: str | None, compression_level: int | None, shuffle: bool):

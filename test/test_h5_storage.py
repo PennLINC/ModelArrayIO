@@ -44,10 +44,25 @@ def test_resolve_compression_gzip_and_none() -> None:
     assert shuffle is False
 
 
-def test_resolve_compression_invalid_gzip_level_falls_back() -> None:
-    comp, level, _shuffle = resolve_compression('gzip', 'bad', True)
-    assert comp == 'gzip'
-    assert level == 4
+def test_resolve_compression_defaults_and_none() -> None:
+    assert resolve_compression('gzip', None, True) == ('gzip', 4, True)
+    # At the storage level, None means "no compression", not "backend default".
+    assert resolve_compression(None, 4, True) == (None, None, False)
+
+
+@pytest.mark.parametrize(
+    ('compression', 'level', 'message'),
+    [
+        ('gzip', 'bad', 'compression level must be an integer'),
+        ('gzip', 12, 'gzip compression level must be between 0 and 9'),
+        ('zstd', 5, "Compression 'zstd' is not supported by hdf5"),
+    ],
+)
+def test_resolve_compression_rejects_invalid_settings(compression, level, message) -> None:
+    # Shared with the CLI's resolver: invalid settings raise instead of being
+    # silently clamped or replaced.
+    with pytest.raises(ValueError, match=message):
+        resolve_compression(compression, level, True)
 
 
 def test_compute_chunk_shape_full_subjects() -> None:
@@ -268,7 +283,7 @@ def test_direct_chunk_worker_failure_logs_and_falls_back(tmp_path, monkeypatch, 
     data = np.arange(10, dtype=np.float64).reshape(2, 5)
 
     def _failed_worker(*_args, **_kwargs):
-        raise RuntimeError('injected compression failure')
+        raise zlib.error('injected compression failure')
 
     monkeypatch.setattr(h5_storage, '_encode_gzip_chunk', _failed_worker)
     with h5py.File(path, 'w') as h5, caplog.at_level(logging.WARNING):
@@ -287,11 +302,62 @@ def test_direct_chunk_worker_failure_logs_and_falls_back(tmp_path, monkeypatch, 
     assert metrics['direct_chunk'] is False
     assert metrics['fallback'] is True
     assert metrics['compression_seconds'] is None
-    assert metrics['fallback_reason'] == 'injected compression failure'
+    assert metrics['fallback_reason'] == 'gzip encoding failed: injected compression failure'
     assert any('Falling back to ordinary HDF5' in record.message for record in caplog.records)
 
 
-def test_unsupported_direct_filter_logs_and_falls_back(tmp_path, caplog) -> None:
+def test_direct_chunk_programming_errors_propagate(tmp_path, monkeypatch) -> None:
+    # Only zlib/h5py failures fall back; a bug in the encoder must surface.
+    def _buggy_worker(*_args, **_kwargs):
+        raise AttributeError('injected bug')
+
+    monkeypatch.setattr(h5_storage, '_encode_gzip_chunk', _buggy_worker)
+    with h5py.File(tmp_path / 'bug.h5', 'w') as h5:
+        dataset = h5.create_dataset(
+            'values', shape=(2, 5), dtype='f8', chunks=(2, 3), compression='gzip'
+        )
+        with pytest.raises(AttributeError, match='injected bug'):
+            write_full_matrix(dataset, np.zeros((2, 5)), compression_workers=2)
+
+
+class _FailingDatasetID:
+    def __init__(self, real):
+        self._real = real
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+    def write_direct_chunk(self, *_args, **_kwargs):
+        raise OSError('injected h5py failure')
+
+
+class _DatasetWithFailingDirectWrite:
+    def __init__(self, real):
+        self._real = real
+        self.id = _FailingDatasetID(real.id)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+    def __setitem__(self, key, value):
+        self._real[key] = value
+
+
+def test_direct_chunk_h5py_failure_logs_and_falls_back(tmp_path, caplog) -> None:
+    data = np.arange(10, dtype=np.float32).reshape(2, 5)
+    with h5py.File(tmp_path / 'h5py-failure.h5', 'w') as h5, caplog.at_level(logging.WARNING):
+        dataset = h5.create_dataset(
+            'values', shape=data.shape, dtype=data.dtype, chunks=(2, 3), compression='gzip'
+        )
+        metrics = write_full_matrix(_DatasetWithFailingDirectWrite(dataset), data)
+        np.testing.assert_array_equal(dataset[...], data)
+
+    assert metrics['fallback'] is True
+    assert 'injected h5py failure' in metrics['fallback_reason']
+    assert any('Falling back to ordinary HDF5' in record.message for record in caplog.records)
+
+
+def test_lzf_writes_through_h5py_without_fallback_warning(tmp_path, caplog) -> None:
     path = tmp_path / 'lzf.h5'
     data = np.arange(10, dtype=np.float32).reshape(2, 5)
 
@@ -307,10 +373,11 @@ def test_unsupported_direct_filter_logs_and_falls_back(tmp_path, caplog) -> None
         metrics = write_full_matrix(dataset, data)
         np.testing.assert_array_equal(dataset[...], data)
 
+    # lzf is a supported option, not a direct-writer failure: no fallback, no warning.
     assert metrics['direct_chunk'] is False
-    assert metrics['fallback'] is True
-    assert "compression 'lzf' is not supported" in metrics['fallback_reason']
-    assert any('Falling back to ordinary HDF5' in record.message for record in caplog.records)
+    assert metrics['fallback'] is False
+    assert metrics['fallback_reason'] is None
+    assert not [record for record in caplog.records if record.levelno >= logging.WARNING]
 
 
 def test_full_matrix_coercion_preserves_staged_array() -> None:

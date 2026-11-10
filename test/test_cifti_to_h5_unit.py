@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import tiledb
+from utils import lazy_scalars
 
 from modelarrayio.cli import cifti_to_h5
 
@@ -30,10 +31,12 @@ def test_cifti_to_h5_tiledb_split_outputs_and_parcels(monkeypatch, tmp_path: Pat
         cifti_to_h5,
         'load_cohort_cifti',
         lambda *_args, **_kwargs: (
-            {
-                'FA': np.array([[1.0, 2.0]], dtype=np.float32),
-                'MD': np.array([[3.0, 4.0]], dtype=np.float32),
-            },
+            lazy_scalars(
+                {
+                    'FA': np.array([[1.0, 2.0]], dtype=np.float32),
+                    'MD': np.array([[3.0, 4.0]], dtype=np.float32),
+                }
+            ),
             ['brain-a', 'brain-b'],
         ),
     )
@@ -63,7 +66,7 @@ def test_cifti_to_h5_tiledb_split_outputs_and_parcels(monkeypatch, tmp_path: Pat
 
 def test_cifti_to_h5_hdf5_split_outputs_for_dscalar(monkeypatch, tmp_path: Path) -> None:
     scalar_sources = {'FA': ['fa1.nii']}
-    scalars = {'FA': [np.array([1.0, 2.0], dtype=np.float32)]}
+    scalars = lazy_scalars({'FA': np.array([[1.0, 2.0]], dtype=np.float32)})
 
     monkeypatch.setattr(cifti_to_h5, 'build_scalar_sources', lambda _cohort: scalar_sources)
     monkeypatch.setattr(cifti_to_h5, '_get_cifti_parcel_info', lambda _first: ('dscalar', {}))

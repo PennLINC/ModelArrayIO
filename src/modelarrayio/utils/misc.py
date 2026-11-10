@@ -168,10 +168,32 @@ def build_scalar_sources(long_df):
         Keys are scalar names, values are lists of source files.
     """
     scalar_sources = OrderedDict()
+    for scalar, source, _row in iter_scalar_source_rows(long_df):
+        scalar_sources.setdefault(scalar, []).append(source)
+    return scalar_sources
+
+
+def iter_scalar_source_rows(long_df):
+    """Yield ``(scalar_name, source_file, row)`` for every usable cohort row.
+
+    This is the single place cohort rows are normalised: names and sources are
+    stringified, and rows with an empty name or source are skipped. Loaders that
+    need further per-row columns (such as ``source_mask_file``) iterate this so
+    their rows always line up with :func:`build_scalar_sources`.
+
+    Parameters
+    ----------
+    long_df : :obj:`pandas.DataFrame`
+        Long-format cohort dataframe with columns 'scalar_name' and 'source_file'.
+
+    Yields
+    ------
+    tuple
+        Scalar name (str), source file (str), and the original row namedtuple.
+    """
     for row in long_df.itertuples(index=False):
         scalar = str(row.scalar_name)
         source = str(row.source_file)
         if not scalar or not source:
             continue
-        scalar_sources.setdefault(scalar, []).append(source)
-    return scalar_sources
+        yield scalar, source, row

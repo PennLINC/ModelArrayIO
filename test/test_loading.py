@@ -44,7 +44,6 @@ def test_stage_source_rows_is_bounded_ordered_and_typed() -> None:
     np.testing.assert_array_equal(matrix[:, 0], np.arange(6, dtype=np.float32) + 0.25)
     assert 1 <= stats.in_flight_sources_max <= 2
     assert stats.in_flight_sources_mean >= 1
-    assert stats.queue_occupancy_max == 0
     assert stats.source_wall_seconds > 0
     assert stats.source_count == 6
 

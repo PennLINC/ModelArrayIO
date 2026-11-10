@@ -1,6 +1,5 @@
 """Utility functions for MIF data."""
 
-from collections import OrderedDict
 from io import BytesIO
 from pathlib import Path
 
@@ -14,6 +13,7 @@ from modelarrayio.utils.loading import (
     stage_source_rows,
 )
 from modelarrayio.utils.mif_image import MifHeader, MifImage
+from modelarrayio.utils.misc import build_scalar_sources
 from modelarrayio.utils.s3_utils import (
     _check_local_source,
     is_s3_path,
@@ -52,13 +52,9 @@ def mif_to_image(mif_file, dtype=np.float32):
     mif_img = _load_mif_image(mif_file)
     release_after_decode = is_s3_path(mif_file)
     try:
-        if hasattr(mif_img, 'dataobj'):
-            data = np.asanyarray(mif_img.dataobj).squeeze()
-            if dtype is not None and data.dtype != np.dtype(dtype):
-                data = data.astype(dtype, copy=False)
-        else:
-            # Compatibility with nibabel-like test doubles and older readers.
-            data = mif_img.get_fdata(dtype=dtype).squeeze()
+        data = np.asanyarray(mif_img.dataobj).squeeze()
+        if dtype is not None and data.dtype != np.dtype(dtype):
+            data = data.astype(dtype, copy=False)
     finally:
         if release_after_decode:
             release_image_buffers(mif_img)
@@ -97,10 +93,7 @@ def load_cohort_mif(
         Per-scalar ordered list of source file paths (for HDF5 metadata).
     """
     worker_count = resolve_loader_workers(workers, s3_workers)
-
-    sources_lists: OrderedDict[str, list[str]] = OrderedDict()
-    for row in cohort_long.itertuples(index=False):
-        sources_lists.setdefault(str(row.scalar_name), []).append(str(row.source_file))
+    sources_lists = build_scalar_sources(cohort_long)
 
     def _load_native(source):
         _image, data = mif_to_image(source, dtype=None)

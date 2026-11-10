@@ -325,8 +325,8 @@ def test_nifti_tiledb_removes_existing_arrays_on_rerun(tmp_path, monkeypatch, ca
     """Regression test for https://github.com/PennLINC/ModelArrayIO/issues/39.
 
     The TileDB backend should succeed when the output directory already contains
-    arrays from a previous run, removing and recreating them, and should emit a
-    warning for each removed array.
+    arrays from a previous run, replacing them, and should emit a warning for
+    each replaced scalar.
     """
     group_mask_file, cohort_csv = _build_nifti_cohort(tmp_path)
     out_tdb = tmp_path / 'out.tdb'
@@ -346,16 +346,57 @@ def test_nifti_tiledb_removes_existing_arrays_on_rerun(tmp_path, monkeypatch, ca
         'gzip',
     ]
 
-    # First run should succeed without any "Removing existing array" warnings.
-    with caplog.at_level(logging.WARNING, logger='modelarrayio.storage.tiledb_storage'):
+    # First run should succeed without any "Replacing existing" warnings.
+    with caplog.at_level(logging.WARNING, logger='modelarrayio.cli.runtime'):
         assert modelarrayio_main(cli_args) == 0
     assert out_tdb.exists()
     assert tiledb.object_type(str(out_tdb / 'scalars' / 'FA' / 'values')) is not None
-    assert not any('Removing existing array' in r.message for r in caplog.records)
+    assert not any('Replacing existing' in r.message for r in caplog.records)
 
     # Second run to the same output directory should succeed (regression for
-    # issue #39) and emit a warning for the pre-existing array that was removed.
+    # issue #39) and emit a warning for the pre-existing scalar it replaced.
     caplog.clear()
-    with caplog.at_level(logging.WARNING, logger='modelarrayio.storage.tiledb_storage'):
+    with caplog.at_level(logging.WARNING, logger='modelarrayio.cli.runtime'):
         assert modelarrayio_main(cli_args) == 0
-    assert any('Removing existing array' in r.message for r in caplog.records)
+    assert any(
+        r.name == 'modelarrayio.cli.runtime' and 'Replacing existing scalars/FA' in r.message
+        for r in caplog.records
+    )
+
+
+def test_nifti_tiledb_sequential_scalars_share_one_root(tmp_path, monkeypatch):
+    """Converting FA, then MD, into the same TileDB root must keep both scalars."""
+    group_mask_file, fa_cohort = _build_nifti_cohort(tmp_path)
+    md_cohort = tmp_path / 'cohort_md.csv'
+    md_cohort.write_text(
+        fa_cohort.read_text(encoding='utf-8').replace('FA,', 'MD,'), encoding='utf-8'
+    )
+    out_tdb = tmp_path / 'out.tdb'
+    monkeypatch.chdir(tmp_path)
+
+    def _convert(cohort_csv):
+        return modelarrayio_main(
+            [
+                'to-modelarray',
+                '--mask',
+                str(group_mask_file),
+                '--cohort-file',
+                str(cohort_csv),
+                '--output',
+                str(out_tdb),
+                '--backend',
+                'tiledb',
+            ]
+        )
+
+    assert _convert(fa_cohort) == 0
+    with tiledb.open(str(out_tdb / 'scalars' / 'FA' / 'values')) as array:
+        fa_values = array[:]['values']
+    assert _convert(md_cohort) == 0
+
+    for scalar in ('FA', 'MD'):
+        uri = str(out_tdb / 'scalars' / scalar / 'values')
+        assert tiledb.object_type(uri) == 'array'
+        with tiledb.open(uri) as array:
+            np.testing.assert_array_equal(array[:]['values'], fa_values)
+    assert not list(tmp_path.glob('.*.modelarrayio-*'))

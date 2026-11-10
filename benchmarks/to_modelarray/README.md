@@ -450,9 +450,7 @@ The benchmarks measure its two main choices:
 ## Interpretation and limits
 
 The optimization target is end-to-end elapsed time while preserving values, NaN locations,
-source order, metadata, and R readability. `writer_idle_seconds` is the time a sequential
-writer awaits staging; `loader_blocked_seconds` and queue occupancy remain zero until the
-optional loader/writer overlap pipeline exists. `scheduler_wait_seconds` and the in-flight
+source order, metadata, and R readability. `scheduler_wait_seconds` and the in-flight
 source counters describe the bounded loader itself. HDF5 `compression_workers` is an internal runtime policy;
 `--workers` controls only concurrent input loads. TileDB's compute and I/O pools are recorded and
 never capped to `--workers`.

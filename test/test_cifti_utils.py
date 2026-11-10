@@ -391,6 +391,7 @@ def test_load_cohort_cifti_raw_fast_path_matches_nibabel(tmp_path, monkeypatch, 
     assert {f'sub{i}.dscalar.nii' for i in (1, 2, 3)} <= {
         source.split('/')[-1] for source in raw_reads
     }
+    assert scalars.stats['FA'].fast_path_rows == 3
 
 
 def test_load_cohort_cifti_raw_path_handles_per_scalar_offsets(tmp_path, monkeypatch) -> None:
@@ -498,15 +499,15 @@ def test_load_cohort_cifti_raw_path_disabled_by_env(tmp_path, monkeypatch) -> No
 
 
 def test_load_cohort_cifti_pconn_row_major_values_are_correct(tmp_path) -> None:
-    # pconn stores a 2-D matrix flattened row-major. The raw plan self-validates
-    # against the decoded reference row, so it only engages when the on-disk
-    # order reproduces ``get_fdata().ravel()`` exactly; either way the staged
-    # values must match the flattened matrices.
+    # pconn rows are the matrix flattened row-major. make_pconn shares one axis
+    # for rows and columns (one "0,1" map); the fast path must reorder the
+    # column-major data block for it too. Asymmetric matrices expose any
+    # transpose.
     parcel_names = ['a', 'b', 'c']
     rows = []
     truth = []
     for i in range(2):
-        matrix = np.arange(9, dtype=np.float32).reshape(3, 3) + i
+        matrix = np.arange(9, dtype=np.float32).reshape(3, 3) * (i + 1) + np.triu(np.ones((3, 3)))
         path = str(tmp_path / f'sub{i}.pconn.nii')
         make_pconn(parcel_names, matrix).to_filename(path)
         rows.append({'scalar_name': 'conn', 'source_file': path})
@@ -516,6 +517,346 @@ def test_load_cohort_cifti_pconn_row_major_values_are_correct(tmp_path) -> None:
     scalars, _ = load_cohort_cifti(cohort, workers=2, storage_dtype='float32')
 
     np.testing.assert_array_equal(scalars['conn'], np.stack(truth))
+    assert scalars.stats['conn'].fast_path_rows == 1
+
+
+def _write_pconn(path, row_names, column_names, matrix):
+    """Write a pconn with distinct row and column parcel axes (two separate maps)."""
+    header = nb.cifti2.Cifti2Header.from_axes(
+        (make_parcels_axis(list(row_names)), make_parcels_axis(list(column_names)))
+    )
+    nb.Cifti2Image(np.asarray(matrix, dtype=np.float32), header=header).to_filename(str(path))
+    return str(path)
+
+
+def test_load_cohort_cifti_pconn_asymmetric_follower_matches_nibabel(
+    tmp_path, monkeypatch
+) -> None:
+    # Regression: a symmetric reference matrix used to pass the raw plan's
+    # reference probe, after which every non-symmetric subject was stored
+    # transposed. The fast path must read the column-major block in order.
+    rows, cols = list('ABCD'), list('WXYZ')
+    asym = np.arange(16, dtype=np.float32).reshape(4, 4)
+    sym = asym + asym.T
+    paths = [
+        _write_pconn(tmp_path / 'sub0.pconn.nii', rows, cols, sym),
+        _write_pconn(tmp_path / 'sub1.pconn.nii', rows, cols, asym),
+    ]
+    cohort = pd.DataFrame({'scalar_name': 'conn', 'source_file': paths})
+
+    raw_reads = _spy_raw_reads(monkeypatch)
+    scalars, _ = load_cohort_cifti(cohort, workers=1, storage_dtype='float32')
+    matrix = scalars['conn']
+
+    np.testing.assert_array_equal(matrix[0], sym.ravel())
+    np.testing.assert_array_equal(matrix[1], asym.ravel())
+    np.testing.assert_array_equal(matrix[1], nb.load(paths[1]).get_fdata(dtype=np.float32).ravel())
+    assert paths[1] in raw_reads
+    assert scalars.stats['conn'].fast_path_rows == 1
+
+
+@pytest.mark.parametrize('shape', [(3, 5), (5, 3)])
+def test_load_cohort_cifti_pconn_fast_path_handles_non_square_matrices(
+    tmp_path, monkeypatch, shape
+) -> None:
+    rows, cols = [f'r{i}' for i in range(shape[0])], [f'c{i}' for i in range(shape[1])]
+    matrices = [
+        np.arange(np.prod(shape), dtype=np.float32).reshape(shape) * (i + 1) for i in range(3)
+    ]
+    paths = [
+        _write_pconn(tmp_path / f'sub{i}.pconn.nii', rows, cols, matrix)
+        for i, matrix in enumerate(matrices)
+    ]
+    cohort = pd.DataFrame({'scalar_name': 'conn', 'source_file': paths})
+
+    scalars, _ = load_cohort_cifti(cohort, workers=1, storage_dtype='float32')
+    np.testing.assert_array_equal(scalars['conn'], np.stack([m.ravel() for m in matrices]))
+    assert scalars.stats['conn'].fast_path_rows == 2
+
+
+def test_load_cohort_cifti_pconn_rejects_permuted_row_parcels(tmp_path, monkeypatch) -> None:
+    # Regression: the raw path only hashed the dimension-1 map, so a subject
+    # whose row (dimension-0) parcels were permuted was silently accepted.
+    rows, cols = list('ABCD'), list('WXYZ')
+    asym = np.arange(16, dtype=np.float32).reshape(4, 4)
+    sym = asym + asym.T
+    paths = [
+        _write_pconn(tmp_path / 'sub0.pconn.nii', rows, cols, sym),
+        _write_pconn(tmp_path / 'sub1.pconn.nii', rows, cols, asym),
+        _write_pconn(tmp_path / 'sub2.pconn.nii', rows[::-1], cols, sym),
+    ]
+    cohort = pd.DataFrame({'scalar_name': 'conn', 'source_file': paths})
+
+    raw_reads = _spy_raw_reads(monkeypatch)
+    scalars, _ = load_cohort_cifti(cohort, workers=1, storage_dtype='float32')
+    with pytest.raises(cifti_utils.SourceLoadError, match='Inconsistent spatial axis'):
+        scalars['conn']
+    assert paths[2] not in raw_reads
+
+
+def test_load_cohort_cifti_pconn_rejects_permuted_column_parcels(tmp_path, monkeypatch) -> None:
+    rows, cols = list('ABCD'), list('WXYZ')
+    asym = np.arange(16, dtype=np.float32).reshape(4, 4)
+    paths = [
+        _write_pconn(tmp_path / 'sub0.pconn.nii', rows, cols, asym),
+        _write_pconn(tmp_path / 'sub1.pconn.nii', rows, cols[::-1], asym),
+    ]
+    cohort = pd.DataFrame({'scalar_name': 'conn', 'source_file': paths})
+
+    raw_reads = _spy_raw_reads(monkeypatch)
+    scalars, _ = load_cohort_cifti(cohort, workers=1, storage_dtype='float32')
+    with pytest.raises(cifti_utils.SourceLoadError, match='Inconsistent spatial axis'):
+        scalars['conn']
+    assert paths[1] not in raw_reads
+
+
+def test_to_modelarray_pconn_regression_end_to_end(tmp_path, monkeypatch) -> None:
+    # The review repro: the CLI must reject the permuted subject and store an
+    # asymmetric follower in row-major order.
+    import h5py
+
+    from modelarrayio.cli.to_modelarray import to_modelarray
+
+    rows, cols = list('ABCD'), list('WXYZ')
+    asym = np.arange(16, dtype=np.float32).reshape(4, 4)
+    sym = asym + asym.T
+    good = [
+        _write_pconn(tmp_path / 'sub0.pconn.nii', rows, cols, sym),
+        _write_pconn(tmp_path / 'sub1.pconn.nii', rows, cols, asym),
+    ]
+    permuted = _write_pconn(tmp_path / 'sub2.pconn.nii', rows[::-1], cols, sym)
+
+    bad_cohort = tmp_path / 'bad.csv'
+    pd.DataFrame({'scalar_name': 'conn', 'source_file': [*good, permuted]}).to_csv(
+        bad_cohort, index=False
+    )
+    with pytest.raises(cifti_utils.SourceLoadError, match='Inconsistent spatial axis'):
+        to_modelarray(bad_cohort, output=tmp_path / 'bad.h5')
+    assert not (tmp_path / 'bad.h5').exists()
+
+    good_cohort = tmp_path / 'good.csv'
+    pd.DataFrame({'scalar_name': 'conn', 'source_file': good}).to_csv(good_cohort, index=False)
+    to_modelarray(good_cohort, output=tmp_path / 'good.h5')
+    with h5py.File(tmp_path / 'good.h5', 'r') as h5_file:
+        np.testing.assert_array_equal(h5_file['scalars/conn/values'][1], asym.ravel())
+
+
+def test_raw_read_of_pconn_matches_nibabel_order(tmp_path) -> None:
+    # The on-disk block is column-major; the raw read must return nibabel's
+    # row-major flattening, whatever the reference matrix looks like.
+    rows, cols = list('ABC'), list('WXYZ')
+    reference = _write_pconn(tmp_path / 'ref.pconn.nii', rows, cols, np.ones((3, 4)))
+    follower_matrix = np.arange(12, dtype=np.float32).reshape(3, 4)
+    follower = _write_pconn(tmp_path / 'f.pconn.nii', rows, cols, follower_matrix)
+    plan = _build_cifti_raw_read_plan(
+        nb.load(reference).get_fdata(dtype=np.float32).ravel(), reference, 'float32'
+    )
+    assert plan is not None
+    assert plan.matrix_shape == (3, 4)
+    raw = _read_cifti_row_raw(follower, plan)
+    np.testing.assert_array_equal(raw, follower_matrix.ravel())
+    np.testing.assert_array_equal(raw, nb.load(follower).get_fdata(dtype=np.float32).ravel())
+
+
+def _cifti_xml(*maps: tuple[str, str, str]) -> bytes:
+    """Return a minimal CIFTI XML prefix with the given (dimension, type, body) maps."""
+    body = ''.join(
+        f'<MatrixIndicesMap AppliesToMatrixDimension="{dimension}" '
+        f'IndicesMapToDataType="{index_type}">{inner}</MatrixIndicesMap>'
+        for dimension, index_type, inner in maps
+    )
+    return f'HEADER<CIFTI Version="2"><Matrix>{body}</Matrix></CIFTI>'.encode()
+
+
+_SCALARS = 'CIFTI_INDEX_TYPE_SCALARS'
+_BRAIN_MODELS = 'CIFTI_INDEX_TYPE_BRAIN_MODELS'
+_PARCELS = 'CIFTI_INDEX_TYPE_PARCELS'
+
+
+def test_layout_digest_accepts_scalar_plus_spatial_map() -> None:
+    def digest(xml):
+        layout = cifti_utils._layout_digest(xml)
+        assert layout is not None
+        assert layout[0] == 1  # exactly one matrix row
+        return layout[1]
+
+    dscalar = digest(
+        _cifti_xml(('0', _SCALARS, '<NamedMap>a</NamedMap>'), ('1', _BRAIN_MODELS, 'x'))
+    )
+    renamed = digest(
+        _cifti_xml(('0', _SCALARS, '<NamedMap>b</NamedMap>'), ('1', _BRAIN_MODELS, 'x'))
+    )
+    moved = digest(
+        _cifti_xml(('0', _SCALARS, '<NamedMap>a</NamedMap>'), ('1', _BRAIN_MODELS, 'y'))
+    )
+    pscalar = digest(_cifti_xml(('0', _SCALARS, ''), ('1', _PARCELS, 'x')))
+
+    # Scalar map names may differ per subject; the spatial map may not.
+    assert renamed == dscalar
+    assert moved != dscalar
+    assert pscalar != dscalar
+
+
+def test_layout_digest_accepts_pconn_and_covers_every_map() -> None:
+    def digest(xml):
+        layout = cifti_utils._layout_digest(xml)
+        assert layout is not None
+        assert layout[0] == 0  # any number of matrix rows
+        return layout[1]
+
+    separate = digest(_cifti_xml(('0', _PARCELS, 'rows'), ('1', _PARCELS, 'cols')))
+    rows_changed = digest(_cifti_xml(('0', _PARCELS, 'ROWS'), ('1', _PARCELS, 'cols')))
+    cols_changed = digest(_cifti_xml(('0', _PARCELS, 'rows'), ('1', _PARCELS, 'COLS')))
+    shared = digest(_cifti_xml(('0,1', _PARCELS, 'rows')))
+    shared_changed = digest(_cifti_xml(('0,1', _PARCELS, 'ROWS')))
+
+    assert len({separate, rows_changed, cols_changed, shared, shared_changed}) == 5
+
+
+@pytest.mark.parametrize(
+    'head',
+    [
+        pytest.param(b'no cifti xml here', id='no-cifti-element'),
+        pytest.param(_cifti_xml(('1', _BRAIN_MODELS, 'x')), id='missing-dimension-0-map'),
+        pytest.param(_cifti_xml(('0', _SCALARS, '')), id='missing-dimension-1-map'),
+        pytest.param(_cifti_xml(('0', _BRAIN_MODELS, 'r'), ('1', _BRAIN_MODELS, 'c')), id='dconn'),
+        pytest.param(_cifti_xml(('0', _PARCELS, 'r'), ('1', _BRAIN_MODELS, 'c')), id='pdconn'),
+        pytest.param(_cifti_xml(('0,1', _BRAIN_MODELS, 'p')), id='shared-dense-map'),
+        pytest.param(_cifti_xml(('0', _SCALARS, ''), ('1', _SCALARS, '')), id='scalar-scalar'),
+        pytest.param(
+            _cifti_xml(('0', 'CIFTI_INDEX_TYPE_LABELS', ''), ('1', _BRAIN_MODELS, 'x')),
+            id='label-map',
+        ),
+        pytest.param(
+            _cifti_xml(('0', _SCALARS, ''), ('1', 'CIFTI_INDEX_TYPE_SERIES', '')),
+            id='series-spatial-map',
+        ),
+        pytest.param(
+            _cifti_xml(('0', _SCALARS, ''), ('0', _SCALARS, ''), ('1', _BRAIN_MODELS, 'x')),
+            id='duplicate-dimension',
+        ),
+        pytest.param(
+            b'<CIFTI><MatrixIndicesMap AppliesToMatrixDimension="0" '
+            b'IndicesMapToDataType="CIFTI_INDEX_TYPE_SCALARS">',
+            id='unterminated-map',
+        ),
+        pytest.param(
+            b'<CIFTI><MatrixIndicesMap IndicesMapToDataType="CIFTI_INDEX_TYPE_SCALARS">'
+            b'</MatrixIndicesMap>',
+            id='missing-dimension-attribute',
+        ),
+    ],
+)
+def test_layout_digest_declines_other_layouts(head) -> None:
+    assert cifti_utils._layout_digest(head) is None
+
+
+def test_shared_axis_pconn_is_written_as_one_map(tmp_path) -> None:
+    # make_pconn uses one axis for rows and columns, which nibabel writes as a
+    # single AppliesToMatrixDimension="0,1" map; the plan must accept it.
+    path = str(tmp_path / 'combined.pconn.nii')
+    make_pconn(['a', 'b'], np.arange(4, dtype=np.float32)).to_filename(path)
+    with open(path, 'rb') as handle:
+        assert b'AppliesToMatrixDimension="0,1"' in handle.read(4096)
+    row = nb.load(path).get_fdata(dtype=np.float32).ravel()
+    assert _build_cifti_raw_read_plan(row, path, 'float32') is not None
+    assert _build_cifti_raw_read_plan(row, str(tmp_path / 'missing.nii'), 'float32') is None
+
+
+def _reference_plan(tmp_path, mask, values):
+    reference = _write_dscalar(tmp_path / 'ref.dscalar.nii', mask, values)
+    image = nb.load(reference)
+    row = image.get_fdata(dtype=np.float32).reshape(-1)
+    plan = _build_cifti_raw_read_plan(row, reference, 'float32')
+    assert plan is not None
+    return reference, plan
+
+
+def test_read_cifti_row_raw_declines_dtype_dims_scaling_and_truncation(tmp_path) -> None:
+    mask = _toy_mask()
+    n = int(mask.sum())
+    _reference, plan = _reference_plan(tmp_path, mask, np.arange(n, dtype=np.float32))
+
+    # Different on-disk dtype.
+    header = nb.cifti2.Cifti2Header.from_axes((ScalarAxis(['m']), BrainModelAxis.from_mask(mask)))
+    float64_path = str(tmp_path / 'float64.dscalar.nii')
+    nb.Cifti2Image(np.arange(n, dtype=np.float64).reshape(1, -1), header=header).to_filename(
+        float64_path
+    )
+    assert _read_cifti_row_raw(float64_path, plan) is None
+
+    # Different element count (dims).
+    bigger = _toy_mask()
+    bigger[0, 1, 2] = True
+    dims_path = _write_dscalar(
+        tmp_path / 'dims.dscalar.nii', bigger, np.arange(n + 1, dtype=np.float32)
+    )
+    assert _read_cifti_row_raw(dims_path, plan) is None
+
+    # On-disk scaling the reference does not have.
+    scaled_path = _write_dscalar(
+        tmp_path / 'scaled.dscalar.nii', mask, np.arange(n, dtype=np.float32)
+    )
+    with open(scaled_path, 'r+b') as handle:
+        nifti_header = nb.Nifti2Header.from_fileobj(handle, check=False)
+        nifti_header.set_slope_inter(2.0, 1.0)
+        handle.seek(0)
+        handle.write(nifti_header.binaryblock)
+    assert _read_cifti_row_raw(scaled_path, plan) is None
+
+    # A real file cut short inside its data block.
+    truncated_path = _write_dscalar(
+        tmp_path / 'truncated.dscalar.nii', mask, np.arange(n, dtype=np.float32)
+    )
+    with open(truncated_path, 'r+b') as handle:
+        handle.truncate(nb.load(truncated_path).dataobj.offset + 4)
+    assert _read_cifti_row_raw(truncated_path, plan) is None
+
+
+def test_load_cohort_cifti_falls_back_for_mismatched_followers(tmp_path, monkeypatch) -> None:
+    # Followers the raw path declines are still decoded by nibabel and stored
+    # correctly; only matching followers count as fast-path rows.
+    mask = _toy_mask()
+    n = int(mask.sum())
+    reference = _write_dscalar(tmp_path / 'sub0.dscalar.nii', mask, np.arange(n) + 0.0)
+    matching = _write_dscalar(tmp_path / 'sub1.dscalar.nii', mask, np.arange(n) + 1.0)
+    header = nb.cifti2.Cifti2Header.from_axes((ScalarAxis(['m']), BrainModelAxis.from_mask(mask)))
+    float64_path = str(tmp_path / 'sub2.dscalar.nii')
+    nb.Cifti2Image((np.arange(n) + 2.0).reshape(1, -1), header=header).to_filename(float64_path)
+    cohort = pd.DataFrame(
+        {'scalar_name': 'FA', 'source_file': [reference, matching, float64_path]}
+    )
+
+    raw_reads = _spy_raw_reads(monkeypatch)
+    scalars, _ = load_cohort_cifti(cohort, workers=1, storage_dtype='float32')
+    matrix = scalars['FA']
+
+    np.testing.assert_array_equal(
+        matrix, np.stack([np.arange(n) + offset for offset in (0.0, 1.0, 2.0)])
+    )
+    # The reference itself is read once as the plan's probe.
+    assert raw_reads == [reference, matching]
+    assert scalars.stats['FA'].fast_path_rows == 1
+
+
+def test_load_cohort_cifti_rejects_label_follower(tmp_path) -> None:
+    # A dlabel-style follower (label map on dimension 0) with the same brain
+    # models must not be read as a scalar row.
+    from nibabel.cifti2.cifti2_axes import LabelAxis
+
+    mask = _toy_mask()
+    n = int(mask.sum())
+    reference = _write_dscalar(tmp_path / 'sub0.dscalar.nii', mask, np.arange(n) + 0.0)
+    label_header = nb.cifti2.Cifti2Header.from_axes(
+        (LabelAxis(['labels'], {0: ('???', (0, 0, 0, 0))}), BrainModelAxis.from_mask(mask))
+    )
+    label_path = str(tmp_path / 'sub1.dscalar.nii')
+    nb.Cifti2Image(np.zeros((1, n), dtype=np.float32), header=label_header).to_filename(label_path)
+    cohort = pd.DataFrame({'scalar_name': 'FA', 'source_file': [reference, label_path]})
+
+    scalars, _ = load_cohort_cifti(cohort, workers=1, storage_dtype='float32')
+    with pytest.raises(cifti_utils.SourceLoadError):
+        scalars['FA']
 
 
 def test_read_cifti_row_raw_rejects_non_matching_sources(tmp_path) -> None:
@@ -524,7 +865,7 @@ def test_read_cifti_row_raw_rejects_non_matching_sources(tmp_path) -> None:
     reference = _write_dscalar(tmp_path / 'ref.dscalar.nii', mask, np.arange(n, dtype=np.float32))
     ref_image = nb.load(reference)
     ref_row = ref_image.get_fdata(dtype=np.float32, caching='unchanged').reshape(-1)
-    plan = _build_cifti_raw_read_plan(ref_image, ref_row, reference, 'float32')
+    plan = _build_cifti_raw_read_plan(ref_row, reference, 'float32')
     assert plan is not None
 
     # An s3:// URI and a .gz path are declined outright.
@@ -547,7 +888,7 @@ def test_build_cifti_raw_read_plan_rejects_in_memory_image() -> None:
     # An in-memory image has no on-disk data offset, so no plan can be built.
     image = make_dscalar(_toy_mask(), np.arange(int(_toy_mask().sum()), dtype=np.float32))
     row = image.get_fdata(dtype=np.float32).reshape(-1)
-    assert _build_cifti_raw_read_plan(image, row, 'memory.dscalar.nii', 'float32') is None
+    assert _build_cifti_raw_read_plan(row, 'memory.dscalar.nii', 'float32') is None
 
 
 def test_load_cohort_cifti_raw_fast_path_serves_pscalar(tmp_path, monkeypatch) -> None:
@@ -607,7 +948,7 @@ def test_read_cifti_row_raw_reads_file_once(tmp_path, monkeypatch) -> None:
     )
     ref_image = nb.load(reference)
     ref_row = ref_image.get_fdata(dtype=np.float32).reshape(-1)
-    plan = _build_cifti_raw_read_plan(ref_image, ref_row, reference, 'float32')
+    plan = _build_cifti_raw_read_plan(ref_row, reference, 'float32')
     assert plan is not None
 
     opened: list[str] = []
@@ -622,3 +963,125 @@ def test_read_cifti_row_raw_reads_file_once(tmp_path, monkeypatch) -> None:
     row = _read_cifti_row_raw(other, plan)
     np.testing.assert_array_equal(row, np.arange(n, dtype=np.float32) + 1)
     assert opened.count(other) == 1
+
+
+def test_build_cifti_raw_read_plan_declines_ineligible_references(tmp_path) -> None:
+    mask = _toy_mask()
+    n = int(mask.sum())
+    reference = _write_dscalar(tmp_path / 'ref.dscalar.nii', mask, np.arange(n, dtype=np.float32))
+    image = nb.load(reference)
+    row = image.get_fdata(dtype=np.float32).reshape(-1)
+
+    # Remote and compressed sources never get a plan.
+    assert _build_cifti_raw_read_plan(row, 's3://bucket/ref.dscalar.nii', 'float32') is None
+    assert _build_cifti_raw_read_plan(row, f'{reference}.gz', 'float32') is None
+    # A row that does not match the on-disk dims is declined.
+    assert _build_cifti_raw_read_plan(row[:-1], reference, 'float32') is None
+    assert _build_cifti_raw_read_plan(row.reshape(1, -1), reference, 'float32') is None
+    # The final reference probe must reproduce the decoded row exactly.
+    assert _build_cifti_raw_read_plan(row + 1.0, reference, 'float32') is None
+
+    # Integer on-disk data is left to nibabel.
+    header = nb.cifti2.Cifti2Header.from_axes((ScalarAxis(['m']), BrainModelAxis.from_mask(mask)))
+    int_path = str(tmp_path / 'int.dscalar.nii')
+    nb.Cifti2Image(np.arange(n, dtype=np.int16).reshape(1, -1), header=header).to_filename(
+        int_path
+    )
+    int_image = nb.load(int_path)
+    int_row = int_image.get_fdata(dtype=np.float32).reshape(-1)
+    assert _build_cifti_raw_read_plan(int_row, int_path, 'float32') is None
+
+
+def _set_slope_inter(path, slope, inter) -> None:
+    with open(path, 'r+b') as handle:
+        nifti_header = nb.Nifti2Header.from_fileobj(handle, check=False)
+        nifti_header.set_slope_inter(slope, inter)
+        handle.seek(0)
+        handle.write(nifti_header.binaryblock)
+
+
+def test_load_cohort_cifti_scaled_sources_use_nibabel(tmp_path, monkeypatch) -> None:
+    # The raw path serves unscaled data only. A scaled reference gets no plan,
+    # and a scaled follower of an unscaled reference is declined; both are
+    # decoded (and scaled) by nibabel.
+    mask = _toy_mask()
+    n = int(mask.sum())
+
+    def _cohort(scaled):
+        paths = []
+        for i, is_scaled in enumerate(scaled):
+            path = _write_dscalar(
+                tmp_path / f'{"".join(map(str, map(int, scaled)))}_sub{i}.dscalar.nii',
+                mask,
+                np.arange(n, dtype=np.float32) + i,
+            )
+            if is_scaled:
+                _set_slope_inter(path, 2.0, 0.5)
+            paths.append(path)
+        return paths
+
+    for scaled, expected_fast_rows in (((True, True, True), 0), ((False, True, False), 1)):
+        paths = _cohort(scaled)
+        cohort = pd.DataFrame({'scalar_name': 'FA', 'source_file': paths})
+        raw_reads = _spy_raw_reads(monkeypatch)
+        scalars, _ = load_cohort_cifti(cohort, workers=1, storage_dtype='float32')
+        matrix = scalars['FA']
+
+        expected = np.stack([nb.load(path).get_fdata(dtype=np.float32).ravel() for path in paths])
+        np.testing.assert_array_equal(matrix, expected)
+        if scaled[1]:
+            np.testing.assert_array_equal(matrix[1], (np.arange(n) + 1) * 2.0 + 0.5)
+        assert not [
+            path
+            for path, is_scaled in zip(paths, scaled, strict=True)
+            if is_scaled and path in raw_reads
+        ]
+        assert scalars.stats['FA'].fast_path_rows == expected_fast_rows
+
+
+@pytest.mark.parametrize('kind', ['dscalar', 'pscalar', 'pconn'])
+def test_fast_path_followers_never_touch_nibabel(tmp_path, monkeypatch, kind) -> None:
+    # Per-file nibabel decoding (XML parse + axis rebuild) is what made large
+    # CIFTI cohorts unusable. Only each scalar's first source may be decoded;
+    # nibabel work must not grow with the number of followers.
+    mask = _toy_mask()
+    n = int(mask.sum())
+    parcel_names = [f'p{i}' for i in range(n)]
+
+    def _write(path, values):
+        if kind == 'dscalar':
+            return _write_dscalar(path, mask, values)
+        if kind == 'pconn':
+            matrix = np.outer(values, np.arange(1, 4, dtype=np.float32))
+            return _write_pconn(path, parcel_names, ['x', 'y', 'z'], matrix)
+        make_pscalar(parcel_names, values).to_filename(str(path))
+        return str(path)
+
+    def _stage(n_sources):
+        paths = [
+            _write(tmp_path / f'{n_sources}_sub{i}.{kind}.nii', np.arange(n, dtype=np.float32) + i)
+            for i in range(n_sources)
+        ]
+        cohort = pd.DataFrame({'scalar_name': 'FA', 'source_file': paths})
+        loads: list[str] = []
+        real_load = cifti_utils.load_nibabel
+        monkeypatch.setattr(
+            cifti_utils,
+            'load_nibabel',
+            lambda source, **kwargs: (loads.append(str(source)), real_load(source, **kwargs))[1],
+        )
+        axis_builds = []
+        real_get_axis = nb.cifti2.Cifti2Header.get_axis
+        monkeypatch.setattr(
+            nb.cifti2.Cifti2Header,
+            'get_axis',
+            lambda self, index: (axis_builds.append(index), real_get_axis(self, index))[1],
+        )
+        scalars, _ = load_cohort_cifti(cohort, workers=2, storage_dtype='float32')
+        scalars['FA']
+        monkeypatch.undo()
+        assert loads == [paths[0]]
+        assert scalars.stats['FA'].fast_path_rows == n_sources - 1
+        return len(axis_builds)
+
+    assert _stage(3) == _stage(8)

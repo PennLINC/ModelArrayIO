@@ -19,11 +19,15 @@ import tiledb
 
 try:
     import resource
-except ImportError:  # pragma: no cover - resource is available on supported benchmark hosts
+except ImportError:  # pragma: no cover - resource is unavailable only on Windows
     resource = None
 
 from modelarrayio.cli import utils as cli_utils
-from modelarrayio.utils.loading import resolve_loader_workers, validate_workers
+from modelarrayio.utils.loading import (
+    LazyScalarMatrices,
+    resolve_loader_workers,
+    validate_workers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +55,6 @@ def load_timing_metrics(load_stats) -> dict[str, float | int]:
     staging_cpu = float(values.get('cpu_seconds', 0.0))
     return {
         'source_load_seconds': source_wall,
-        # Retain the original keys for benchmark-file compatibility while also
-        # exposing their precise staging semantics.
-        'source_cpu_seconds': staging_cpu,
-        'source_cpu_utilization_percent': (
-            100.0 * staging_cpu / staging_wall if staging_wall else 0.0
-        ),
         'source_worker_seconds': float(values.get('source_seconds', 0.0)),
         'validation_seconds': float(values.get('validation_seconds', 0.0)),
         'staging_seconds': staging_wall,
@@ -65,14 +63,10 @@ def load_timing_metrics(load_stats) -> dict[str, float | int]:
             100.0 * staging_cpu / staging_wall if staging_wall else 0.0
         ),
         'staging_allocation_seconds': float(values.get('allocation_seconds', 0.0)),
-        'writer_idle_seconds': staging_wall,
-        'loader_blocked_seconds': 0.0,
         'scheduler_wait_seconds': float(values.get('scheduler_wait_seconds', 0.0)),
-        'queue_occupancy_mean': 0.0,
-        'queue_occupancy_max': 0,
         'in_flight_sources_mean': float(values.get('in_flight_sources_mean', 0.0)),
         'in_flight_sources_max': int(values.get('in_flight_sources_max', 0)),
-        # Rows served by a reader fast path (CIFTI raw greyordinate read); a
+        # Rows served by a reader fast path (CIFTI raw data-block read); a
         # value below source_count means some rows silently fell back.
         'fast_path_rows': int(values.get('fast_path_rows', 0)),
     }
@@ -138,30 +132,125 @@ def _remove_path(path: Path) -> None:
         path.unlink()
 
 
-def _publish_directory(temporary: Path, output: Path) -> None:
-    """Publish a directory with rollback when replacing a non-empty root."""
-    if not output.exists():
-        temporary.replace(output)
-        return
+def _is_tiledb_internal(path: Path) -> bool:
+    """Return True for TileDB's own bookkeeping entries (``__group``, ``__meta``, ...)."""
+    return path.name.startswith('__')
 
-    backup = output.with_name(f'.{output.name}.modelarrayio-backup-{uuid.uuid4().hex}')
-    storage_logger = logging.getLogger('modelarrayio.storage.tiledb_storage')
-    storage_logger.warning('Removing existing array tree %s during atomic publication', output)
-    output.replace(backup)
+
+def _is_tiledb_array(path: Path) -> bool:
+    return tiledb.object_type(str(path)) == 'array'
+
+
+def _directory_merge_entries(temporary: Path, output: Path) -> list[str]:
+    """Return the relative paths of *temporary* to move into the existing *output* root.
+
+    A top-level entry that *output* lacks moves as a whole. A top-level group
+    that both roots have (normally ``scalars`` and ``parcels``) is merged one
+    level down, so each scalar group or parcel array replaces only its
+    namesake and every other scalar already in *output* is kept. TileDB
+    bookkeeping entries are moved only where *output* has none of its own.
+    """
+    entries: list[str] = []
+    for child in sorted(temporary.iterdir()):
+        target = output / child.name
+        if _is_tiledb_internal(child):
+            if not (target.exists() or target.is_symlink()):
+                entries.append(child.name)
+            continue
+        if (
+            child.is_dir()
+            and target.is_dir()
+            and not _is_tiledb_array(child)
+            and not _is_tiledb_array(target)
+        ):
+            for grandchild in sorted(child.iterdir()):
+                existing = target / grandchild.name
+                if _is_tiledb_internal(grandchild) and (
+                    existing.exists() or existing.is_symlink()
+                ):
+                    continue
+                entries.append(f'{child.name}/{grandchild.name}')
+        else:
+            entries.append(child.name)
+    return entries
+
+
+def _merge_directory(temporary: Path, output: Path) -> None:
+    """Move each entry of *temporary* into *output*, rolling every move back on failure.
+
+    Replaced entries are parked in a same-filesystem sibling backup directory
+    until all moves succeed, so an interrupted publication leaves *output*
+    exactly as it was.
+    """
+    entries = _directory_merge_entries(temporary, output)
+    backup_root = output.with_name(f'.{output.name}.modelarrayio-backup-{uuid.uuid4().hex}')
+    moved: list[tuple[Path, Path, Path | None]] = []
     try:
-        temporary.replace(output)
+        for entry in entries:
+            source = temporary / entry
+            target = output / entry
+            backup = None
+            if target.exists() or target.is_symlink():
+                backup = backup_root / entry
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                logger.warning('Replacing existing %s in TileDB root %s', entry, output)
+                target.replace(backup)
+            moved.append((source, target, backup))
+            source.replace(target)
     except BaseException:
-        if not output.exists() and backup.exists():
-            backup.replace(output)
+        restored = True
+        for source, target, backup in reversed(moved):
+            try:
+                if not (source.exists() or source.is_symlink()) and (
+                    target.exists() or target.is_symlink()
+                ):
+                    target.replace(source)
+                if backup is not None and (backup.exists() or backup.is_symlink()):
+                    backup.replace(target)
+            except OSError:
+                restored = False
+                logger.exception(
+                    'Could not restore %s during rollback; the previous content is kept in %s.',
+                    target,
+                    backup_root,
+                )
+        if restored:
+            _remove_path(backup_root)
         raise
-    else:
-        _remove_path(backup)
+    _remove_path(backup_root)
+
+
+def _publish_directory(temporary: Path, output: Path) -> None:
+    """Publish a TileDB root: rename it into place, or merge into an existing root.
+
+    Merging matches the long-standing behaviour of converting one scalar at a
+    time into the same ``.tdb`` root: arrays written by this run replace their
+    namesakes, and every other scalar already in the root is kept.
+    """
+    if not output.exists():
+        try:
+            temporary.replace(output)
+            return
+        except OSError:
+            # Another process published the root first; merge into it instead.
+            if not output.is_dir():
+                raise
+    _merge_directory(temporary, output)
+    _remove_path(temporary)
 
 
 @contextmanager
 def atomic_output(output: str | Path, *, directory: bool):
-    """Yield a same-parent temporary path and publish it only on success."""
+    """Yield a same-parent temporary path and publish it only on success.
+
+    Files replace any existing output. Directories (TileDB roots) are merged
+    into an existing root by :func:`_publish_directory`.
+    """
     final_path = Path(output)
+    if directory and final_path.exists() and not final_path.is_dir():
+        raise NotADirectoryError(
+            f'TileDB output {str(final_path)!r} exists and is not a directory.'
+        )
     final_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = _temporary_sibling(final_path)
     _remove_path(temporary)
@@ -456,22 +545,18 @@ class TimingRecorder:
         )
 
 
-def _writer_metrics(result, scalar_name: str) -> dict[str, object]:
+_SCALAR_RECORD_KEYS = frozenset(
+    {'scalar_name', 'matrix_shape', 'dtype', 'output_bytes', 'output_file_count'}
+)
+
+
+def _writer_metrics(result: Mapping[str, Mapping[str, object]], scalar_name: str) -> dict:
     """Return a writer's per-scalar metrics minus keys the scalar record sets itself."""
-    if not isinstance(result, dict):
-        return {}
-    value = result.get(scalar_name)
-    metrics = value if isinstance(value, dict) else result
-    reserved = {'scalar_name', 'matrix_shape', 'dtype', 'output_bytes', 'output_file_count'}
-    return {key: item for key, item in metrics.items() if key not in reserved}
-
-
-def _matrix_description(matrix, result, scalar_name: str, storage_dtype) -> tuple[list, str]:
-    raw = result.get(scalar_name, {}) if isinstance(result, dict) else {}
-    if isinstance(raw, dict) and raw.get('matrix_shape') is not None:
-        return list(raw['matrix_shape']), str(raw.get('dtype', storage_dtype))
-    array = matrix if hasattr(matrix, 'shape') else np.asarray(matrix)
-    return list(array.shape), str(array.dtype)
+    return {
+        key: value
+        for key, value in result.get(scalar_name, {}).items()
+        if key not in _SCALAR_RECORD_KEYS
+    }
 
 
 def publish_scalar_outputs(
@@ -481,7 +566,7 @@ def publish_scalar_outputs(
     output: str | Path,
     split_outputs: bool,
     scalar_names: Sequence[str],
-    scalars: Mapping[str, object],
+    scalars: LazyScalarMatrices,
     sources_by_scalar: Mapping[str, Sequence[str]],
     storage_dtype: str,
     compression: str,
@@ -499,19 +584,15 @@ def publish_scalar_outputs(
     """Stage, write, validate and atomically publish every scalar; emit telemetry.
 
     This is the one per-scalar loop shared by the CIFTI, NIfTI and MIF
-    converters. ``scalars`` is indexed once per scalar (normally a
-    :class:`~modelarrayio.utils.loading.LazyScalarMatrices`, so each access
-    stages that scalar) and the matrix is dropped right after its write.
-    ``hdf5_metadata`` runs once per HDF5 file right after it is created;
-    ``tiledb_metadata`` runs once per TileDB root after its scalar arrays are
-    written. Validation happens on the temporary path before publication.
+    converters. ``scalars`` is indexed once per scalar (each access stages that
+    scalar) and the matrix is dropped right after its write. ``hdf5_metadata``
+    runs once per HDF5 file right after it is created; ``tiledb_metadata`` runs
+    once per TileDB root after its scalar arrays are written. Validation
+    happens on the temporary path before publication.
     """
     directory = backend == 'tiledb'
-    # Stats are filled in as scalars are accessed, so keep the live mapping
-    # itself rather than a snapshot of it (an empty dict is falsy).
-    load_stats = getattr(scalars, 'stats', None)
-    if load_stats is None:
-        load_stats = {}
+    # Filled in as scalars are accessed, so read it per scalar, not up front.
+    load_stats = scalars.stats
     writer_kwargs = {
         'storage_dtype': storage_dtype,
         'compression': compression,
@@ -565,15 +646,12 @@ def publish_scalar_outputs(
         output_bytes, output_files = scalar_output_stats(
             result, scalar_name, output_path, split_output=split_outputs
         )
-        matrix_shape, matrix_dtype = _matrix_description(
-            matrix, result, scalar_name, storage_dtype
-        )
         recorder.emit(
             'scalar_complete',
             scalar_name=scalar_name,
             scalar_seconds=time.perf_counter() - started,
-            matrix_shape=matrix_shape,
-            dtype=matrix_dtype,
+            matrix_shape=[int(value) for value in matrix.shape],
+            dtype=str(matrix.dtype),
             **load_timing_metrics(load_stats.get(scalar_name)),
             peak_memory_bytes=peak_rss_bytes(),
             output_bytes=output_bytes,

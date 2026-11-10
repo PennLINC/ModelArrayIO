@@ -82,28 +82,28 @@ Fast conversion and input sources
 C-contiguous matrix, then writes that matrix in one backend submission. Use
 ``--workers N`` to bound how many input sources are loaded concurrently. This
 meaning applies to local paths and ``s3://`` URLs, every modality, and both
-backends; it does not cap HDF5 compression threads or TileDB's internal pools.
+backends; it does not cap TileDB's internal pools or HDF5 gzip compression
+threads. Compression threads default to every CPU available to the process; set
+``MODELARRAYIO_HDF5_COMPRESSION_WORKERS`` to cap them, for example on shared
+cluster nodes.
 
 ``--workers`` previously controlled concurrent TileDB scalar writes.
-``--s3-workers`` is accepted as a deprecated alias for one minor release.
-Matching values are accepted, conflicting values are rejected, and the alias
-will be removed in the next breaking release.
+``--s3-workers`` is a deprecated alias that will be removed in the next
+breaking release. A value matching ``--workers`` is accepted; a conflicting
+value is rejected.
 
 Local files and materialized DataLad/git-annex symlinks are read directly.
 ModelArrayIO never runs ``datalad get`` implicitly; a broken annex symlink
 reports an actionable error. S3 sources use one shared connection pool sized
 for the loader concurrency. Set ``MODELARRAYIO_S3_ANON=1`` for public buckets.
 
-``--dtype float32`` is the faster, smaller default. ``--dtype float64`` keeps
-source precision through decoding, staging, and storage, at twice the staging
-memory. On the committed 20-subject fixture, three warm runs showed HDF5's
-median write phase increasing from 0.00090 s to 0.00138 s (1.54x) and compressed
-output from 37,460 to 54,355 bytes (1.45x). That fixture is too small for a
-throughput claim; use the reproducible `benchmark harness
-<benchmarks/to_modelarray/README.md>`_ to measure the medium ABIDE cohort on deployment
-hardware.
+``--dtype float32`` is the default. ``--dtype float64`` keeps source precision
+through decoding, staging, and storage, at twice the staging memory and bytes
+written.
 
 Pass ``--timing-jsonl PATH`` to append structured per-scalar and total runtime
 records. Outputs are written to a same-filesystem temporary path and validated
-before publication. File replacement is atomic; existing TileDB directories
-use a recoverable rename-and-rollback sequence.
+before publication. An existing HDF5 file is replaced atomically. Converting
+into an existing TileDB directory merges into it: the scalars (and parcel
+arrays) written by the run replace their namesakes, every other scalar already
+in the directory is kept, and an interrupted publication is rolled back.

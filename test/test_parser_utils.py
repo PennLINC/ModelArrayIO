@@ -46,6 +46,22 @@ def test_parse_to_modelarray_minimal_defaults(tmp_path):
     assert args.log_level == 'INFO'
 
 
+@pytest.mark.parametrize('option', ['--workers', '--s3-workers'])
+@pytest.mark.parametrize('value', ['0', '-2', 'many', '1.5'])
+def test_parse_to_modelarray_rejects_non_positive_worker_counts(tmp_path, capsys, option, value):
+    cohort = tmp_path / 'cohort.csv'
+    cohort.touch()
+    parser = _parse_to_modelarray()
+    with pytest.raises(SystemExit) as excinfo:
+        parser.parse_args(['--cohort-file', str(cohort), option, value])
+    assert excinfo.value.code == 2
+    assert f'argument {option}' in capsys.readouterr().err
+
+
+def test_positive_int_accepts_positive_values():
+    assert parser_utils._positive_int('3') == 3
+
+
 def test_parse_to_modelarray_cohort_file_underscore_alias(tmp_path):
     cohort = tmp_path / 'cohort.csv'
     cohort.touch()

@@ -31,15 +31,15 @@ def test_resolve_loader_workers_defaults_and_deprecated_alias() -> None:
     assert resolve_loader_workers(None, None) == 1
     assert resolve_loader_workers(3, None) == 3
 
-    with pytest.warns(DeprecationWarning, match='--s3-workers is deprecated'):
+    with pytest.warns(FutureWarning, match='--s3-workers is deprecated'):
         assert resolve_loader_workers(None, 4) == 4
-    with pytest.warns(DeprecationWarning, match='--s3-workers is deprecated'):
+    with pytest.warns(FutureWarning, match='--s3-workers is deprecated'):
         assert resolve_loader_workers(4, 4) == 4
 
 
 def test_resolve_loader_workers_rejects_conflicts_and_nonpositive_values() -> None:
     with (
-        pytest.warns(DeprecationWarning, match='--s3-workers is deprecated'),
+        pytest.warns(FutureWarning, match='--s3-workers is deprecated'),
         pytest.raises(ValueError, match='Conflicting loader worker counts'),
     ):
         resolve_loader_workers(2, 3)
@@ -47,7 +47,7 @@ def test_resolve_loader_workers_rejects_conflicts_and_nonpositive_values() -> No
         resolve_loader_workers(0, None)
 
 
-def test_load_timing_metrics_distinguishes_scheduler_and_pipeline_waiting() -> None:
+def test_load_timing_metrics_reports_measured_counters_only() -> None:
     metrics = load_timing_metrics(
         LoadStats(
             allocation_seconds=0.25,
@@ -64,11 +64,20 @@ def test_load_timing_metrics_distinguishes_scheduler_and_pipeline_waiting() -> N
 
     assert metrics['source_load_seconds'] == 2.0
     assert metrics['staging_seconds'] == 3.0
-    assert metrics['writer_idle_seconds'] == 3.0
+    assert metrics['staging_cpu_seconds'] == 1.5
+    assert metrics['staging_cpu_utilization_percent'] == pytest.approx(50.0)
     assert metrics['scheduler_wait_seconds'] == 1.75
-    assert metrics['loader_blocked_seconds'] == 0.0
-    assert metrics['queue_occupancy_mean'] == 0.0
     assert metrics['in_flight_sources_max'] == 2
+    # Placeholders that were always zero, or duplicated staging_cpu_*, are gone.
+    for removed in (
+        'writer_idle_seconds',
+        'loader_blocked_seconds',
+        'queue_occupancy_mean',
+        'queue_occupancy_max',
+        'source_cpu_seconds',
+        'source_cpu_utilization_percent',
+    ):
+        assert removed not in metrics
 
 
 def test_scalar_output_stats_avoids_cumulative_combined_file_size(tmp_path: Path) -> None:
@@ -149,30 +158,93 @@ def test_atomic_output_cleans_temporary_path_on_keyboard_interrupt(
     assert not list(tmp_path.glob('.*.modelarrayio-tmp-*'))
 
 
+def _write_tree(root: Path, files: dict[str, str]) -> None:
+    for relative, text in files.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding='utf-8')
+
+
+def _read_tree(root: Path) -> dict[str, str]:
+    return {
+        str(path.relative_to(root)): path.read_text(encoding='utf-8')
+        for path in sorted(root.rglob('*'))
+        if path.is_file()
+    }
+
+
+def test_atomic_directory_publish_merges_into_existing_root(tmp_path: Path) -> None:
+    output = tmp_path / 'result.tdb'
+    _write_tree(
+        output,
+        {
+            'scalars/FA/values': 'old FA',
+            'scalars/MD/values': 'old MD',
+            'parcels/parcel_id': 'old parcels',
+        },
+    )
+
+    with atomic_output(output, directory=True) as temporary:
+        _write_tree(
+            temporary,
+            {'scalars/MD/values': 'new MD', 'parcels/parcel_id': 'new parcels'},
+        )
+
+    # The scalar written by this run replaces its namesake; the other is kept.
+    assert _read_tree(output) == {
+        'parcels/parcel_id': 'new parcels',
+        'scalars/FA/values': 'old FA',
+        'scalars/MD/values': 'new MD',
+    }
+    assert not list(tmp_path.glob('.*.modelarrayio-tmp-*'))
+    assert not list(tmp_path.glob('.*.modelarrayio-backup-*'))
+
+
+def test_atomic_directory_publish_rejects_existing_file(tmp_path: Path) -> None:
+    output = tmp_path / 'result.tdb'
+    output.write_text('not a directory', encoding='utf-8')
+    with pytest.raises(NotADirectoryError), atomic_output(output, directory=True):
+        pytest.fail('the conversion must not start')
+    assert output.read_text(encoding='utf-8') == 'not a directory'
+
+
 def test_atomic_directory_publish_rolls_back_on_keyboard_interrupt(
     tmp_path: Path, monkeypatch
 ) -> None:
     output = tmp_path / 'result.tdb'
-    output.mkdir()
-    (output / 'old.txt').write_text('old', encoding='utf-8')
+    before = {
+        'scalars/FA/values': 'old FA',
+        'scalars/MD/values': 'old MD',
+        'parcels/parcel_id': 'old parcels',
+    }
+    _write_tree(output, before)
     real_replace = Path.replace
+    moves_into_output: list[Path] = []
 
-    def _interrupt_temporary_publish(self, target):
-        if '.modelarrayio-tmp-' in self.name and Path(target) == output:
-            raise KeyboardInterrupt
+    def _interrupt_second_publish_move(self, target):
+        target = Path(target)
+        if '.modelarrayio-tmp-' in str(self) and output in target.parents:
+            moves_into_output.append(target)
+            if len(moves_into_output) == 2:
+                raise KeyboardInterrupt
         return real_replace(self, target)
 
-    monkeypatch.setattr(Path, 'replace', _interrupt_temporary_publish)
+    monkeypatch.setattr(Path, 'replace', _interrupt_second_publish_move)
 
     def _interrupt_publication() -> None:
         with atomic_output(output, directory=True) as temporary:
-            temporary.mkdir()
-            (temporary / 'new.txt').write_text('new', encoding='utf-8')
+            _write_tree(
+                temporary,
+                {'scalars/MD/values': 'new MD', 'parcels/parcel_id': 'new parcels'},
+            )
 
     with pytest.raises(KeyboardInterrupt):
         _interrupt_publication()
 
-    assert (output / 'old.txt').read_text(encoding='utf-8') == 'old'
+    # The first entry was already moved in when the second move was interrupted;
+    # both must be rolled back to the previous content.
+    assert len(moves_into_output) == 2
+    assert _read_tree(output) == before
     assert not list(tmp_path.glob('.*.modelarrayio-tmp-*'))
     assert not list(tmp_path.glob('.*.modelarrayio-backup-*'))
 

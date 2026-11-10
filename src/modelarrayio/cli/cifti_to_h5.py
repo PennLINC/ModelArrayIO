@@ -18,7 +18,6 @@ from modelarrayio.utils.cifti import (
     brain_names_to_dataframe,
     load_cohort_cifti,
 )
-from modelarrayio.utils.loading import LazyScalarMatrices
 from modelarrayio.utils.misc import build_scalar_sources
 from modelarrayio.utils.s3_utils import configure_s3_client_pool
 
@@ -30,8 +29,8 @@ def cifti_to_h5(
     backend='hdf5',
     output=Path('greyordinatearray.h5'),
     storage_dtype='float32',
-    compression='gzip',
-    compression_level=4,
+    compression=None,
+    compression_level=None,
     shuffle=True,
     chunk_voxels=0,
     target_chunk_mb=2.0,
@@ -54,11 +53,13 @@ def cifti_to_h5(
         for the tiledb backend, path to a .tdb directory.
     storage_dtype : :obj:`str`
         Floating type to store values
-    compression : :obj:`str`
-        Compression filter. ``gzip`` works for both backends;
-        ``lzf`` is HDF5-only; ``zstd`` is TileDB-only.
-    compression_level : :obj:`int`
-        Compression level (codec-dependent)
+    compression : :obj:`str`, optional
+        Compression filter. ``None`` selects the backend default (``gzip`` for HDF5,
+        ``zstd`` for TileDB). ``gzip`` works for both backends; ``lzf`` is HDF5-only;
+        ``zstd`` is TileDB-only; ``none`` disables compression.
+    compression_level : :obj:`int`, optional
+        Compression level (codec-dependent). ``None`` selects the codec default
+        (gzip 4, zstd 5).
     shuffle : :obj:`bool`
         Enable shuffle filter
     chunk_voxels : :obj:`int`
@@ -114,12 +115,8 @@ def cifti_to_h5(
         storage_dtype=storage_dtype,
     )
     # The loader hands back the decoded first image so the metadata can be
-    # derived without reopening the file; plain mappings (tests) reopen it.
-    reference_image = scalars.reference_image if isinstance(scalars, LazyScalarMatrices) else None
-    first_path = scalar_sources[scalar_names[0]][0]
-    cifti_type, parcel_arrays = _get_cifti_parcel_info(
-        reference_image if reference_image is not None else first_path
-    )
+    # derived without reopening the file.
+    cifti_type, parcel_arrays = _get_cifti_parcel_info(scalars.reference_image)
 
     if cifti_type == 'dscalar':
         greyordinate_table, structure_names = brain_names_to_dataframe(reference_brain_names)
