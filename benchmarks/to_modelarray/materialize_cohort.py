@@ -11,8 +11,8 @@ Example::
 
     python benchmarks/to_modelarray/materialize_cohort.py \
       --cohort benchmarks/to_modelarray/cohorts/abide-small.csv \
-      --data-dir /cbica/home/tongt/modelarray_opt/data/abide \
-      --output /cbica/home/tongt/modelarray_opt/cohorts/abide-small-local.csv
+      --data-dir "$OPT_ROOT/data/abide" \
+      --output "$OPT_ROOT/cohorts/abide-small-local.csv"
 """
 
 from __future__ import annotations

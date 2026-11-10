@@ -4,10 +4,10 @@
 #SBATCH -c 8
 #SBATCH --mem=48G
 #SBATCH -t 12:00:00
-#SBATCH -o /cbica/home/tongt/modelarray_opt/logs/%x-%j.out
+#SBATCH -o logs/%x-%j.out
 # One full production scalar (8,693 subjects): old vs new (1 rep), then a worker sweep.
 set -euo pipefail
-source /cbica/home/tongt/modelarray_opt/ModelArrayIO/benchmarks/to_modelarray/cubic/env.sh
+source "${REPO:-${OPT_ROOT:?export OPT_ROOT before sbatch (see cubic/env.sh)}/ModelArrayIO}/benchmarks/to_modelarray/cubic/env.sh"
 cd "$REPO"
 SCALAR=${SCALAR:-area}; COHORT="$OPT_ROOT/cohorts/per-scalar/$SCALAR.csv"
 BASE=benchmarks/to_modelarray/baselines/modelarrayio-baseline-9ab13dd; OPT=$VENV/bin/modelarrayio

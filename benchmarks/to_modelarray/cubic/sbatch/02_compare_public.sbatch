@@ -4,9 +4,9 @@
 #SBATCH -c 8
 #SBATCH --mem=32G
 #SBATCH -t 4:00:00
-#SBATCH -o /cbica/home/tongt/modelarray_opt/logs/%x-%j.out
+#SBATCH -o logs/%x-%j.out
 set -euo pipefail
-source /cbica/home/tongt/modelarray_opt/ModelArrayIO/benchmarks/to_modelarray/cubic/env.sh
+source "${REPO:-${OPT_ROOT:?export OPT_ROOT before sbatch (see cubic/env.sh)}/ModelArrayIO}/benchmarks/to_modelarray/cubic/env.sh"
 cd "$REPO"
 BASE=benchmarks/to_modelarray/baselines/modelarrayio-baseline-9ab13dd; OPT=$VENV/bin/modelarrayio
 # area areaPial curv: scalars the original production run completed, so every CIFTI output can

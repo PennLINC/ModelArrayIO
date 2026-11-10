@@ -4,10 +4,10 @@
 #SBATCH -c 8
 #SBATCH --mem=48G
 #SBATCH -t 4:00:00
-#SBATCH -o /cbica/home/tongt/modelarray_opt/logs/%x-%A_%a.out
+#SBATCH -o logs/%x-%A_%a.out
 # Full production build: every scalar -> its own HDF5 file (kept). Submit via submit_production.sh.
 set -euo pipefail
-source /cbica/home/tongt/modelarray_opt/ModelArrayIO/benchmarks/to_modelarray/cubic/env.sh
+source "${REPO:-${OPT_ROOT:?export OPT_ROOT before sbatch (see cubic/env.sh)}/ModelArrayIO}/benchmarks/to_modelarray/cubic/env.sh"
 cd "$REPO"
 SCALAR=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$OPT_ROOT/cohorts/per-scalar/all_scalars.txt")
 COHORT="$OPT_ROOT/cohorts/per-scalar/$SCALAR.csv"; OUT="$OPT_ROOT/results/production"; mkdir -p "$OUT/checks"

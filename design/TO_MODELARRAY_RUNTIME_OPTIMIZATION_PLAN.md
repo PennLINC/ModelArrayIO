@@ -616,7 +616,6 @@ benchmarks/
     fixtures/               committed fixture cohort CSVs
     baselines/
       baseline_<cohort>.csv pinned reference numbers, committed
-    reports/                rendered findings PDFs, committed
     cubic/                  HPC validation ladder (SLURM templates, container env)
     data/  cohorts/         downloaded/generated inputs, gitignored
     results/                gitignored

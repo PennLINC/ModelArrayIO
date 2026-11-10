@@ -4,9 +4,9 @@
 #SBATCH -c 4
 #SBATCH --mem=16G
 #SBATCH -t 1:00:00
-#SBATCH -o /cbica/home/tongt/modelarray_opt/logs/%x-%j.out
+#SBATCH -o logs/%x-%j.out
 set -euo pipefail
-source /cbica/home/tongt/modelarray_opt/ModelArrayIO/benchmarks/to_modelarray/cubic/env.sh
+source "${REPO:-${OPT_ROOT:?export OPT_ROOT before sbatch (see cubic/env.sh)}/ModelArrayIO}/benchmarks/to_modelarray/cubic/env.sh"
 cd "$REPO"
 echo "== reference scalar completeness (needs a compute-node CPU for libtiledb) =="
 in_sif python benchmarks/to_modelarray/compare_to_reference.py --reference "$REF_TDB" --list --output-csv "$OPT_ROOT/reference_scalars.csv"

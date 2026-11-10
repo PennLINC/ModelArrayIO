@@ -359,7 +359,8 @@ Pinned CUBIC results (original `9ab13dd` vs optimized, real RBC freesurferpost d
 [`baselines/cubic_production_scale_9ab13dd_vs_optimized_20260923.csv`](baselines/cubic_production_scale_9ab13dd_vs_optimized_20260923.csv)
 (one full 8,693-subject scalar 27.6×/27.5× at one worker, 69–91 s at eight; 15-scalar job array in
 21 min; all 70 production scalars in ≈22 min of array wall-clock, every output bitwise-equal to the
-deployed reference). The CUBIC PDF is `benchmarks/to_modelarray/reports/to-modelarray-cubic-benchmark.pdf`.
+deployed reference). The CUBIC report PDF is not committed; regenerate it from these CSVs with
+`create_comparison_report.py` (see [`cubic/README.md`](cubic/README.md#pinning-the-results)).
 
 ## Original versus optimized comparison
 
@@ -410,8 +411,7 @@ python benchmarks/to_modelarray/compare_revisions.py \
 ```
 
 Then render the cross-modality findings PDF from the three run directories. It is written to
-`benchmarks/to_modelarray/results/` by default; only a run that supersedes the pinned CUBIC report
-belongs in `reports/`:
+`benchmarks/to_modelarray/results/` by default and is not committed:
 
 ```bash
 python benchmarks/to_modelarray/create_comparison_report.py \

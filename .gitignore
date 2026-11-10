@@ -79,6 +79,8 @@ docs/sg_execution_times.rst
 benchmarks/*/cohorts/
 benchmarks/*/data/
 benchmarks/*/results/
+# Rendered benchmark reports are regenerated from the pinned CSVs, never committed.
+benchmarks/**/*.pdf
 
 # PyBuilder
 target/

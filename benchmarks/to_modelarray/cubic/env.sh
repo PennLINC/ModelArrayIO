@@ -1,17 +1,31 @@
 #!/usr/bin/env bash
 # Shared environment for the CUBIC validation ladder. Source this file.
-# Everything writable lives under /cbica/home/tongt (never comp_space, never the project dir).
-export OPT_ROOT=/cbica/home/tongt/modelarray_opt
-export REPO=$OPT_ROOT/ModelArrayIO
+#
+# No site-specific paths are committed. Export these before running any step;
+# sbatch passes the submitting shell's environment on to the job:
+#   OPT_ROOT    writable work directory: ModelArrayIO checkout, venv, caches,
+#               cohorts, results and logs (the input data is only ever read)
+#   SIF         ModelArray container image
+#   REF_TDB     deployed reference TileDB output (read only)
+#   RBC_COHORT  production cohort CSV (read only)
+# Optional:
+#   REPO        ModelArrayIO checkout (default: $OPT_ROOT/ModelArrayIO)
+#   DATA_BINDS  comma-separated read-only directories to bind into the container:
+#               the reference output's directory and every mount path the cohort
+#               CSV uses for its source files
+: "${OPT_ROOT:?export OPT_ROOT, the writable work directory (see cubic/env.sh)}"
+: "${SIF:?export SIF, the ModelArray container image (see cubic/env.sh)}"
+: "${REF_TDB:?export REF_TDB, the deployed reference TileDB output (see cubic/env.sh)}"
+: "${RBC_COHORT:?export RBC_COHORT, the production cohort CSV (see cubic/env.sh)}"
+export OPT_ROOT SIF REF_TDB RBC_COHORT
+export REPO=${REPO:-$OPT_ROOT/ModelArrayIO}
 export VENV=$OPT_ROOT/.venv
-export SIF=/cbica/home/tongt/software/modelarray_confixel_0.1.5.sif
 
 # uv / apptainer caches must not land in the (small, purged) default locations.
 export UV_CACHE_DIR=$OPT_ROOT/.uv-cache
 export UV_PYTHON_INSTALL_DIR=$OPT_ROOT/.uv-python
 export APPTAINER_CACHEDIR=$OPT_ROOT/.apptainer-cache
-# The production cohort CSV uses /gpfs/fs001/... absolute paths; bind both spellings.
-export APPTAINER_BIND=/cbica/home/tongt,/cbica/projects/pennlinc_rbc,/gpfs/fs001
+export APPTAINER_BIND=$OPT_ROOT${DATA_BINDS:+,$DATA_BINDS}
 
 # The login node sets a 2 h CPU-time ulimit that SLURM propagates into jobs; the
 # original converter needs ~3 h CPU per full CIFTI scalar and was killed by SIGXCPU.
@@ -21,9 +35,6 @@ export MODELARRAYIO_BENCHMARK_RESULTS_DIR=$OPT_ROOT/results
 export MODELARRAYIO_BASELINE_ROOT=$OPT_ROOT/baseline-9ab13dd
 export MODELARRAYIO_PYTHON=$VENV/bin/python
 export MODELARRAYIO_S3_ANON=1
-
-export REF_TDB=/cbica/projects/pennlinc_rbc/modelarray_rbc_tiledb/derivatives/rbc_freesurferpost.tdb
-export RBC_COHORT=/cbica/projects/pennlinc_rbc/modelarray_rbc_tiledb/derivatives/rbc_freesurferpost_cohort.csv
 
 # Current ModelArray (installed from source into this user library) is the HDF5 gate;
 # the container ships ModelArray 0.1.5, which reads column_names from an HDF5 attribute
@@ -36,9 +47,9 @@ export GATE="$REPO/benchmarks/to_modelarray/cubic/gate.sh {output} {backend}"
 # venv first on PATH. When already inside the container, run it directly.
 in_sif() {
   if [ -n "${APPTAINER_CONTAINER:-}${SINGULARITY_CONTAINER:-}" ]; then
-    PATH="$VENV/bin:/cbica/home/tongt/.local/bin:$PATH" "$@"
+    PATH="$VENV/bin:$HOME/.local/bin:$PATH" "$@"
   else
-    apptainer exec "$SIF" env PATH="$VENV/bin:/cbica/home/tongt/.local/bin:$PATH" "$@"
+    apptainer exec "$SIF" env PATH="$VENV/bin:$HOME/.local/bin:$PATH" "$@"
   fi
 }
 export -f in_sif

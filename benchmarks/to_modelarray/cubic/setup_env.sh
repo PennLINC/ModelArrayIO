@@ -4,10 +4,10 @@
 # uv-managed Python 3.12 so the exact local library versions install as wheels.
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
-UV=/cbica/home/tongt/.local/bin/uv
+UV=${UV:-$HOME/.local/bin/uv}
 mkdir -p "$OPT_ROOT"/{data,cohorts,results,logs} "$UV_CACHE_DIR" "$UV_PYTHON_INSTALL_DIR" "$APPTAINER_CACHEDIR"
 
-echo "== quota =="; df -h /cbica/home/tongt | tail -1
+echo "== free space =="; df -h "$OPT_ROOT" | tail -1
 
 echo "== python 3.12 (uv-managed; runs on glibc >= 2.17, host and container) =="
 "$UV" python install 3.12
