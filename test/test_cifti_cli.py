@@ -14,7 +14,7 @@ import nibabel as nb
 import numpy as np
 import pandas as pd
 import pytest
-from utils import make_dscalar, make_parcels_axis, make_pconn, make_pscalar  # noqa: F401
+from utils import make_dscalar, make_parcels_axis, make_pconn, make_pscalar
 
 from modelarrayio.cli.cifti_to_h5 import cifti_to_h5
 from modelarrayio.cli.h5_to_cifti import _cifti_output_ext, h5_to_cifti
@@ -991,3 +991,108 @@ class TestCiftiToModelarrayViaCLI:
         with h5py.File(beta_out, 'r') as h5:
             assert 'greyordinates' in h5
             assert sorted(h5['scalars'].keys()) == ['beta']
+
+
+def test_cifti_tiledb_sequential_scalars_share_one_root(tmp_path, monkeypatch):
+    """Converting one pscalar scalar, then another, into one TileDB root keeps both."""
+    import tiledb
+
+    parcels = ['P1', 'P2', 'P3']
+    out_tdb = tmp_path / 'out.tdb'
+    monkeypatch.chdir(tmp_path)
+    expected = {}
+    for scalar in ('thickness', 'myelin'):
+        paths = _write_pscalar_subjects(tmp_path, parcels, scalar_name=scalar)
+        cohort = tmp_path / f'{scalar}.csv'
+        _write_cohort_csv(
+            cohort, [{'scalar_name': scalar, 'source_file': str(path)} for path in paths]
+        )
+        expected[scalar] = np.stack([nb.load(path).get_fdata().ravel() for path in paths])
+        assert (
+            modelarrayio_main(
+                [
+                    'to-modelarray',
+                    '--cohort-file',
+                    str(cohort),
+                    '--output',
+                    str(out_tdb),
+                    '--backend',
+                    'tiledb',
+                ]
+            )
+            == 0
+        )
+
+    for scalar, values in expected.items():
+        with tiledb.open(str(out_tdb / 'scalars' / scalar / 'values')) as array:
+            np.testing.assert_array_equal(array[:]['values'], values)
+        assert tiledb.object_type(str(out_tdb / 'scalars' / scalar / 'column_names')) == 'array'
+    with tiledb.open(str(out_tdb / 'parcels' / 'parcel_id')) as array:
+        assert list(array[:]['values']) == parcels
+
+
+def test_h5_to_cifti_writes_float32_even_for_integer_template(tmp_path):
+    """Results must not be re-quantized into an integer, scaled template encoding."""
+    mask = _dscalar_mask()
+    n = int(mask.sum())
+    header = nb.cifti2.Cifti2Header.from_axes(
+        (
+            nb.cifti2.cifti2_axes.ScalarAxis(['m']),
+            nb.cifti2.cifti2_axes.BrainModelAxis.from_mask(mask),
+        )
+    )
+    template = tmp_path / 'int16.dscalar.nii'
+    nb.Cifti2Image(np.arange(n, dtype=np.int16).reshape(1, -1), header=header).to_filename(
+        template
+    )
+    with open(template, 'r+b') as handle:
+        nifti_header = nb.Nifti2Header.from_fileobj(handle, check=False)
+        nifti_header.set_slope_inter(0.01, -1.0)
+        handle.seek(0)
+        handle.write(nifti_header.binaryblock)
+
+    pvalues = np.linspace(1e-6, 0.999999, n, dtype=np.float32).reshape(1, -1)
+    h5_path = tmp_path / 'results.h5'
+    _make_h5_results(h5_path, 'lm', pvalues, ['p.value'])
+    h5_to_cifti(str(template), str(h5_path), 'lm', str(tmp_path))
+
+    for name, expected in (('p.value', pvalues[0]), ('1m.p.value', 1 - pvalues[0])):
+        out = tmp_path / f'lm_{name}.dscalar.nii'
+        with open(out, 'rb') as handle:
+            assert nb.Nifti2Header.from_fileobj(handle).get_data_dtype() == np.float32
+        np.testing.assert_array_equal(nb.load(out).get_fdata(dtype=np.float32)[0], expected)
+
+
+@pytest.mark.parametrize('fast_path', ['1', '0'])
+def test_pconn_import_export_round_trip_preserves_orientation(tmp_path, monkeypatch, fast_path):
+    """Values stored by to-modelarray and written back by h5_to_cifti match the sources."""
+    monkeypatch.setenv('MODELARRAYIO_CIFTI_RAW', fast_path)
+    rows_axis = make_parcels_axis(['A', 'B', 'C'])
+    cols_axis = make_parcels_axis(['W', 'X', 'Y', 'Z'])
+    header = nb.cifti2.Cifti2Header.from_axes((rows_axis, cols_axis))
+    paths = []
+    for i in range(3):
+        matrix = np.arange(12, dtype=np.float32).reshape(3, 4) * (i + 1)
+        path = tmp_path / f'sub{i}.pconn.nii'
+        nb.Cifti2Image(matrix, header=header).to_filename(path)
+        paths.append(path)
+    cohort = tmp_path / 'cohort.csv'
+    _write_cohort_csv(cohort, [{'scalar_name': 'conn', 'source_file': str(p)} for p in paths])
+    out_h5 = tmp_path / 'out.h5'
+    assert (
+        modelarrayio_main(['to-modelarray', '--cohort-file', str(cohort), '--output', str(out_h5)])
+        == 0
+    )
+
+    with h5py.File(out_h5, 'a') as h5:
+        values = h5['scalars/conn/values'][...]
+        ds = h5.create_dataset('results/rt/results_matrix', data=values)
+        ds.attrs['colnames'] = [f'subj{i}'.encode() for i in range(len(paths))]
+    h5_to_cifti(str(paths[0]), str(out_h5), 'rt', str(tmp_path))
+
+    for i, path in enumerate(paths):
+        exported = nb.load(tmp_path / f'rt_subj{i}.pconn.nii')
+        original = nb.load(path)
+        np.testing.assert_array_equal(exported.get_fdata(), original.get_fdata())
+        assert exported.header.get_axis(0) == original.header.get_axis(0)
+        assert exported.header.get_axis(1) == original.header.get_axis(1)

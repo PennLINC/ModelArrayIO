@@ -8,6 +8,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
+import pytest
 
 from modelarrayio.cli import utils as cli_utils
 
@@ -31,6 +32,27 @@ def test_prefixed_output_path_sanitizes_prefix(tmp_path: Path) -> None:
     assert prefixed.name == 'p.value_result_stats.h5'
 
 
+def test_conversion_output_paths_rejects_sanitized_collisions(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match='map to the same split output'):
+        cli_utils.conversion_output_paths(
+            tmp_path / 'output.h5',
+            ['a b', 'a_b'],
+            split_outputs=True,
+        )
+
+
+@pytest.mark.parametrize('scalar_name', ['a/b', r'a\b', '..'])
+def test_conversion_output_paths_rejects_unsafe_scalar_names(
+    tmp_path: Path, scalar_name: str
+) -> None:
+    with pytest.raises(ValueError, match='Unsafe scalar name'):
+        cli_utils.conversion_output_paths(
+            tmp_path / 'output.h5',
+            [scalar_name],
+            split_outputs=False,
+        )
+
+
 def test_write_table_dataset_writes_transposed_data_and_attrs(tmp_path: Path) -> None:
     table = pd.DataFrame({'a': [1, 2], 'b': [3, 4]})
     h5_path = tmp_path / 'table.h5'
@@ -50,7 +72,7 @@ def test_write_table_dataset_writes_transposed_data_and_attrs(tmp_path: Path) ->
 def test_write_hdf5_scalar_matrices_skips_empty_rows_and_writes_values(tmp_path: Path) -> None:
     h5_path = tmp_path / 'scalars.h5'
     with h5py.File(h5_path, 'w') as h5_file:
-        cli_utils.write_hdf5_scalar_matrices(
+        metrics = cli_utils.write_hdf5_scalar_matrices(
             h5_file,
             scalars={
                 'FA': [
@@ -73,27 +95,28 @@ def test_write_hdf5_scalar_matrices_skips_empty_rows_and_writes_values(tmp_path:
         assert 'scalars/MD/values' not in h5_file
         values = h5_file['scalars/FA/values'][...]
         np.testing.assert_array_equal(values, np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32))
+        assert h5_file['scalars/FA/column_names'].asstr()[...].tolist() == ['sub-1', 'sub-2']
+    assert set(metrics) == {'FA'}
+    assert metrics['FA']['backend'] == 'hdf5'
+    assert metrics['FA']['matrix_shape'] == [2, 2]
 
 
 def test_write_tiledb_scalar_matrices_calls_column_name_writer(
     monkeypatch, tmp_path: Path
 ) -> None:
-    called = {'create': [], 'columns': [], 'write': []}
+    called = {'create': [], 'columns': []}
 
     def _fake_create(*args, **kwargs):
         called['create'].append((args, kwargs))
+        kwargs['metrics'].update({'dense_submissions': 1})
 
     def _fake_write_columns(*args, **kwargs):
         called['columns'].append((args, kwargs))
 
-    def _fake_write_rows(*args, **kwargs):
-        called['write'].append((args, kwargs))
-
-    monkeypatch.setattr(cli_utils.tiledb_storage, 'create_empty_scalar_matrix_array', _fake_create)
+    monkeypatch.setattr(cli_utils.tiledb_storage, 'create_scalar_matrix_array', _fake_create)
     monkeypatch.setattr(cli_utils.tiledb_storage, 'write_column_names', _fake_write_columns)
-    monkeypatch.setattr(cli_utils.tiledb_storage, 'write_rows_in_column_stripes', _fake_write_rows)
 
-    cli_utils.write_tiledb_scalar_matrices(
+    metrics = cli_utils.write_tiledb_scalar_matrices(
         tmp_path / 'out.tdb',
         scalars={'FA': [np.array([1.0, 2.0], dtype=np.float32)], 'MD': []},
         sources_by_scalar={'FA': ['sub-1.nii.gz'], 'MD': []},
@@ -108,7 +131,18 @@ def test_write_tiledb_scalar_matrices_calls_column_name_writer(
 
     assert len(called['create']) == 1
     assert len(called['columns']) == 1
-    assert len(called['write']) == 1
+    create_args, create_kwargs = called['create'][0]
+    assert create_args[1] == 'scalars/FA/values'
+    np.testing.assert_array_equal(create_args[2], [np.array([1.0, 2.0], dtype=np.float32)])
+    assert create_args[3] == ['sub-1.nii.gz']
+    assert create_kwargs['tile_voxels'] == 16
+    assert metrics == {
+        'FA': {
+            'dense_submissions': 1,
+            'backend': 'tiledb',
+            'scalar_name': 'FA',
+        }
+    }
 
 
 def test_write_hdf5_and_tiledb_parcel_arrays(monkeypatch, tmp_path: Path) -> None:

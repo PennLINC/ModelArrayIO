@@ -7,6 +7,7 @@ import csv
 import h5py
 import numpy as np
 import pandas as pd
+from utils import lazy_scalars
 
 import modelarrayio.cli.mif_to_h5 as mif_cli
 from modelarrayio.cli.main import main as modelarrayio_main
@@ -33,14 +34,14 @@ def test_mif_to_h5_scalar_columns_writes_prefixed_outputs(tmp_path, monkeypatch)
     def fake_gather_fixels(_index_file, _directions_file):
         return fixel_table, voxel_table
 
-    def fake_load_cohort_mif(cohort_long, _s3_workers):
+    def fake_load_cohort_mif(cohort_long, **_kwargs):
         scalars = {}
         sources = {}
         for scalar_name, group in cohort_long.groupby('scalar_name'):
             n_rows = group.shape[0]
-            scalars[scalar_name] = [np.array([1.0, 2.0], dtype=np.float32) for _ in range(n_rows)]
+            scalars[scalar_name] = np.tile(np.array([1.0, 2.0], dtype=np.float32), (n_rows, 1))
             sources[scalar_name] = group['source_file'].tolist()
-        return scalars, sources
+        return lazy_scalars(scalars), sources
 
     monkeypatch.setattr(mif_cli, 'gather_fixels', fake_gather_fixels)
     monkeypatch.setattr(mif_cli, 'load_cohort_mif', fake_load_cohort_mif)

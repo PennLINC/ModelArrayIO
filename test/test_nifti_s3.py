@@ -170,9 +170,5 @@ def test_nifti_s3_serial_matches_parallel(tmp_path, group_mask_path, monkeypatch
         serial_data = s['scalars/alff/values'][...]
         parallel_data = p['scalars/alff/values'][...]
 
-    # Row order in the parallel result may differ from cohort order, so sort both
-    # by their row fingerprint before comparing
     assert serial_data.shape == parallel_data.shape
-    serial_sorted = serial_data[np.lexsort(serial_data.T)]
-    parallel_sorted = parallel_data[np.lexsort(parallel_data.T)]
-    np.testing.assert_array_equal(serial_sorted, parallel_sorted)
+    np.testing.assert_array_equal(serial_data, parallel_data)

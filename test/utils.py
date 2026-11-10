@@ -46,3 +46,16 @@ def make_nifti(data: np.ndarray, affine: np.ndarray | None = None) -> nb.Nifti1I
     if affine is None:
         affine = np.eye(4)
     return nb.Nifti1Image(data.astype(np.float32), affine)
+
+
+def lazy_scalars(matrices, **attributes):
+    """Wrap ready-made 2-D matrices in the loaders' ``LazyScalarMatrices`` mapping."""
+    from modelarrayio.utils.loading import LazyScalarMatrices, LoadStats
+
+    staged = {name: np.asarray(matrix) for name, matrix in matrices.items()}
+
+    def _stage(scalar_name):
+        matrix = staged[scalar_name]
+        return matrix, LoadStats(source_count=matrix.shape[0])
+
+    return LazyScalarMatrices(list(staged), _stage, **attributes)

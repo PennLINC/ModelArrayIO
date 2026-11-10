@@ -1,0 +1,2 @@
+subject_id,scalar_name,source_file
+example,example,../../../test/data_cifti_toy/example.dscalar.nii

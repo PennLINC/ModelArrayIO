@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
+from urllib.parse import urlparse
+
+from modelarrayio.utils.s3_utils import is_s3_path
 
 
 def add_log_level_arg(parser):
@@ -28,3 +32,24 @@ def _is_file(path: str | Path | None, parser) -> Path:
     if not path.is_file():
         raise parser.error(f'Path should point to a file (or symlink of file): <{path}>.')
     return path
+
+
+def _positive_int(value: str) -> int:
+    """Parse a strictly positive integer; argparse reports failures as usage errors."""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = None
+    if number is None or number < 1:
+        raise argparse.ArgumentTypeError(f'expected a positive integer, got {value!r}')
+    return number
+
+
+def _is_file_or_s3(path: str | Path | None, parser) -> Path | str:
+    """Accept an existing local file or a syntactically valid S3 object URI."""
+    if path is not None and is_s3_path(path):
+        parsed = urlparse(str(path))
+        if parsed.netloc and parsed.path.lstrip('/'):
+            return str(path)
+        raise parser.error(f'Invalid S3 URI: <{path}>.')
+    return _is_file(path, parser)

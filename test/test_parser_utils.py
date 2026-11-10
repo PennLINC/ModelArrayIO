@@ -30,19 +30,36 @@ def test_parse_to_modelarray_minimal_defaults(tmp_path):
     assert args.output == Path('modelarray.h5')
     assert args.backend == 'hdf5'
     assert args.storage_dtype == 'float32'
-    assert args.compression == 'gzip'
-    assert args.compression_level == 4
+    assert args.compression is None
+    assert args.compression_level is None
     assert args.shuffle is True
     assert args.chunk_voxels == 0
     assert args.target_chunk_mb == 2.0
-    assert args.workers == 1
-    assert args.s3_workers == 1
+    assert args.workers is None
+    assert args.s3_workers is None
+    assert args.timing_jsonl is None
     assert args.scalar_columns is None
     assert args.split_outputs is None
     assert args.group_mask_file is None
     assert args.index_file is None
     assert args.directions_file is None
     assert args.log_level == 'INFO'
+
+
+@pytest.mark.parametrize('option', ['--workers', '--s3-workers'])
+@pytest.mark.parametrize('value', ['0', '-2', 'many', '1.5'])
+def test_parse_to_modelarray_rejects_non_positive_worker_counts(tmp_path, capsys, option, value):
+    cohort = tmp_path / 'cohort.csv'
+    cohort.touch()
+    parser = _parse_to_modelarray()
+    with pytest.raises(SystemExit) as excinfo:
+        parser.parse_args(['--cohort-file', str(cohort), option, value])
+    assert excinfo.value.code == 2
+    assert f'argument {option}' in capsys.readouterr().err
+
+
+def test_positive_int_accepts_positive_values():
+    assert parser_utils._positive_int('3') == 3
 
 
 def test_parse_to_modelarray_cohort_file_underscore_alias(tmp_path):
@@ -111,6 +128,36 @@ def test_parse_to_modelarray_optional_paths_and_flags(tmp_path):
     assert args.index_file == idx.resolve()
     assert args.directions_file == dirs.resolve()
     assert args.log_level == 'WARNING'
+
+
+def test_parse_to_modelarray_accepts_s3_auxiliary_inputs(tmp_path):
+    cohort = tmp_path / 'cohort.csv'
+    cohort.touch()
+    parser = _parse_to_modelarray()
+    args = parser.parse_args(
+        [
+            '--cohort-file',
+            str(cohort),
+            '--mask',
+            's3://bucket/group-mask.nii.gz',
+            '--index-file',
+            's3://bucket/index.mif',
+            '--directions-file',
+            's3://bucket/directions.mif',
+        ]
+    )
+
+    assert args.group_mask_file == 's3://bucket/group-mask.nii.gz'
+    assert args.index_file == 's3://bucket/index.mif'
+    assert args.directions_file == 's3://bucket/directions.mif'
+
+
+def test_parse_to_modelarray_rejects_invalid_s3_auxiliary_uri(tmp_path):
+    cohort = tmp_path / 'cohort.csv'
+    cohort.touch()
+    parser = _parse_to_modelarray()
+    with pytest.raises(SystemExit):
+        parser.parse_args(['--cohort-file', str(cohort), '--mask', 's3://bucket'])
 
 
 def test_parse_to_modelarray_target_chunk_mb_branch(tmp_path):
